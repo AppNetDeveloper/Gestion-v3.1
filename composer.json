@@ -23,6 +23,7 @@
         "silviolleite/laravelpwa": "^2.0",
         "spatie/image": "^3.4",
         "spatie/laravel-backup": "^8.6",
+        "spatie/laravel-cookie-consent": "^3.3",
         "spatie/laravel-medialibrary": "^11.4",
         "spatie/laravel-permission": "^6.4",
         "spatie/laravel-query-builder": "^5.8",

@@ -3,7 +3,6 @@
         <div class="block sm:flex items-center justify-between mb-6">
             <x-breadcrumb :pageTitle="$pageTitle"/>
         </div>
-
         <section class="control-horario">
             <h2>Panel de Control de Horario</h2>
 

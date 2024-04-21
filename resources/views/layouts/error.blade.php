@@ -8,9 +8,9 @@
         <x-favicon/>
         {{-- Scripts --}}
         @vite(['resources/css/app.scss', 'resources/js/custom/store.js'])
+        @laravelPWA
     </head>
     <body>
-
         {{ $slot }}
 
         @vite(['resources/js/app.js'])

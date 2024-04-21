@@ -5,12 +5,12 @@
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <meta name="csrf-token" content="{{ csrf_token() }}">
         <title>{{ config('app.name', 'dashcode') }}</title>
+        @laravelPWA
         <x-favicon/>
         {{-- Scripts --}}
         @vite(['resources/css/app.scss', 'resources/js/custom/store.js'])
     </head>
     <body>
-
         <div class="loginwrapper">
             <div class="lg-inner-column">
                 <div class="left-column relative z-[1]">
