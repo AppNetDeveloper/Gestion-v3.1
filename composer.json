@@ -25,7 +25,7 @@
         "spatie/laravel-backup": "^8.6",
         "spatie/laravel-cookie-consent": "^3.3",
         "spatie/laravel-medialibrary": "^11.4",
-        "spatie/laravel-permission": "^6.4",
+        "spatie/laravel-permission": "^6.7",
         "spatie/laravel-query-builder": "^5.8",
         "spatie/laravel-settings": "^3.3",
         "vemcogroup/laravel-translation": "^3.0",
