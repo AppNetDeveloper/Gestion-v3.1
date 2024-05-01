@@ -134,9 +134,9 @@
     mini-svg-data-uri "^1.2.3"
 
 "@tailwindcss/typography@^0.5.9":
-  version "0.5.12"
-  resolved "https://registry.npmjs.org/@tailwindcss/typography/-/typography-0.5.12.tgz"
-  integrity sha512-CNwpBpconcP7ppxmuq3qvaCxiRWnbhANpY/ruH4L5qs2GCiVDJXde/pjj2HWPV1+Q4G9+V/etrwUYopdcjAlyg==
+  version "0.5.13"
+  resolved "https://registry.npmjs.org/@tailwindcss/typography/-/typography-0.5.13.tgz"
+  integrity sha512-ADGcJ8dX21dVVHIwTRgzrcunY6YY9uSlAHHGVKvkA+vLc5qLwEszvKts40lx7z0qc4clpjclwLeK5rVCV2P/uw==
   dependencies:
     lodash.castarray "^4.4.0"
     lodash.isplainobject "^4.0.6"
@@ -192,9 +192,9 @@ acorn@^7.0.0:
   integrity sha512-nQyp0o1/mNdbTO1PO6kHkwSrmgZ0MT/jCCpNiwbUjGoRN4dlBhqJtoQuCnEOKzgTVwg0ZWiCoQy6SxMebQVh8A==
 
 alpinejs@^3.4.2:
-  version "3.13.8"
-  resolved "https://registry.npmjs.org/alpinejs/-/alpinejs-3.13.8.tgz"
-  integrity sha512-XolbBJryCndomtaHd/KHQjQeD/L72FJxy/YhLLFD4Lr7zzGcpcbg+UgXteMR2pYg1KhRUr6V4O3GfN1zJAmRWw==
+  version "3.13.10"
+  resolved "https://registry.npmjs.org/alpinejs/-/alpinejs-3.13.10.tgz"
+  integrity sha512-86RB307VWICex0vG15Eq0x058cNNsvS57ohrjN6n/TJAVSFV+zXOK/E34nNHDHc6Poq+yTNCLqEzPqEkRBTMRQ==
   dependencies:
     "@vue/reactivity" "~3.1.1"
 
@@ -239,9 +239,9 @@ anymatch@~3.1.2:
     picomatch "^2.0.4"
 
 apexcharts@^3.36.3:
-  version "3.48.0"
-  resolved "https://registry.npmjs.org/apexcharts/-/apexcharts-3.48.0.tgz"
-  integrity sha512-Lhpj1Ij6lKlrUke8gf+P+SE6uGUn+Pe1TnCJ+zqrY0YMvbqM3LMb1lY+eybbTczUyk0RmMZomlTa2NgX2EUs4Q==
+  version "3.49.0"
+  resolved "https://registry.npmjs.org/apexcharts/-/apexcharts-3.49.0.tgz"
+  integrity sha512-2T9HnbQFLCuYRPndQLmh+bEQFoz0meUbvASaGgiSKDuYhWcLBodJtIpKql2aOtMx4B/sHrWW0dm90HsW4+h2PQ==
   dependencies:
     "@yr/monotone-cubic-spline" "^1.0.3"
     svg.draggable.js "^2.2.2"
@@ -332,9 +332,9 @@ can-use-dom@^0.1.0:
   integrity sha512-ceOhN1DL7Y4O6M0j9ICgmTYziV89WMd96SvSl0REd8PMgrY0B/WBOPoed5S1KUmJqXgUXh8gzSe6E3ae27upsQ==
 
 caniuse-lite@^1.0.30001587, caniuse-lite@^1.0.30001599:
-  version "1.0.30001610"
-  resolved "https://registry.npmjs.org/caniuse-lite/-/caniuse-lite-1.0.30001610.tgz"
-  integrity sha512-QFutAY4NgaelojVMjY63o6XlZyORPaLfyMnsl3HgnWdJUcX6K0oaJymHjH8PT5Gk7sTm8rvC/c5COUQKXqmOMA==
+  version "1.0.30001613"
+  resolved "https://registry.npmjs.org/caniuse-lite/-/caniuse-lite-1.0.30001613.tgz"
+  integrity sha512-BNjJULJfOONQERivfxte7alLfeLW4QnwHvNW4wEcLEbXfV6VSCYvr+REbf2Sojv8tC1THpjPXBxWgDbq4NtLWg==
 
 chart.js@^2.9.4, "chart.js@>= 2.7.0 < 3":
   version "2.9.4"
@@ -429,9 +429,9 @@ contra@1.9.4:
     ticky "1.0.1"
 
 core-js@^3.26.1:
-  version "3.36.1"
-  resolved "https://registry.npmjs.org/core-js/-/core-js-3.36.1.tgz"
-  integrity sha512-BTvUrwxVBezj5SZ3f10ImnX2oRByMxql3EimVqMysepbC9EeMUOpLwdy6Eoili2x6E4kf+ZUB5k/+Jv55alPfA==
+  version "3.37.0"
+  resolved "https://registry.npmjs.org/core-js/-/core-js-3.37.0.tgz"
+  integrity sha512-fu5vHevQ8ZG4og+LXug8ulUtVxjOcEYvifJr7L5Bfq9GOztVqsKd9/59hUk2ZSbCrS3BqUr3EpaYGIYzq7g3Ug==
 
 country-select-js@^2.1.0:
   version "2.1.0"
@@ -547,9 +547,9 @@ eastasianwidth@^0.2.0:
   integrity sha512-I88TYZWc9XiYHRQ4/3c5rjjfgkjhLyW2luGIheGERbNQ6OY7yTybanSpDXZa8y7VUP9YmDcYa+eyq4ca7iLqWA==
 
 electron-to-chromium@^1.4.668:
-  version "1.4.736"
-  resolved "https://registry.npmjs.org/electron-to-chromium/-/electron-to-chromium-1.4.736.tgz"
-  integrity sha512-Rer6wc3ynLelKNM4lOCg7/zPQj8tPOCB2hzD32PX9wd3hgRRi9MxEbmkFCokzcEhRVMiOVLjnL9ig9cefJ+6+Q==
+  version "1.4.750"
+  resolved "https://registry.npmjs.org/electron-to-chromium/-/electron-to-chromium-1.4.750.tgz"
+  integrity sha512-9ItEpeu15hW5m8jKdriL+BQrgwDTXEL9pn4SkillWFu73ZNNNQ2BKKLS+ZHv2vC9UkNhosAeyfxOf/5OSeTCPA==
 
 emoji-regex@^8.0.0:
   version "8.0.0"
@@ -824,9 +824,9 @@ lodash@^4.17.19, lodash@^4.17.21:
   integrity sha512-v2kDEe57lecTulaDIuNTPy3Ry4gLGJ6Z1O3vE1krgXZNrsQ+LFTGHVxVjcXPs17LhbZVGedAJv8XZ1tvj5FvSg==
 
 lru-cache@^10.2.0:
-  version "10.2.0"
-  resolved "https://registry.npmjs.org/lru-cache/-/lru-cache-10.2.0.tgz"
-  integrity sha512-2bIM8x+VAf6JT4bKAljS1qUWgMsqZRPGJS6FSahIMPVvctcNhyVp7AJu7quxOW9jwkryBReKZY5tY5JYv2n/7Q==
+  version "10.2.1"
+  resolved "https://registry.npmjs.org/lru-cache/-/lru-cache-10.2.1.tgz"
+  integrity sha512-tS24spDe/zXhWbNPErCHs/AGOzbKGHT+ybSBqmdLm8WZ1xXLWvH8Qn71QPAlqVhd0qUTWjy+Kl9JmISgDdEjsA==
 
 merge2@^1.3.0:
   version "1.4.1"
@@ -1316,9 +1316,9 @@ svg.select.js@^3.0.1:
     svg.js "^2.6.5"
 
 sweetalert2@^11.6.10:
-  version "11.10.7"
-  resolved "https://registry.npmjs.org/sweetalert2/-/sweetalert2-11.10.7.tgz"
-  integrity sha512-5Jlzrmaitay6KzU+2+LhYu9q+L4v/dZ8oZyEDH14ep0C/QilCnFLHmqAyD/Lhq/lm5DiwsOs6Tr58iv8k3wyGg==
+  version "11.10.8"
+  resolved "https://registry.npmjs.org/sweetalert2/-/sweetalert2-11.10.8.tgz"
+  integrity sha512-oAkYROBfXBY+4sVbQEIcN+ZxAx69lsmz5WEBwdEpyS4m59vOBNlRU5/fJpAI1MVfiDwFZiGwVzB/KBpOyfLNtg==
 
 tailwindcss@^3.2.7, "tailwindcss@>=2.0.0 || >=3.0.0 || >=3.0.0-alpha.1", "tailwindcss@>=3.0.0 || >= 3.0.0-alpha.1", "tailwindcss@>=3.0.0 || insiders":
   version "3.4.3"
@@ -1500,6 +1500,6 @@ yaml@^1.10.2:
   integrity sha512-r3vXyErRCYJ7wg28yvBY5VSoAF8ZvlcW9/BwUzEtUsjvX/DKs24dIkuwjtuprwJJHsbyUbLApepYTR1BN4uHrg==
 
 yaml@^2.3.4:
-  version "2.4.1"
-  resolved "https://registry.npmjs.org/yaml/-/yaml-2.4.1.tgz"
-  integrity sha512-pIXzoImaqmfOrL7teGUBt/T7ZDnyeGBWyXQBvOVhLkWLN37GXv8NMLK406UY6dS51JfcQHsmcW5cJ441bHg6Lg==
+  version "2.4.2"
+  resolved "https://registry.npmjs.org/yaml/-/yaml-2.4.2.tgz"
+  integrity sha512-B3VqDZ+JAg1nZpaEmWtTXUlBneoGx6CPM9b0TENK6aoSu5t73dItudwdgmi6tHlIZZId4dZ9skcAQ2UbcyAeVA==
