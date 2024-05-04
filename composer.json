@@ -19,6 +19,7 @@
         "masbug/flysystem-google-drive-ext": "^2.3",
         "modernmcguire/flysystem-google-drive": "^1.2",
         "nesbot/carbon": "^3.3",
+        "opcodesio/log-viewer": "^3.8",
         "protonemedia/laravel-verify-new-email": "^1.10",
         "silviolleite/laravelpwa": "^2.0",
         "spatie/image": "^3.5",
