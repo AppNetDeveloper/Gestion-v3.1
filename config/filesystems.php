@@ -55,16 +55,16 @@ return [
             'use_path_style_endpoint' => env('AWS_USE_PATH_STYLE_ENDPOINT', false),
             'throw' => false,
         ],
-        
+
         'ftp' => [
             'driver' => 'ftp',
-            'host' => 's3.eu-west-2.wasabisys.com', //Tu servidor FTP
-            'port' => 21, //Puerto FTP
-            'username' => 'liviudiaconu.dev@gmail.com', //Nombre de usuario FTP
-            'password' => 'Lss281613858715***', //Contraseña FTP
-            'root' => '/ftp-appnetdeveloper', //Directorio raíz en el servidor FTP
-            'passive' => true, //Habilitar modo pasivo FTP (si es necesario)
-            'throw' => false, //Evitar excepciones en caso de errores
+            'host' => env('FTP_HOST'), //Tu servidor FTP
+            'port' => env('FTP_PORT'), //Puerto FTP
+            'username' => env('FTP_USERNAME'), //Nombre de usuario FTP
+            'password' => env('FTP_PASSWORD'), //Contraseña FTP
+            'root' => env('FTP_ROOT'), //Directorio raíz en el servidor FTP
+            'passive' => env('FTP_PASSIVE'), //Habilitar modo pasivo FTP (si es necesario)
+            'throw' => env('FTP_THROW'), //Evitar excepciones en caso de errores
         ],
         /* composer require masbug/flysystem-google-drive-ext // if is not working is from remove. web : https://github.com/masbug/flysystem-google-drive-ext  */
         'google' => [
@@ -78,7 +78,7 @@ return [
         ],
         /* composer require modernmcguire/flysystem-google-drive:~1.1 //if is not working , for remove.  WEB: https://packagist.org/packages/modernmcguire/flysystem-google-drive*/
         'googlev2' => [
-            'driver' => 'google',
+            'driver' => 'google2',
             'clientId' => env('GOOGLE_DRIVE_CLIENT_ID'),
             'clientSecret' => env('GOOGLE_DRIVE_CLIENT_SECRET'),
             'refreshToken' => env('GOOGLE_DRIVE_REFRESH_TOKEN'),
