@@ -66,6 +66,15 @@ return [
             'passive' => env('FTP_PASSIVE', true),//Habilitar modo pasivo FTP (si es necesario)
             'throw' => env('FTP_THROW', false), //Evitar excepciones en caso de errores
         ],
+
+        'sftp' => [
+            'driver' => 'sftp',
+            'host' => env('SFTP_HOST'),
+            'port' => env('SFTP_PORT'),
+            'username' => env('SFTP_USERNAME'),
+            'password' => env('SFTP_PASSWORD'),
+            'root' => env('SFTP_ROOT'),
+        ],
         /* composer require masbug/flysystem-google-drive-ext // if is not working is from remove. web : https://github.com/masbug/flysystem-google-drive-ext  */
         'google' => [
             'driver' => 'google',

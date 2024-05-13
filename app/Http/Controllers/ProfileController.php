@@ -77,7 +77,7 @@ class ProfileController extends Controller
     {
         $user->update($request->safe(['name', 'phone', 'post_code', 'city', 'country']));
 
-        // sends verification email if email has changed
+        //  sends verification email if email has changed
         if( $user->email !== $request->validated('email') ) {
             $user->newEmail($request->validated('email'));
         }
