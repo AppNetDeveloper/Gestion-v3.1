@@ -58,13 +58,13 @@ return [
 
         'ftp' => [
             'driver' => 'ftp',
-            'host' => env('FTP_HOST'), //Tu servidor FTP
-            'port' => env('FTP_PORT'), //Puerto FTP
+            'host' => env('FTP_HOST', "localhost"),//Tu servidor FTP
+            'port' => env('FTP_PORT', "21"), //Puerto FTP
             'username' => env('FTP_USERNAME'), //Nombre de usuario FTP
             'password' => env('FTP_PASSWORD'), //Contraseña FTP
-            'root' => env('FTP_ROOT'), //Directorio raíz en el servidor FTP
-            'passive' => env('FTP_PASSIVE'), //Habilitar modo pasivo FTP (si es necesario)
-            'throw' => env('FTP_THROW'), //Evitar excepciones en caso de errores
+            'root' => env('FTP_ROOT', "/"), //Directorio raíz en el servidor FTP
+            'passive' => env('FTP_PASSIVE', true),//Habilitar modo pasivo FTP (si es necesario)
+            'throw' => env('FTP_THROW', false), //Evitar excepciones en caso de errores
         ],
         /* composer require masbug/flysystem-google-drive-ext // if is not working is from remove. web : https://github.com/masbug/flysystem-google-drive-ext  */
         'google' => [

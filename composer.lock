@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "0398213da717ced0d128e6c0c1b4fc5a",
+    "content-hash": "c5160072512498bf5499bcd3854108ba",
     "packages": [
         {
             "name": "beste/clock",
@@ -331,6 +331,75 @@
                 }
             ],
             "time": "2024-02-09T16:56:22+00:00"
+        },
+        {
+            "name": "cloudstudio/ollama-laravel",
+            "version": "v1.0.7",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/cloudstudio/ollama-laravel.git",
+                "reference": "977f01ea63b3351224c3b4ff015baa23105775e9"
+            },
+            "dist": {
+                "type": "zip",
+                "url": "https://api.github.com/repos/cloudstudio/ollama-laravel/zipball/977f01ea63b3351224c3b4ff015baa23105775e9",
+                "reference": "977f01ea63b3351224c3b4ff015baa23105775e9",
+                "shasum": ""
+            },
+            "require": {
+                "guzzlehttp/guzzle": "^7.8",
+                "illuminate/contracts": "^11.0",
+                "php": "^8.2",
+                "spatie/laravel-package-tools": "^1.16"
+            },
+            "require-dev": {
+                "laravel/pint": "^1.0",
+                "nunomaduro/collision": "^7.8",
+                "orchestra/testbench": "^8.8",
+                "pestphp/pest": "^2.20",
+                "pestphp/pest-plugin-arch": "^2.0",
+                "pestphp/pest-plugin-laravel": "^2.0"
+            },
+            "type": "library",
+            "extra": {
+                "laravel": {
+                    "providers": [
+                        "Cloudstudio\\Ollama\\OllamaServiceProvider"
+                    ],
+                    "aliases": {
+                        "Ollama": "Cloudstudio\\Ollama\\Facades\\Ollama"
+                    }
+                }
+            },
+            "autoload": {
+                "psr-4": {
+                    "Cloudstudio\\Ollama\\": "src/",
+                    "Cloudstudio\\Ollama\\Database\\Factories\\": "database/factories/"
+                }
+            },
+            "notification-url": "https://packagist.org/downloads/",
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "Toni Soriano",
+                    "email": "hello@cloudstudio.es",
+                    "role": "Developer"
+                }
+            ],
+            "description": "This is my package ollama-laravel",
+            "homepage": "https://github.com/cloudstudio/ollama-laravel",
+            "keywords": [
+                "cloudstudio",
+                "laravel",
+                "ollama-laravel"
+            ],
+            "support": {
+                "issues": "https://github.com/cloudstudio/ollama-laravel/issues",
+                "source": "https://github.com/cloudstudio/ollama-laravel/tree/v1.0.7"
+            },
+            "time": "2024-05-01T09:53:23+00:00"
         },
         {
             "name": "dflydev/dot-access-data",
