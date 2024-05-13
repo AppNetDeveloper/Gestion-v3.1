@@ -59,7 +59,7 @@ return [
         'ftp' => [
             'driver' => 'ftp',
             'host' => env('FTP_HOST', "localhost"),//Tu servidor FTP
-            'port' => env('FTP_PORT', "21"), //Puerto FTP
+            'port' => 21, //Puerto FTP
             'username' => env('FTP_USERNAME'), //Nombre de usuario FTP
             'password' => env('FTP_PASSWORD'), //Contraseña FTP
             'root' => env('FTP_ROOT', "/"), //Directorio raíz en el servidor FTP
