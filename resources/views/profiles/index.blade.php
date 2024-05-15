@@ -8,8 +8,20 @@
                     <div class="flex-none">
                         <div class="md:h-[186px] md:w-[186px] h-[140px] w-[140px] md:ml-0 md:mr-0 ml-auto mr-auto md:mb-0 mb-4 rounded-full ring-4
                                 ring-slate-100 relative">
-                            <img src="{{ auth()->user()->getFirstMediaUrl('profile-image') ?:
-                            Avatar::create(auth()->user()->name)->setDimension(400)->setFontSize(240)->toBase64() }}" alt="" class="w-full h-full object-cover rounded-full">
+                            @php
+                                $mediaId = App\Models\Media::where('model_id', auth()->user()->id)
+                                                ->where('collection_name', 'profile-image')
+                                                ->value('id');
+                            @endphp
+
+                            <img
+                                src="{{ $mediaId?
+                                     route('image.show', ['media' => $mediaId]):
+                               Avatar::create(auth()->user()->name)->setDimension(400)->setFontSize(240)->toBase64()
+                                }}"
+                                alt=""
+                                class="w-full h-full object-cover rounded-full"
+                            >
                             <a
                                 href="profile-setting"
                                 class="absolute right-2 h-8 w-8 bg-slate-50 text-slate-600 rounded-full shadow-sm flex flex-col items-center
@@ -36,10 +48,10 @@
                     </div>
                     <div class="text-sm text-slate-600 font-light dark:text-slate-300">
                         @php
-                        
+
                         $contractTypeName = auth()->user()->typeOfContract ? auth()->user()->typeOfContract->name : __('No contract type defined!');
                         @endphp
-                        
+
                         {{ $contractTypeName }}
                     </div>
                 </div>
@@ -52,7 +64,7 @@
                         @php
                         $jobPosicionName = auth()->user()->jobPosicion ? auth()->user()->jobPosicion->name : __('No Job Posicion defined!');
                         @endphp
-                        
+
                         {{ $jobPosicionName }}
                     </div>
                 </div>
@@ -65,7 +77,7 @@
                         @php
                         $shiftName = auth()->user()->shift ? auth()->user()->shift->name : __('No Shift defined!');
                         @endphp
-                        
+
                         {{ $shiftName }}
                     </div>
                 </div>
