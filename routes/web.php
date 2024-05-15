@@ -21,6 +21,7 @@ use App\Http\Controllers\TimeControlStatusRulesController;
 use App\Http\Controllers\ShiftController;
 use App\Http\Controllers\TimeControlController;
 use App\Http\Controllers\DebugController;
+use App\Http\Controllers\ImageController;
 
 require __DIR__ . '/auth.php';
 
@@ -168,4 +169,7 @@ Route::group(['middleware' => ['auth', 'verified']], function () {
     // Database Backup
     Route::resource('database-backups', DatabaseBackupController::class);
     Route::get('database-backups-download/{fileName}', [DatabaseBackupController::class, 'databaseBackupDownload'])->name('database-backups.download');
+
+    // image show
+    Route::get('/images/{media}', [ImageController::class, 'show'])->name('image.show');
 });

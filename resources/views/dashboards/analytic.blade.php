@@ -19,10 +19,10 @@
         </div>
     </div>
     <!-- END:: Breadcrumbs -->
-    
 
 
-    
+
+
     <div class="grid grid-cols-12 gap-5 mb-5">
         <div class="2xl:col-span-3 lg:col-span-4 col-span-12">
             <div class="bg-no-repeat bg-cover bg-center p-4 rounded-[6px] relative" style="background-image: url(images/all-img/widget-bg-1.png)">
@@ -201,12 +201,18 @@
                                     </thead>
                                     <tbody class="bg-white divide-y divide-slate-100 dark:bg-slate-800 dark:divide-slate-700">
                                         @foreach($data['users'] as $user)
+                                        @php
+                                            $mediaId = App\Models\Media::where('model_id', $user->id)
+                                                            ->where('collection_name', 'profile-image')
+                                                            ->value('id');
+                                        @endphp
                                         <tr>
                                             <td class="table-td">
                                                 <div class="flex items-center">
                                                     <div class="flex-none">
                                                         <div class="w-8 h-8 rounded-[100%] ltr:mr-3 rtl:ml-3">
-                                                            <img class="w-full h-full rounded-[100%] object-cover" src="{{$user->getFirstMediaUrl('profile-image', 'preview') ?:Avatar::create($user->name)->toBase64() }}" />
+                                                            <img class="w-full h-full rounded-[100%] object-cover" src="{{$mediaId?
+                                                                route('image.show', ['media' => $mediaId]):Avatar::create($user->name)->toBase64() }}" />
                                                         </div>
                                                     </div>
                                                     <div class="flex-1 text-start">

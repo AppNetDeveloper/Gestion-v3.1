@@ -67,6 +67,11 @@
                                 </thead>
                                 <tbody class="bg-white divide-y divide-slate-100 dark:bg-slate-800 dark:divide-slate-700">
                                     @forelse ($users as $user)
+                                    @php
+                                            $mediaId = App\Models\Media::where('model_id', $user->id)
+                                                            ->where('collection_name', 'profile-image')
+                                                            ->value('id');
+                                        @endphp
                                     <tr>
                                         <td class="table-td">
                                             # {{ $user->id }}
@@ -75,7 +80,8 @@
                                             <div class="flex items-center">
                                                 <div class="flex-none">
                                                     <div class="w-8 h-8 rounded-[100%] ltr:mr-3 rtl:ml-3">
-                                                        <img class="w-full h-full rounded-[100%] object-cover" src="{{ Avatar::create($user->name)->toBase64() }}" alt="image">
+                                                        <img class="w-full h-full rounded-[100%] object-cover" src="{{$mediaId?
+                                                            route('image.show', ['media' => $mediaId]):Avatar::create($user->name)->toBase64() }}" alt="image">
                                                     </div>
                                                 </div>
                                                 <div class="flex-1 text-start">
