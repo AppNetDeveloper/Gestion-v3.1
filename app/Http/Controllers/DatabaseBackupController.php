@@ -2,21 +2,25 @@
 
 namespace App\Http\Controllers;
 
-use Illuminate\Contracts\Foundation\Application;
-use Illuminate\Contracts\View\Factory;
-use Illuminate\Contracts\View\View;
-use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
+use Spatie\Backup\Helpers\Format;
+use Illuminate\Contracts\View\View;
+use Illuminate\Http\RedirectResponse;
+use Illuminate\Contracts\View\Factory;
 use Illuminate\Support\Facades\Artisan;
 use Spatie\Backup\BackupDestination\Backup;
+use Illuminate\Contracts\Foundation\Application;
 use Spatie\Backup\BackupDestination\BackupDestination;
-use Spatie\Backup\Helpers\Format;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 use Spatie\Backup\Tasks\Monitor\BackupDestinationStatus;
 use Spatie\Backup\Tasks\Monitor\BackupDestinationStatusFactory;
-use Symfony\Component\HttpFoundation\StreamedResponse;
+
+use Illuminate\Support\Facades\Storage;
+use League\Flysystem\UnableToReadFile;
 
 class DatabaseBackupController extends Controller
+
 {
 
 
@@ -105,7 +109,7 @@ class DatabaseBackupController extends Controller
             abort(403);
         }
 
-        Artisan::call(env('MODEL_backup', 'backup:run --only-db'));
+        Artisan::call(env('MODEL_BACKUP', 'backup:run --only-db'));
         return back()->with('message', 'Database backup created successfully!');
     }
 
@@ -161,26 +165,29 @@ class DatabaseBackupController extends Controller
      * @return RedirectResponse
      */
     public function destroy(int $id)
-    {
-        if (auth()->user()->cannot('database_backup delete')) {
-            abort(403);
-        }
-
-        $files = $this->getFiles(env('BACKUP_STORAGE', 'local'));
-
-        $deletingFile = $files[$id];
-
-        $backupDestination = BackupDestination::create(env('BACKUP_STORAGE', 'local'), config('backup.backup.name'));
-
-        $backupDestination
-            ->backups()
-            ->first(function (Backup $backup) use ($deletingFile) {
-                return $backup->path() === $deletingFile['path'];
-            })
-            ->delete();
-
-        return back()->with(['message' => 'File Deleted Successfully!']);
+{
+    if (auth()->user()->cannot('database_backup delete')) {
+        abort(403);
     }
+
+    $files = $this->getFiles(env('BACKUP_STORAGE', 'local'));
+    $deletingFile = $files[$id];
+
+    $backupDisk = env('BACKUP_STORAGE', 'local');
+    $backupPath = $deletingFile['path'];
+
+    try {
+        if (Storage::disk($backupDisk)->delete($backupPath)) {
+            return back()->with(['message' => 'File Deleted Successfully!']);
+        } else {
+            return back()->with('error', __('Backup file not found.'));
+        }
+    } catch (\Exception $e) {
+        Log::error("Error al eliminar el archivo de respaldo: " . $e->getMessage());
+        return back()->with('error', __('Error deleting backup file.'));
+    }
+}
+
 
     public function databaseBackupDownload(string $fileName)
     {
@@ -188,39 +195,28 @@ class DatabaseBackupController extends Controller
             abort(403);
         }
 
-        $backupDestination = BackupDestination::create('local', config('backup.backup.name'));
+        $backupDisk = env('BACKUP_STORAGE', 'local');
+        $backupPath = config('backup.backup.name') . '/' . $fileName;
 
-        $backup = $backupDestination->backups()->first(function (Backup $backup) use ($fileName) {
-            return $backup->path() === config('backup.backup.name').'/'.$fileName;
-        });
-
-        if (! $backup) {
-            return back()->with('error', __('Backup file not found.'));
-        }
-
-        return $this->respondWithBackupStream($backup);
-    }
-    public function respondWithBackupStream(Backup $backup): StreamedResponse
-    {
-        $fileName = pathinfo($backup->path(), PATHINFO_BASENAME);
-        $size = method_exists($backup, 'sizeInBytes') ? $backup->sizeInBytes() : $backup->size();
-
-        $downloadHeaders = [
-            'Cache-Control' => 'must-revalidate, post-check=0, pre-check=0',
-            'Content-Type' => 'application/zip',
-            'Content-Length' => $size,
-            'Content-Disposition' => 'attachment; filename="'.$fileName.'"',
-            'Pragma' => 'public',
-        ];
-
-        return response()->stream(function () use ($backup) {
-            $stream = $backup->stream();
-
-            fpassthru($stream);
-
-            if (is_resource($stream)) {
-                fclose($stream);
+        try {
+            if (!Storage::disk($backupDisk)->exists($backupPath)) {
+                return back()->with('error', __('Backup file not found.'));
             }
-        }, 200, $downloadHeaders);
+
+            $stream = Storage::disk($backupDisk)->readStream($backupPath);
+            $mimeType = Storage::disk($backupDisk)->mimeType($backupPath);
+
+            return response()->stream(function () use ($stream) {
+                fpassthru($stream);
+            }, 200, [
+                'Content-Type' => $mimeType,
+                'Content-Disposition' => 'attachment; filename="' . $fileName . '"',
+            ]);
+        } catch (UnableToReadFile $e) {
+            Log::error("Error al leer el archivo de respaldo: " . $e->getMessage());
+            return back()->with('error', __('Error downloading backup file.'));
+        }
     }
+
+    
 }

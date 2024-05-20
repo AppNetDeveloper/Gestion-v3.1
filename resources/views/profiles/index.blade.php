@@ -22,12 +22,7 @@
                                 alt=""
                                 class="w-full h-full object-cover rounded-full"
                             >
-                            <a
-                                href="profile-setting"
-                                class="absolute right-2 h-8 w-8 bg-slate-50 text-slate-600 rounded-full shadow-sm flex flex-col items-center
-                                    justify-center md:top-[140px] top-[100px]">
-                                <iconify-icon icon="heroicons:pencil-square"></iconify-icon>
-                            </a>
+                            
                         </div>
                     </div>
                     <div class="flex-1">
