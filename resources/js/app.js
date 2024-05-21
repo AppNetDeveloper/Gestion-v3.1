@@ -72,3 +72,4 @@ import validate from "jquery-validation";
 window.validate = validate;
 
 import.meta.glob(["../images/**"]);
+

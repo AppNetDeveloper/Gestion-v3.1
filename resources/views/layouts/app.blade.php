@@ -11,6 +11,7 @@
     {{-- Scripts --}}
     @vite(['resources/css/app.scss', 'resources/js/custom/store.js'])
     @laravelPWA
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 
 <body class="font-inter dashcode-app" id="body_class">
