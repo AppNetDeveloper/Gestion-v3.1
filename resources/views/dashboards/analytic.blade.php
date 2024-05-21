@@ -460,36 +460,56 @@
         <div class="lg:col-span-4 col-span-12">
             <div class="card">
                 <div class="card-header">
-                    <h4 class="card-title">Overview</h4>
+                    <h4 class="card-title">Monitor de Servidor</h4>
                 </div>
                 <div class="card-body p-6">
-                    <div id="radar-home-chart"></div>
+
+                    <canvas id="cpu-load-chart"></canvas>
+
                     <div class="bg-slate-50 dark:bg-slate-900 rounded p-4 mt-8 flex justify-between flex-wrap">
+
                         <div class="space-y-1">
                             <h4 class="text-slate-600 dark:text-slate-200 text-xs font-normal">
-                                Invested amount
+                                Memoria RAM
                             </h4>
                             <div class="text-sm font-medium text-slate-900 dark:text-white">
-                                $8264.35
+                                {{ exec("free -m | awk 'NR==2{printf \"%.2f%%\", $3*100/$2 }'") }}
                             </div>
                             <div class="text-slate-500 dark:text-slate-300 text-xs font-normal">
-                                +0.001.23 (0.2%)
+                                {{ exec("free -h | awk '/^Mem:/{printf $2}'") }} /
+                                {{ exec("free -m | awk '/^Mem:/{printf(\"%.1fMb\",$2/1)}'") }} |
+                                {{ exec("free -m | awk '/^Mem:/{printf(\"%.1fMb\",$3/1)}'") }} used |
+                                {{ exec("free -m | awk '/^Mem:/{printf(\"%.1fMb\",$6/1)}'") }} available
+                            </div>
+                        </div>
+
+                        <div class="space-y-1">
+                            <h4 class="text-slate-600 dark:text-slate-200 text-xs font-normal">
+                                Uso de Disco
+                            </h4>
+                            <div class="text-sm font-medium text-slate-900 dark:text-white">
+                                {{ exec("df -h | awk '$6==\"/\"{printf \"%s\", $5}'") }}
+                            </div>
+                        </div>
+
+                        <div class="space-y-1">
+                            <h4 class="text-slate-600 dark:text-slate-200 text-xs font-normal">
+                                Carga de CPU
+                            </h4>
+                            <div class="text-sm font-medium text-slate-900 dark:text-white">
+                                {{ exec("top -bn1 | grep load | awk '{printf \"%.2f%%\", $(NF-2)}'") }}
                             </div>
                         </div>
                         <div class="space-y-1">
                             <h4 class="text-slate-600 dark:text-slate-200 text-xs font-normal">
-                                Invested amount
+                                Load Average (1, 5, 15 min)
                             </h4>
                             <div class="text-sm font-medium text-slate-900 dark:text-white">
-                                $8264.35
-                            </div>
-                        </div>
-                        <div class="space-y-1">
-                            <h4 class="text-slate-600 dark:text-slate-200 text-xs font-normal">
-                                Invested amount
-                            </h4>
-                            <div class="text-sm font-medium text-slate-900 dark:text-white">
-                                $8264.35
+                                @if (isset($data['loadAverage']))
+                                    {{ $data['loadAverage'][0] }}, {{ $data['loadAverage'][1] }}, {{ $data['loadAverage'][2] }}
+                                @else
+                                    Sin datos
+                                @endif
                             </div>
                         </div>
                     </div>
@@ -497,8 +517,33 @@
             </div>
         </div>
 
-    </div>
 
+    </div>
+    <script>
+        const cpuLoadCtx = document.getElementById('cpu-load-chart').getContext('2d');
+        const loadAverageData = @json($data['loadAverage']);
+
+        new Chart(cpuLoadCtx, {
+            type: 'pie',
+            data: {
+                labels: ['1 min', '5 min', '15 min'],
+                datasets: [{
+                    label: 'Carga de CPU',
+                    data: loadAverageData,
+                    borderColor: 'rgb(75, 100, 192)', // Personaliza el color
+                    tension: 0.1 // Ajusta la curva de la línea
+                }]
+            },
+            options: {
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        max: 100 // Ajusta el valor máximo según tus necesidades
+                    }
+                }
+            }
+        });
+        </script>
 
     @push('scripts')
     @vite(['resources/js/plugins/jquery-jvectormap-2.0.5.min.js'])

@@ -89,6 +89,13 @@ class HomeController extends Controller
             ],
             'users' => User::latest()->paginate(5),
         ];
+            // Obtener tiempo de carga del sistema
+            $uptime = exec('uptime');
+            preg_match('/load average: (.*)/', $uptime, $matches);
+            $loadAverage = explode(',', $matches[1]); 
+
+            // Agregar tiempo de carga a $chartData
+            $chartData['loadAverage'] = $loadAverage;
 
         return view('dashboards.analytic', [
             'pageTitle' => 'Analytic Dashboard',
