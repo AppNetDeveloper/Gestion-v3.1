@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "c2a45ee704731a46a5c1c55134607536",
+    "content-hash": "936b6a275c7f67d5897fc10b3432a58a",
     "packages": [
         {
             "name": "beste/clock",
@@ -2203,6 +2203,58 @@
                 }
             ],
             "time": "2023-12-03T19:50:20+00:00"
+        },
+        {
+            "name": "insenseanalytics/nova-server-monitor",
+            "version": "v0.1",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/insenseanalytics/nova-server-monitor.git",
+                "reference": "40ce5c712de8aaac8b15a23f9287daa451e40370"
+            },
+            "dist": {
+                "type": "zip",
+                "url": "https://api.github.com/repos/insenseanalytics/nova-server-monitor/zipball/40ce5c712de8aaac8b15a23f9287daa451e40370",
+                "reference": "40ce5c712de8aaac8b15a23f9287daa451e40370",
+                "shasum": ""
+            },
+            "require": {
+                "php": ">=7.1.0",
+                "spatie/laravel-server-monitor": "^1.0"
+            },
+            "type": "library",
+            "extra": {
+                "laravel": {
+                    "providers": [
+                        "Insenseanalytics\\NovaServerMonitor\\ToolServiceProvider"
+                    ]
+                }
+            },
+            "autoload": {
+                "psr-4": {
+                    "Insenseanalytics\\NovaServerMonitor\\": "src/"
+                }
+            },
+            "notification-url": "https://packagist.org/downloads/",
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "Paras Malhotra",
+                    "email": "paras@insenseanalytics.com"
+                }
+            ],
+            "description": "A Laravel Nova tool for Spatie's Server Monitor library.",
+            "keywords": [
+                "laravel",
+                "nova"
+            ],
+            "support": {
+                "issues": "https://github.com/insenseanalytics/nova-server-monitor/issues",
+                "source": "https://github.com/insenseanalytics/nova-server-monitor/tree/v0.1"
+            },
+            "time": "2018-12-07T23:57:13+00:00"
         },
         {
             "name": "intervention/image",
@@ -6301,6 +6353,68 @@
             "time": "2020-08-20T12:19:16+00:00"
         },
         {
+            "name": "spatie/blink",
+            "version": "1.4.0",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/spatie/blink.git",
+                "reference": "d2c12b84ba04d4c5b53d701cc09810bf7e5d546f"
+            },
+            "dist": {
+                "type": "zip",
+                "url": "https://api.github.com/repos/spatie/blink/zipball/d2c12b84ba04d4c5b53d701cc09810bf7e5d546f",
+                "reference": "d2c12b84ba04d4c5b53d701cc09810bf7e5d546f",
+                "shasum": ""
+            },
+            "require": {
+                "php": "^8.0"
+            },
+            "require-dev": {
+                "phpunit/phpunit": "^9.5"
+            },
+            "type": "library",
+            "autoload": {
+                "psr-4": {
+                    "Spatie\\Blink\\": "src"
+                }
+            },
+            "notification-url": "https://packagist.org/downloads/",
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "Freek Van der Herten",
+                    "email": "freek@spatie.be",
+                    "homepage": "https://spatie.be",
+                    "role": "Developer"
+                }
+            ],
+            "description": "Cache that expires in the blink of an eye",
+            "homepage": "https://github.com/spatie/blink",
+            "keywords": [
+                "Blink",
+                "cache",
+                "caching",
+                "spatie"
+            ],
+            "support": {
+                "issues": "https://github.com/spatie/blink/issues",
+                "source": "https://github.com/spatie/blink/tree/1.4.0"
+            },
+            "funding": [
+                {
+                    "url": "https://spatie.be/open-source/support-us",
+                    "type": "custom"
+                },
+                {
+                    "url": "https://github.com/spatie",
+                    "type": "github"
+                }
+            ],
+            "time": "2023-07-19T18:28:44+00:00"
+        },
+        {
             "name": "spatie/db-dumper",
             "version": "3.6.0",
             "source": {
@@ -6588,6 +6702,82 @@
                 }
             ],
             "time": "2024-02-06T20:39:11+00:00"
+        },
+        {
+            "name": "spatie/laravel-blink",
+            "version": "1.7.0",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/spatie/laravel-blink.git",
+                "reference": "e8babaddff704dfb65df6874a03821131dccc222"
+            },
+            "dist": {
+                "type": "zip",
+                "url": "https://api.github.com/repos/spatie/laravel-blink/zipball/e8babaddff704dfb65df6874a03821131dccc222",
+                "reference": "e8babaddff704dfb65df6874a03821131dccc222",
+                "shasum": ""
+            },
+            "require": {
+                "illuminate/support": "^8.73|^9.0|^10.0|^11.0",
+                "php": "^7.4|^8.0",
+                "spatie/blink": "^1.1.3"
+            },
+            "require-dev": {
+                "orchestra/testbench": "^6.23|^8.0|^9.0",
+                "phpunit/phpunit": "^8.5|^9.5|^10.5"
+            },
+            "type": "library",
+            "extra": {
+                "laravel": {
+                    "providers": [
+                        "Spatie\\LaravelBlink\\BlinkServiceProvider"
+                    ],
+                    "aliases": {
+                        "Blink": "Spatie\\LaravelBlink\\BlinkFacade"
+                    }
+                }
+            },
+            "autoload": {
+                "files": [
+                    "src/helpers.php"
+                ],
+                "psr-4": {
+                    "Spatie\\LaravelBlink\\": "src"
+                }
+            },
+            "notification-url": "https://packagist.org/downloads/",
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "Freek Van der Herten",
+                    "email": "freek@spatie.be",
+                    "homepage": "https://spatie.be",
+                    "role": "Developer"
+                }
+            ],
+            "description": "Cache that expires in the blink of an eye",
+            "homepage": "https://github.com/spatie/laravel-blink",
+            "keywords": [
+                "laravel-blink",
+                "spatie"
+            ],
+            "support": {
+                "issues": "https://github.com/spatie/laravel-blink/issues",
+                "source": "https://github.com/spatie/laravel-blink/tree/1.7.0"
+            },
+            "funding": [
+                {
+                    "url": "https://spatie.be/open-source/support-us",
+                    "type": "custom"
+                },
+                {
+                    "url": "https://github.com/spatie",
+                    "type": "github"
+                }
+            ],
+            "time": "2024-03-02T05:46:42+00:00"
         },
         {
             "name": "spatie/laravel-cookie-consent",
@@ -6991,6 +7181,77 @@
             "time": "2024-02-06T20:07:16+00:00"
         },
         {
+            "name": "spatie/laravel-server-monitor",
+            "version": "1.10.0",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/spatie/laravel-server-monitor.git",
+                "reference": "763275bdac2dffbf737c8878678c23b147de87dd"
+            },
+            "dist": {
+                "type": "zip",
+                "url": "https://api.github.com/repos/spatie/laravel-server-monitor/zipball/763275bdac2dffbf737c8878678c23b147de87dd",
+                "reference": "763275bdac2dffbf737c8878678c23b147de87dd",
+                "shasum": ""
+            },
+            "require": {
+                "ext-json": "*",
+                "guzzlehttp/guzzle": "^7.0",
+                "laravel/framework": "^10.0|^11.0",
+                "php": "^8.2",
+                "spatie/laravel-blink": "^1.3",
+                "spatie/regex": "^3.1",
+                "symfony/process": "^6.0|^7.0"
+            },
+            "require-dev": {
+                "mockery/mockery": "^1.4",
+                "orchestra/testbench": "^8.0|^9.0",
+                "pestphp/pest": "^2.34"
+            },
+            "type": "library",
+            "extra": {
+                "laravel": {
+                    "providers": [
+                        "Spatie\\ServerMonitor\\ServerMonitorServiceProvider"
+                    ]
+                }
+            },
+            "autoload": {
+                "psr-4": {
+                    "Spatie\\ServerMonitor\\": "src"
+                }
+            },
+            "notification-url": "https://packagist.org/downloads/",
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "Freek Van der Herten",
+                    "email": "freek@spatie.be",
+                    "homepage": "https://spatie.be",
+                    "role": "Developer"
+                }
+            ],
+            "description": "Monitor servers",
+            "homepage": "https://github.com/spatie/laravel-server-monitor",
+            "keywords": [
+                "laravel-server-monitor",
+                "spatie"
+            ],
+            "support": {
+                "issues": "https://github.com/spatie/laravel-server-monitor/issues",
+                "source": "https://github.com/spatie/laravel-server-monitor/tree/1.10.0"
+            },
+            "funding": [
+                {
+                    "url": "https://github.com/spatie",
+                    "type": "github"
+                }
+            ],
+            "time": "2024-03-08T15:05:54+00:00"
+        },
+        {
             "name": "spatie/laravel-settings",
             "version": "3.3.2",
             "source": {
@@ -7151,6 +7412,69 @@
                 }
             ],
             "time": "2024-02-05T13:37:25+00:00"
+        },
+        {
+            "name": "spatie/regex",
+            "version": "3.1.1",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/spatie/regex.git",
+                "reference": "d543de2019a0068e7b80da0ba24f1c51c7469303"
+            },
+            "dist": {
+                "type": "zip",
+                "url": "https://api.github.com/repos/spatie/regex/zipball/d543de2019a0068e7b80da0ba24f1c51c7469303",
+                "reference": "d543de2019a0068e7b80da0ba24f1c51c7469303",
+                "shasum": ""
+            },
+            "require": {
+                "php": "^8.0|^8.1"
+            },
+            "require-dev": {
+                "phpunit/phpunit": "^9.3"
+            },
+            "type": "library",
+            "autoload": {
+                "psr-4": {
+                    "Spatie\\Regex\\": "src"
+                }
+            },
+            "notification-url": "https://packagist.org/downloads/",
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "Sebastian De Deyne",
+                    "email": "sebastian@spatie.be",
+                    "homepage": "https://spatie.be",
+                    "role": "Developer"
+                }
+            ],
+            "description": "A sane interface for php's built in preg_* functions",
+            "homepage": "https://github.com/spatie/regex",
+            "keywords": [
+                "expression",
+                "expressions",
+                "regex",
+                "regular",
+                "spatie"
+            ],
+            "support": {
+                "issues": "https://github.com/spatie/regex/issues",
+                "source": "https://github.com/spatie/regex/tree/3.1.1"
+            },
+            "funding": [
+                {
+                    "url": "https://spatie.be/open-source/support-us",
+                    "type": "custom"
+                },
+                {
+                    "url": "https://github.com/spatie",
+                    "type": "github"
+                }
+            ],
+            "time": "2021-11-30T21:13:59+00:00"
         },
         {
             "name": "spatie/temporary-directory",
@@ -9045,16 +9369,16 @@
         },
         {
             "name": "symfony/process",
-            "version": "v7.0.4",
+            "version": "v7.0.7",
             "source": {
                 "type": "git",
                 "url": "https://github.com/symfony/process.git",
-                "reference": "0e7727191c3b71ebec6d529fa0e50a01ca5679e9"
+                "reference": "3839e56b94dd1dbd13235d27504e66baf23faba0"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/symfony/process/zipball/0e7727191c3b71ebec6d529fa0e50a01ca5679e9",
-                "reference": "0e7727191c3b71ebec6d529fa0e50a01ca5679e9",
+                "url": "https://api.github.com/repos/symfony/process/zipball/3839e56b94dd1dbd13235d27504e66baf23faba0",
+                "reference": "3839e56b94dd1dbd13235d27504e66baf23faba0",
                 "shasum": ""
             },
             "require": {
@@ -9086,7 +9410,7 @@
             "description": "Executes commands in sub-processes",
             "homepage": "https://symfony.com",
             "support": {
-                "source": "https://github.com/symfony/process/tree/v7.0.4"
+                "source": "https://github.com/symfony/process/tree/v7.0.7"
             },
             "funding": [
                 {
@@ -9102,7 +9426,7 @@
                     "type": "tidelift"
                 }
             ],
-            "time": "2024-02-22T20:27:20+00:00"
+            "time": "2024-04-18T09:29:19+00:00"
         },
         {
             "name": "symfony/routing",

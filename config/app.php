@@ -105,6 +105,7 @@ return [
         'en'=>'united-states',
         'de'=>'germany',
         'fr'=>'france',
+        'es'=>'españa',
     ],
 
     /*

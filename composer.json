@@ -17,7 +17,7 @@
         "laravel/tinker": "^2.9",
         "laravolt/avatar": "^5.1",
         "league/flysystem-ftp": "^3.27",
-        "league/flysystem-sftp-v3": "^3.0",
+        "league/flysystem-sftp-v3": "^3.26",
         "masbug/flysystem-google-drive-ext": "^2.3",
         "modernmcguire/flysystem-google-drive": "^1.2",
         "nesbot/carbon": "^3.3",

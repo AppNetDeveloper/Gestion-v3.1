@@ -54,6 +54,7 @@ return [
             'unix_socket' => env('DB_SOCKET', ''),
             'charset' => 'utf8mb4',
             'collation' => 'utf8mb4_unicode_ci',
+            'lazy_loading' => true, // Habilita la carga diferida
             'prefix' => '',
             'prefix_indexes' => true,
             'dump' => [
