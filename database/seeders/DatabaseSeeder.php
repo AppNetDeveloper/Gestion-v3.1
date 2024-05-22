@@ -28,6 +28,7 @@ class DatabaseSeeder extends Seeder
             UserSeeder::class,
             TimeControlSeeder::class,
             ShiftDaysSeeder::class,
+            MediaSeeder::class,
         ]);
 
     }
