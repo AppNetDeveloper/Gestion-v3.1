@@ -22,6 +22,7 @@ use App\Http\Controllers\ShiftController;
 use App\Http\Controllers\TimeControlController;
 use App\Http\Controllers\DebugController;
 use App\Http\Controllers\ImageController;
+use App\Http\Controllers\ImageLogoController;
 
 require __DIR__ . '/auth.php';
 
@@ -172,4 +173,11 @@ Route::group(['middleware' => ['auth', 'verified']], function () {
 
     // image show
     Route::get('/images/{media}', [ImageController::class, 'show'])->name('image.show');
+
+});
+
+// Grupo de rutas públicas
+Route::group([], function () {
+    Route::get('/logo/{media}', [ImageLogoController::class, 'show'])->name('logo.show');
+    // ... otras rutas públicas que quieras agregar
 });

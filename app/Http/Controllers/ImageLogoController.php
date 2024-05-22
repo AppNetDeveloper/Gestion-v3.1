@@ -16,6 +16,13 @@ class ImageLogoController extends Controller
         if (!$media) {
             abort(404); // Imagen no encontrada
         }
+         // Reglas para collection_name
+         $allowedCollections = ['guest_background', 'dark_logo', 'guest_logo', 'logo', 'favicon'];
+
+         // Verificar si collection_name es permitido
+         if (!in_array($media->collection_name, $allowedCollections)) {
+             abort(403, 'Acceso no autorizado'); // No está permitido ver esta imagen
+         }
         // Verificar si el disco es 'public'
         if ($media->disk === 'public') {
                 return redirect($media->getUrl()); // Redirige a la URL pública para el disco 'public'
