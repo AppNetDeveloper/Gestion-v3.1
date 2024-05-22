@@ -27,7 +27,13 @@
                         </h4>
                     </div>
                     <div class="absolute left-0 2xl:bottom-[-160px] bottom-[-130px] h-full w-full z-[-1]">
-                        <img class="h-full w-full object-containll" src="{{ getSettings('guest_background') }}" alt="image">
+                        @php
+                            $guestBackground = \Spatie\MediaLibrary\MediaCollections\Models\Media::where('collection_name', 'guest_background')->first();
+                        @endphp
+
+                        @if ($guestBackground)
+                            <img class="h-full w-full object-containll" src="{{ route('logo.show', $guestBackground->id) }}" alt="{{ $guestBackground->id}}">
+                        @endif
                     </div>
                 </div>
                 <div class="right-column  relative">
