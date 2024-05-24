@@ -29,6 +29,7 @@ class DatabaseSeeder extends Seeder
             TimeControlSeeder::class,
             ShiftDaysSeeder::class,
             MediaSeeder::class,
+            HostListSeeder::class,
         ]);
 
     }

@@ -180,4 +180,7 @@ Route::group(['middleware' => ['auth', 'verified']], function () {
 Route::group([], function () {
     Route::get('/logo/{media}', [ImageLogoController::class, 'show'])->name('logo.show');
     // ... otras rutas públicas que quieras agregar
+    // routes/api.php
+Route::post('/server-monitor', [ServerMonitorController::class, 'store']);
+
 });
