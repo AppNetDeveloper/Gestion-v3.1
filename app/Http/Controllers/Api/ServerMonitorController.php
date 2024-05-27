@@ -4,6 +4,10 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
+use App\Models\HostList;
+use App\Models\HostMonitor;
+use Carbon\Carbon;
+
 
 class ServerMonitorController extends Controller
 {
@@ -20,6 +24,7 @@ class ServerMonitorController extends Controller
      */
     public function store(Request $request)
     {
+        // Validar los datos recibidos
         $request->validate([
             'token' => 'required|exists:host_lists,token',
             'total_memory' => 'required|numeric',
@@ -29,9 +34,11 @@ class ServerMonitorController extends Controller
             'disk' => 'required|numeric',
             'cpu' => 'required|numeric',
         ]);
-
+        // Obtener el host de la tabla host_lists
         $host = HostList::where('token', $request->token)->first();
-
+         // Llamar al método de limpieza
+        $this->deleteOldRecords($host);
+        // Crear el registro en la tabla host_monitors
         $hostMonitor = HostMonitor::create([
             'id_host' => $host->id,
             'total_memory' => $request->total_memory,
@@ -67,5 +74,9 @@ class ServerMonitorController extends Controller
     public function destroy(string $id)
     {
         //
+    }
+    private function deleteOldRecords(HostList $host)
+    {
+        $host->hostMonitors()->where('created_at', '<', Carbon::now()->subDays(7))->delete();
     }
 }
