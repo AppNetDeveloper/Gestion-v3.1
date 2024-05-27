@@ -10,6 +10,7 @@ use App\Http\Controllers\Api\UserController;
 use App\Http\Controllers\Api\EnvironmentController;
 use App\Http\Controllers\Api\DatabaseBackupController;
 use Illuminate\Support\Facades\Route;
+use App\Http\Controllers\Api\ServerMonitorController;
 
 /*
  * API Routes
@@ -50,3 +51,6 @@ Route::group(['middleware' => 'auth:sanctum'], function () {
 
 // General Settings
 Route::get('general-settings', GeneralSettingsController::class);
+// api.php
+Route::post('/server-monitor', [ServerMonitorController::class, 'store']);
+

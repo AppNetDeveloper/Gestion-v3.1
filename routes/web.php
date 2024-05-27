@@ -23,6 +23,7 @@ use App\Http\Controllers\TimeControlController;
 use App\Http\Controllers\DebugController;
 use App\Http\Controllers\ImageController;
 use App\Http\Controllers\ImageLogoController;
+use App\Http\Controllers\Api\ServerMonitorController;
 
 require __DIR__ . '/auth.php';
 
@@ -179,8 +180,6 @@ Route::group(['middleware' => ['auth', 'verified']], function () {
 // Grupo de rutas públicas
 Route::group([], function () {
     Route::get('/logo/{media}', [ImageLogoController::class, 'show'])->name('logo.show');
-    // ... otras rutas públicas que quieras agregar
-    // routes/api.php
-Route::post('/server-monitor', [ServerMonitorController::class, 'store']);
+
 
 });
