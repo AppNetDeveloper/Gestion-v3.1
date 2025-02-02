@@ -24,6 +24,11 @@ use App\Http\Controllers\DebugController;
 use App\Http\Controllers\ImageController;
 use App\Http\Controllers\ImageLogoController;
 use App\Http\Controllers\Api\ServerMonitorController;
+use App\Http\Controllers\LinkedinController;
+use App\Http\Controllers\OllamaController;    
+use App\Http\Controllers\TaskerLinkedinController;
+
+
 
 require __DIR__ . '/auth.php';
 
@@ -92,7 +97,27 @@ Route::group(['middleware' => ['auth', 'verified']], function () {
     Route::get('utility-coming-soon', [UtilityController::class, 'comingSoon'])->name('utility.coming-soon');
     Route::get('utility-under-maintenance', [UtilityController::class, 'underMaintenance'])->name('utility.under-maintenance');
 
+    //Linkedin
+    Route::get('/linkedin', [LinkedinController::class, 'index'])->name('linkedin.index');
+    Route::get('/linkedin/auth', [LinkedinController::class, 'redirectToLinkedIn'])->name('linkedin.auth');
+    Route::get('/callback', [LinkedinController::class, 'handleLinkedInCallback'])->name('linkedin.callback');
+    Route::post('/linkedin/post', [LinkedinController::class, 'publishPost'])->name('linkedin.post');
+    Route::delete('/linkedin/disconnect', [LinkedinController::class, 'disconnect'])->name('linkedin.disconnect');
 
+    //OLAMA
+    Route::post('/ollama/process', [OllamaController::class, 'processPrompt'])->name('ollama.process');
+
+    //TASKERLINKEDIN
+        // Vista de tareas programadas
+    Route::get('tasker-linkedin', [TaskerLinkedinController::class, 'index'])->name('tasker.linkedin.index');   
+        // Datos para DataTables (JSON)
+    Route::get('tasker-linkedin/data', [TaskerLinkedinController::class, 'data'])->name('tasker.linkedin.data');
+        // Guardar nueva tarea programada
+    Route::post('tasker-linkedin/store', [TaskerLinkedinController::class, 'store'])->name('tasker.linkedin.store');
+    //borrar tarea programada
+    Route::delete('tasker-linkedin/{task}', [TaskerLinkedinController::class, 'destroy'])->name('tasker.linkedin.destroy');
+
+    
     // ELEMENTS
     Route::get('widget-basic', [WidgetsController::class, 'basic'])->name('widget.basic');
     Route::get('widget-statistic', [WidgetsController::class, 'statistic'])->name('widget.statistic');
