@@ -58,6 +58,14 @@
                 </a>
             </li>
             <li>
+                <a href="{{ route('linkedin.index') }}" class="navItem {{ (\Request::route()->getName() == 'linkedin.index') ? 'active' : '' }}">
+                    <span class="flex items-center">
+                        <iconify-icon class="nav-icon" icon="heroicons-outline:link"></iconify-icon>
+                        <span>{{ __('LinkedIn') }}</span>
+                    </span>
+                </a>
+            </li>
+            <li>
                 <a href="{{ route('kanban') }}" class="navItem {{ (\Request::route()->getName() == 'kanban') ? 'active' : '' }}">
                     <span class="flex items-center">
                         <iconify-icon class=" nav-icon" icon="heroicons-outline:view-boards"></iconify-icon>
