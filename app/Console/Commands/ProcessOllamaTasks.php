@@ -3,9 +3,8 @@
 namespace App\Console\Commands;
 
 use Illuminate\Console\Command;
-use App\Models\TaskerLinkedin;
+use App\Models\OllamaTasker;
 use GuzzleHttp\Client;
-use Carbon\Carbon;
 
 class ProcessOllamaTasks extends Command
 {
@@ -21,7 +20,7 @@ class ProcessOllamaTasks extends Command
      *
      * @var string
      */
-    protected $description = 'Process pending LinkedIn tasks by calling the Ollama API continuously';
+    protected $description = 'Process pending Ollama tasks by calling the Ollama API continuously';
 
     /**
      * A Guzzle client instance.
@@ -52,36 +51,39 @@ class ProcessOllamaTasks extends Command
      */
     public function handle()
     {
-        $this->info("Starting infinite loop for processing tasks.");
+        $this->info("Starting infinite loop for processing Ollama tasks.");
         
         // Bucle infinito
         while (true) {
             try {
-                // Buscar tareas pendientes: prompt no vacío, response vacío y status 'pending'
-                $tasks = TaskerLinkedin::where('status', 'pending')
-                    ->whereNotNull('prompt')
-                    ->where(function ($query) {
-                        $query->whereNull('response')
-                              ->orWhere('response', '');
-                    })
-                    ->get();
+                // Buscar tareas pendientes en ollama_taskers:
+                // tareas con prompt definido y sin respuesta (null o cadena vacía)
+                $tasks = OllamaTasker::whereNotNull('prompt')
+                                        ->where(function ($query) {
+                                            $query->whereNull('response')
+                                                ->orWhere('response', '');
+                                        })
+                                        ->whereNull('error') // Solo procesamos tareas sin error previo
+                                        ->get();
+
 
                 if ($tasks->isEmpty()) {
-                    $this->info("No pending tasks found. Sleeping for 10 seconds.");
+                    $this->info("No pending Ollama tasks found. Sleeping for 10 seconds.");
                     sleep(10);
                     continue;
                 }
 
                 foreach ($tasks as $task) {
-                    $this->info("Processing task ID: " . $task->id);
-                    // NOTA: No actualizamos el estado a "processing" todavía; lo haremos solo si recibimos la respuesta
+                    $this->info("Processing Ollama task ID: {$task->id}");
 
                     try {
-                        $prefix = "Crea una publicación profesional y atractiva para LinkedIn, pero sin escribir nada de cabezal sobre te escribo una publicacion o algo parecido, siguiendo estas directrices: ";
-                        $textArea=$task->prompt;
-                        $suffix = " Mantén un tono profesional, cercano y humano. Usa un lenguaje claro, inspirador y persuasivo que motive a la acción. SI no tienes las informaciones para completar tus textos no pongas la parte que te falta. Pon solo datos concretos y que tienes; no inventes nada y tampoco dejes partes para que el usuario las complete. Si no existen los datos como nombre, usuario, empresa, etc., no uses esto.";
-                        $prompt = $prefix ." ". $textArea ." ". $suffix;
-                        // Preparar la carga útil para la API
+                        // Construir el prompt completo
+                        $prefix = "Crea una publicación profesional y atractiva para LinkedIn, pero sin escribir nada de cabezal sobre te escribo una publicacion o algo parecido, siguiendo estas directrices:";
+                        $textArea = $task->prompt;
+                        $suffix = "Mantén un tono profesional, cercano y humano. Usa un lenguaje claro, inspirador y persuasivo que motive a la acción. Si no tienes las informaciones para completar tus textos, no pongas la parte que te falta. Pon solo datos concretos y que tienes; no inventes nada y tampoco dejes partes para que el usuario las complete. Si no existen los datos como nombre, usuario, empresa, etc., no uses esto.";
+                        $prompt = $prefix . " " . $textArea . " " . $suffix;
+
+                        // Preparar la carga útil para la API de Ollama
                         $payload = [
                             'model'    => env('OLLAMA_MODEL_DEFAULT'),
                             'messages' => [
@@ -142,24 +144,23 @@ class ProcessOllamaTasks extends Command
                         if (empty($combinedContent)) {
                             $this->error("No content found from API for task ID: {$task->id}");
                             $task->error = 'No content found from API';
-                            $task->status = 'failed';
+                            // En caso de error, se guarda en la columna error
                             $task->save();
                             continue;
                         }
 
-                        // Limpiar el contenido (elimina secciones entre <think> y </think>)
+                        // Limpiar el contenido (eliminar secciones entre <think> y </think>)
                         $cleanContent = $this->cleanContent($combinedContent);
-                        // Ahora actualizamos la tarea: asignamos response y marcamos status a "processing" (ya que se recibieron datos)
+                        // Actualizamos la tarea en ollama_taskers con la respuesta recibida
                         $task->response = $cleanContent;
-                        $task->status = 'processing';
+                        // Si se desea, se podría actualizar algún campo de status
                         $task->save();
 
-                        $this->info("Task ID {$task->id} processed successfully.");
+                        $this->info("Ollama task ID {$task->id} processed successfully.");
 
                     } catch (\Exception $e) {
-                        $this->error("Error processing task ID {$task->id}: " . $e->getMessage());
+                        $this->error("Error processing Ollama task ID {$task->id}: " . $e->getMessage());
                         $task->error = $e->getMessage();
-                        $task->status = 'failed';
                         $task->save();
                     }
                 }
@@ -170,7 +171,7 @@ class ProcessOllamaTasks extends Command
             sleep(5);
         }
         
-        // Nunca se alcanza este return, pero se requiere por la firma
+        // Nunca se alcanza este return, pero se requiere por la firma.
         return 0;
     }
 

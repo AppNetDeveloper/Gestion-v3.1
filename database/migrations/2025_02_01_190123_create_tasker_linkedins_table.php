@@ -15,17 +15,33 @@ class CreateTaskerLinkedinsTable extends Migration
     {
         Schema::create('tasker_linkedins', function (Blueprint $table) {
             $table->id();
-            $table->unsignedBigInteger('user_id'); // User relationship
-            $table->text('prompt');                // The prompt/message sent to the API
-            $table->text('response')->nullable();  // The processed response (nullable until completed)
+            $table->unsignedBigInteger('user_id');           // Relación con la tabla users
+            $table->text('prompt');                           // El mensaje enviado a la API
+            $table->text('response')->nullable();             // La respuesta procesada (nullable hasta completarse)
+            
+            // Campo status con sus posibilidades
             $table->enum('status', ['pending', 'processing', 'completed', 'failed'])
-                  ->default('pending');           // Task status
-            $table->text('error')->nullable();     // Any error message if processing fails
-            $table->dateTime('publish_date')->nullable(); // Publication date (in English)
+                  ->default('pending');                       // Estado de la tarea
+            
+            $table->text('error')->nullable();                // Mensaje de error en caso de fallo
+
+            // Columna para la relación con la tabla ollama_taskers
+            $table->unsignedBigInteger('ollama_tasker_id')->nullable();
+
+            $table->dateTime('publish_date')->nullable();     // Fecha de publicación
             $table->timestamps();
 
-            // Foreign key relationship with users table
-            $table->foreign('user_id')->references('id')->on('users')->onDelete('cascade');
+            // Llave foránea con la tabla users
+            $table->foreign('user_id')
+                  ->references('id')
+                  ->on('users')
+                  ->onDelete('cascade');
+            
+            // Llave foránea con la tabla ollama_taskers
+            $table->foreign('ollama_tasker_id')
+                  ->references('id')
+                  ->on('ollama_taskers')
+                  ->onDelete('set null');
         });
     }
 
@@ -36,6 +52,12 @@ class CreateTaskerLinkedinsTable extends Migration
      */
     public function down()
     {
+        // Primero eliminamos las restricciones de llave foránea
+        Schema::table('tasker_linkedins', function (Blueprint $table) {
+            $table->dropForeign(['ollama_tasker_id']);
+            $table->dropForeign(['user_id']);
+        });
+
         Schema::dropIfExists('tasker_linkedins');
     }
 }
