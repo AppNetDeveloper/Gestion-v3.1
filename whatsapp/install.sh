@@ -10,5 +10,7 @@ fi
 
 # Instala las dependencias necesarias
 npm install @whiskeysockets/baileys express node-cache pino axios @hapi/boom dotenv qrcode
+npm update
+npm install
 
 echo "Instalación completada."
