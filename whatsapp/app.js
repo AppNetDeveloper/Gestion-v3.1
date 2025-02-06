@@ -23,7 +23,7 @@ const PORT = process.env.PORT || 3005;
 const AUTH_DIR = process.env.AUTH_DIR || './baileys_auth_info';
 const STORE_FILE = process.env.STORE_FILE || './baileys_store_multi.json';
 // Asegúrate de que la URL incluya el puerto si corresponde, por ejemplo: http://localhost:3005/api/whatsapp-credentials
-const API_CREDENTIALS_URL = process.env.API_CREDENTIALS_URL || 'http://localhost/api/whatsapp-credentials';
+const API_CREDENTIALS_URL = process.env.API_CREDENTIALS_URL || 'http://localhost:3005/api/whatsapp-credentials';
 
 // Inicialización de Express y Pino para logs
 const app = express();
