@@ -36,3 +36,4 @@ whatsapp/baileys_store_multi*
 whatsapp/baileys_store*
 whatsapp/wa-logs.txt
 whatsapp/baileys_auth_info/*
+# Ignorar archivos y carpetas dentro de la carpeta whatsapp
