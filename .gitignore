@@ -23,3 +23,9 @@ yarn-error.log
 /packages
 ngrok.exe
 tf_env/
+whatsapp/baileys-store_multi*
+whatsapp/baileys-store*
+whatsapp/wa-logs.txt
+/.whatsapp/baileys-store_multi*
+/.whatsapp/baileys-store*
+/.whatsapp/wa-logs.txt
