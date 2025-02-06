@@ -16,12 +16,13 @@ const {
   useMultiFileAuthState,
 } = require('@whiskeysockets/baileys');
 const Pino = require('pino');
-const QRCode = require('qrcode'); // Importa el paquete qrcode
+const QRCode = require('qrcode'); // Para generar el QR como imagen
 
 // Configuración a través de variables de entorno
 const PORT = process.env.PORT || 3005;
 const AUTH_DIR = process.env.AUTH_DIR || './baileys_auth_info';
 const STORE_FILE = process.env.STORE_FILE || './baileys_store_multi.json';
+// Asegúrate de que la URL incluya el puerto si corresponde, por ejemplo: http://localhost:3005/api/whatsapp-credentials
 const API_CREDENTIALS_URL = process.env.API_CREDENTIALS_URL || 'http://localhost/api/whatsapp-credentials';
 
 // Inicialización de Express y Pino para logs
@@ -44,7 +45,7 @@ if (store) {
   setInterval(() => store.writeToFile(STORE_FILE), 10_000);
 }
 
-// Variables globales para el socket, QR y mensajes en chats
+// Variables globales para el socket, el código QR y almacenamiento de mensajes
 let sock = null;
 let qrCode = null;
 const chatMessagesStore = {};
@@ -62,6 +63,7 @@ async function startSock() {
     version,
     logger,
     printQRInTerminal: true, // Siempre imprime el QR en la terminal
+    autoRead: false, // Evita que se envíen recibos de lectura automáticamente
     auth: {
       creds: state.creds,
       keys: makeCacheableSignalKeyStore(state.keys, logger),
@@ -86,13 +88,13 @@ async function startSock() {
       const update = events['connection.update'];
       const { connection, lastDisconnect, qr } = update;
 
-      // Si hay código QR, se almacena para ser consumido por los endpoints
+      // Si se genera un código QR, se almacena para ser consumido por los endpoints
       if (qr) {
         qrCode = qr;
         console.log('Nuevo código QR generado:', qr);
       }
 
-      // Si la conexión se cierra, se intenta reconectar (a menos que se trate de un logout)
+      // Si la conexión se cierra, intenta reconectar (a menos que sea un logout)
       if (connection === 'close') {
         if ((lastDisconnect?.error instanceof Boom) && lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut) {
           console.log('Intentando reconectar...');
@@ -102,16 +104,18 @@ async function startSock() {
         }
       }
 
-      // Cuando la conexión se abre, se limpia el código QR y se envían credenciales a la API
+      // Cuando la conexión se abre, limpia el QR y envía las credenciales a la API
       if (connection === 'open') {
         console.log('Conexión exitosa.');
         qrCode = null;
 
         try {
-          // Se filtran los datos esenciales de las credenciales
+          // Extrae los datos esenciales de la sesión
           const { registrationId, advSecretKey, me } = sock.authState.creds;
           const filteredCreds = { registrationId, advSecretKey, me };
-          const filteredKeys = {}; // Ajusta si requieres enviar información adicional
+          const filteredKeys = {}; // Puedes agregar más datos si es necesario
+
+          // Envía la información a la URL configurada
           const response = await axios.post(API_CREDENTIALS_URL, {
             creds: JSON.stringify(filteredCreds),
             keys: JSON.stringify(filteredKeys)
@@ -154,6 +158,13 @@ async function startSock() {
    ENDPOINTS DE LA API
    ============================ */
 
+// Endpoint para recibir las credenciales (puedes adaptar este código según tus necesidades)
+app.post('/api/whatsapp-credentials', (req, res) => {
+  console.log('Datos recibidos en /api/whatsapp-credentials:', req.body);
+  // Aquí podrías guardar los datos en una base de datos o realizar otra acción.
+  res.json({ message: 'Credenciales recibidas correctamente' });
+});
+
 // Inicia la conexión a WhatsApp
 app.post('/start-whatsapp', async (req, res) => {
   try {
@@ -189,8 +200,7 @@ app.get('/get-qr-jpg', (req, res) => {
       console.error('Error generando imagen QR:', err);
       return res.status(500).json({ error: 'Error generando la imagen del código QR' });
     }
-    // El Data URL tiene el formato "data:image/jpeg;base64,...."
-    // Extraemos la parte base64 y enviamos la imagen
+    // Extrae la parte base64 del Data URL y la convierte en Buffer
     const base64Data = url.split(',')[1];
     const imgBuffer = Buffer.from(base64Data, 'base64');
     res.writeHead(200, {
@@ -242,7 +252,7 @@ app.post('/send-message', async (req, res) => {
 app.get('/get-chats', async (req, res) => {
   try {
     let chats = [];
-    // Se intenta obtener los chats del store de Baileys (si está disponible)
+    // Intenta obtener los chats desde el store de Baileys
     if (store && store.chats) {
       chats = store.chats.all().map(chat => ({
         jid: chat.id,
@@ -251,7 +261,7 @@ app.get('/get-chats', async (req, res) => {
         unreadCount: chat.unreadCount || 0,
       }));
     } else {
-      // Fallback: se obtienen los chats a partir de la estructura local
+      // Fallback: usa la estructura local de mensajes
       chats = Object.keys(chatMessagesStore).map(jid => ({
         jid,
         name: jid,

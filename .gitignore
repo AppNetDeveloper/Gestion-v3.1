@@ -23,9 +23,16 @@ yarn-error.log
 /packages
 ngrok.exe
 tf_env/
-whatsapp/baileys-store_multi*
-whatsapp/baileys-store*
+whatsapp/baileys_store_multi*
+whatsapp/baileys_store*
 whatsapp/wa-logs.txt
-/.whatsapp/baileys-store_multi*
-/.whatsapp/baileys-store*
+/.whatsapp/baileys_store_multi*
+/.whatsapp/baileys_store*
 /.whatsapp/wa-logs.txt
+whatsapp/baileys_auth_info/*
+/.whatsapp/baileys_auth_info/*
+# Ignorar archivos y carpetas dentro de la carpeta whatsapp
+whatsapp/baileys_store_multi*
+whatsapp/baileys_store*
+whatsapp/wa-logs.txt
+whatsapp/baileys_auth_info/*
