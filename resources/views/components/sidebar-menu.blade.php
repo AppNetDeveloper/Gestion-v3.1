@@ -90,6 +90,14 @@
                 </a>
             </li>
             <li>
+                <a href="{{ route('shiftdays.kanban') }}" class="navItem {{ (\Request::route()->getName() == 'shiftdays.kanban') ? 'active' : '' }}">
+                    <span class="flex items-center">
+                        <iconify-icon class=" nav-icon" icon="bi:kanban"></iconify-icon>
+                        <span>{{ __('Shift Day') }}</span>
+                    </span>
+                </a>
+            </li>
+            <li>
                 <a href="{{ route('calendar.index') }}" class="navItem {{ (\Request::route()->getName() == 'calender') ? 'active' : '' }}">
                     <span class="flex items-center">
                         <iconify-icon class=" nav-icon" icon="heroicons-outline:calendar"></iconify-icon>
