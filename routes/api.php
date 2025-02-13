@@ -11,6 +11,10 @@ use App\Http\Controllers\Api\EnvironmentController;
 use App\Http\Controllers\Api\DatabaseBackupController;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Api\ServerMonitorController;
+use App\Http\Controllers\Api\WhatsappMessageController;
+use App\Http\Controllers\Api\TelegramController;
+use App\Http\Controllers\Api\WhatsappSessionController;
+
 
 /*
  * API Routes
@@ -49,8 +53,22 @@ Route::group(['middleware' => 'auth:sanctum'], function () {
     });
 });
 
+
 // General Settings
 Route::get('general-settings', GeneralSettingsController::class);
 // api.php
 Route::post('/server-monitor', [ServerMonitorController::class, 'store']);
+//api para iniciar sesion de whatsapp
+Route::get('whatsapp/logout', [WhatsappSessionController::class, 'logout']);
+Route::post('whatsapp/start-session', [WhatsappSessionController::class, 'startSession']);
 
+//Api para insertas los mesajes de whatsapp
+Route::post('/whatsapp-messages', [WhatsappMessageController::class, 'store']);
+//whatsapp api sesion 
+Route::get('whatsapp/check', [WhatsappSessionController::class, 'checkSession']);
+//send whatsapp
+Route::post('/whatsapp/send-message-now', [WhatsappMessageController::class, 'sendMessageNow'])->name('api.whatsapp.send.message.now');
+
+//api para insertar mesajes telegram
+
+Route::post('/telegram', [TelegramController::class, 'store']);

@@ -100,8 +100,16 @@ class RoleController extends Controller
      */
     public function store(StoreRoleRequest $request)
     {
-        $createdRole = Role::create(['name' => $request->validated('name')]);
-        $createdRole->syncPermissions($request->validated('permissions'));
+        $validated = $request->validated(); // Obtiene todos los datos validados
+
+        // Crear el rol con el nombre validado
+        $createdRole = Role::create(['name' => $validated['name']]);
+
+        // Obtener los IDs de permisos o un array vacío si no se enviaron
+        $permissionsIds = $validated['permissions'] ?? [];
+        $permissions = Permission::whereIn('id', $permissionsIds)->get();
+
+        $createdRole->syncPermissions($permissions);
 
         return to_route('roles.index')->with('message', 'Role created successfully');
     }
@@ -128,7 +136,6 @@ class RoleController extends Controller
         ];
 
         $permissionModules = Permission::all()->groupBy('module_name');
-
         $rolePermissions = $role->permissions()->pluck('id')->toArray();
 
         return view('roles.show', [
@@ -162,7 +169,6 @@ class RoleController extends Controller
         ];
 
         $permissionModules = Permission::all()->groupBy('module_name');
-
         $rolePermissions = $role->permissions()->pluck('id')->toArray();
 
         return view('roles.edit', [
@@ -183,8 +189,14 @@ class RoleController extends Controller
      */
     public function update(UpdateRoleRequest $request, Role $role)
     {
-        $role->update(['name' => $request->validated('name')]);
-        $role->syncPermissions($request->validated('permissions'));
+        $validated = $request->validated();
+        $role->update(['name' => $validated['name']]);
+
+        // Obtener los permisos a partir de los IDs o un array vacío
+        $permissionsIds = $validated['permissions'] ?? [];
+        $permissions = Permission::whereIn('id', $permissionsIds)->get();
+
+        $role->syncPermissions($permissions);
 
         return to_route('roles.index')->with('message', 'Role updated successfully');
     }

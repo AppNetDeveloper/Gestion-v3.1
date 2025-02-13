@@ -66,6 +66,22 @@
                 </a>
             </li>
             <li>
+                <a href="{{ route('whatsapp.index') }}" class="navItem {{ (\Request::route()->getName() == 'whatsapp.index') ? 'active' : '' }}">
+                    <span class="flex items-center">
+                        <iconify-icon class="nav-icon" icon="hugeicons:message-01"></iconify-icon>
+                        <span>{{ __('Whatsapp') }}</span>
+                    </span>
+                </a>
+            </li>
+            <li>
+                <a href="{{ route('contacts.index') }}" class="navItem {{ (\Request::route()->getName() == 'contacts.index') ? 'active' : '' }}">
+                    <span class="flex items-center">
+                        <iconify-icon class="nav-icon" icon="hugeicons:message-01"></iconify-icon>
+                        <span>{{ __('Contacts') }}</span>
+                    </span>
+                </a>
+            </li>
+            <li>
                 <a href="{{ route('kanban') }}" class="navItem {{ (\Request::route()->getName() == 'kanban') ? 'active' : '' }}">
                     <span class="flex items-center">
                         <iconify-icon class=" nav-icon" icon="heroicons-outline:view-boards"></iconify-icon>
@@ -74,10 +90,10 @@
                 </a>
             </li>
             <li>
-                <a href="{{ route('calender') }}" class="navItem {{ (\Request::route()->getName() == 'calender') ? 'active' : '' }}">
+                <a href="{{ route('calendar.index') }}" class="navItem {{ (\Request::route()->getName() == 'calender') ? 'active' : '' }}">
                     <span class="flex items-center">
                         <iconify-icon class=" nav-icon" icon="heroicons-outline:calendar"></iconify-icon>
-                        <span>{{ __('Calander') }}</span>
+                        <span>{{ __('Calendar') }}</span>
                     </span>
                 </a>
             </li>

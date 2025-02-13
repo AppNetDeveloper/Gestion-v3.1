@@ -12,6 +12,11 @@ export default defineConfig({
                 "resources/js/custom/chart-active.js",
                 "resources/js/main.js",
                 "resources/js/app.js",
+                "resources/js/custom/app-chat.js", // Agregado
+                "resources/js/custom/app-email.js",// Agregado
+                "resources/js/plugins/flatpickr.js",
+                'resources/js/plugins/fullcalendar.js',
+                'resources/js/custom/calander-init.js',
             ],
             refresh: true,
         }),

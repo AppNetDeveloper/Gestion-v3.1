@@ -10,6 +10,8 @@ fi
 
 # Instala las dependencias necesarias
 npm install @whiskeysockets/baileys express node-cache pino axios @hapi/boom dotenv qrcode
+npm install swagger-ui-express swagger-jsdoc
+
 npm update
 npm install
 

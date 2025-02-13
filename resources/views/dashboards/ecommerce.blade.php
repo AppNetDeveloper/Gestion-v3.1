@@ -1206,61 +1206,58 @@
             ).render();
             {{-- Last Week Overview chart end --}}
 
-//send ajax a anadir nuevo fichaje
+        //send ajax a anadir nuevo fichaje
+        $(document).ready(function() {
+            $('.attendance-button').on('click', function(event) {
+                // Mostrar el loading y ocultar el contenedor de botones
+                document.getElementById("loading-overlay").style.display = "block";
+                document.getElementById("buttons-container").style.display = "none";
 
-$(document).ready(function() {
-    $('.attendance-button').on('click', function(event) {
-        // Mostrar el loading
-        document.getElementById("loading-overlay").style.display = "block";
-        document.getElementById("buttons-container").style.display = "none";
+                event.preventDefault();
 
-        event.preventDefault();
+                let button = $(this);
+                let statusId = button.data('status-id');
 
-        let button = $(this);
-        let statusId = button.data('status-id');
+                // Uso de la API nativa de geolocalización del navegador
+                if (navigator.geolocation) {
+                    navigator.geolocation.getCurrentPosition(function(position) {
+                        let lat = position.coords.latitude;
+                        let long = position.coords.longitude;
 
-        // Geolocalización
-        if (navigator.geolocation) {
-            navigator.geolocation.getCurrentPosition(function(position) {
-                let lat = position.coords.latitude;
-                let long = position.coords.longitude;
-
-                // Solicitud AJAX
-                $.ajax({
-                    url: '{{ route('add-new-time-control.index') }}',
-                    method: 'POST',
-                    data: {
-                        _token: '{{ csrf_token() }}',
-                        status_id: statusId,
-                        lat: lat,
-                        long: long
-                    },
-                    success: function(response) {
-                        if (response.success) {
-                            console.log('Registro de asistencia guardado!');
-                            window.location.reload(); // Actualizar la página
-                        } else {
-                            console.log('Error:', response.error);
-                            showErrorAlert(response.message); // Mostrar mensaje de error
-                        }
-                    },
-                    error: function(xhr, status, error) {
-                        console.log('Error al enviar la solicitud AJAX:', error);
-                        showErrorAlert('Error al enviar la solicitud'); // Mensaje de error genérico
-                    }
-                });
-            }, function(error) {
-                console.log("Error al obtener la ubicación:", error);
-                showErrorAlert('Error al obtener la ubicación'); // Mensaje de error genérico
+                        // Solicitud AJAX para enviar la ubicación y el estado seleccionado
+                        $.ajax({
+                            url: '/add-new-time-control',
+                            method: 'POST',
+                            data: {
+                                _token: '{{ csrf_token() }}',
+                                status_id: statusId,
+                                lat: lat,
+                                long: long
+                            },
+                            success: function(response) {
+                                if (response.success) {
+                                    console.log('Registro de asistencia guardado!');
+                                    window.location.reload(); // Actualizar la página
+                                } else {
+                                    console.log('Error:', response.error);
+                                    showErrorAlert(response.message); // Mostrar mensaje de error
+                                }
+                            },
+                            error: function(xhr, status, error) {
+                                console.log('Error al enviar la solicitud AJAX:', error);
+                                showErrorAlert('Error al enviar la solicitud'); // Mensaje de error genérico
+                            }
+                        });
+                    }, function(error) {
+                        console.log("Error al obtener la ubicación:", error);
+                        showErrorAlert('Error al obtener la ubicación'); // Mensaje de error genérico
+                    });
+                } else {
+                    console.log("Geolocalización no soportada");
+                    showErrorAlert('Geolocalización no soportada'); // Mensaje de error genérico
+                }
             });
-        } else {
-            console.log("Geolocalización no soportada");
-            showErrorAlert('Geolocalización no soportada'); // Mensaje de error genérico
-        }
-    });
-});
-
-
+        });
         </script>
     @endpush
 </x-app-layout>

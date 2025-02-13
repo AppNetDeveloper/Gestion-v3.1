@@ -39,3 +39,14 @@ whatsapp/baileys_auth_info/*
 # Ignorar archivos y carpetas dentro de la carpeta whatsapp
 /.whatsapp/whatsapp_sessions/*
 whatsapp/whatsapp_sessions/*
+telegram/node_modules/*
+telegram/sessions/*
+whatsapp/baileys_store_multi*
+whatsapp/baileys_store*
+whatsapp/wa-logs.txt
+whatsapp/baileys_auth_info
+whatsapp/node_modules/*
+# Ignorar archivos y carpetas dentro de la carpeta whatsapp
+/.whatsapp/whatsapp_sessions/*
+whatsapp/baileys_auth_info/
+whatsapp/node_modules/

@@ -30,11 +30,11 @@ class UserSeeder extends Seeder
                 'role' => 'admin',
             ],
             [
-                'name' => 'User',
+                'name' => 'Employee',
                 'email' => 'liviudiaconu.dev@gmail.com',
                 'email_verified_at' => now(),
                 'password' => bcrypt('password'),
-                'role' => 'user',
+                'role' => 'employee',
             ],
         ]);
 

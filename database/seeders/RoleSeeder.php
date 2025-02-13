@@ -15,66 +15,72 @@ class RoleSeeder extends Seeder
      */
     public function run(): void
     {
+        // Definición de roles, incluyendo 'employee' (empleado en inglés) y 'manager'
         $roles = [
             'super-admin',
             'admin',
             'user',
+            'employee',
+            'manager',
         ];
+
+        // Se crean los roles solo si no existen
         foreach ($roles as $role) {
-            Role::create([
-                'name' => $role,
-                'guard_name' => 'web',
-            ]);
+            Role::firstOrCreate(
+                ['name' => $role, 'guard_name' => 'web']
+            );
         }
 
+        // Asignación de permisos al rol 'super-admin'
         $superAdminWeb = Role::where(['name' => 'super-admin', 'guard_name' => 'web'])->firstOrFail();
-        $superAdminWeb->givePermissionTo(Permission::where('guard_name', 'web')->get());
+        $superAdminWeb->syncPermissions(Permission::where('guard_name', 'web')->get());
 
+        // Asignación de permisos al rol 'admin'
         $adminWeb = Role::where(['name' => 'admin', 'guard_name' => 'web'])->firstOrFail();
-        $adminWeb->givePermissionTo([
-            // user
+        $adminWeb->syncPermissions([
+            // Permisos de usuario
             'user index',
             'user create',
             'user update',
             'user delete',
             'user show',
-            // role
+            // Permisos de rol
             'role index',
             'role update',
             'role show',
-            // permission
+            // Permisos de permiso
             'permission index',
             'permission update',
             'permission show',
-            // menu
+            // Permisos de menú
             'menu users_list',
             'menu role_permission',
             'menu role_permission_permissions',
             'menu role_permission_roles',
-
-            //Time control status
+            // Permisos de Time Control Status
             'timecontrolstatus index',
             'timecontrolstatus create',
             'timecontrolstatus update',
             'timecontrolstatus delete',
             'timecontrolstatus show',
-            //Company date
+            // Permisos de Company Data
             'company index',
             'company create',
             'company update',
             'company delete',
             'company show',
-
         ]);
 
+        // Asignación de permisos al rol 'employee'
+        $employeeWeb = Role::where(['name' => 'employee', 'guard_name' => 'web'])->firstOrFail();
+        $employeeWeb->syncPermissions([
+            'user index',
+            'timecontrolstatus index',
+        ]);
+
+        // En este ejemplo, el rol 'user' no se le asignan permisos específicos,
+        // pero se podría modificar de manera similar si fuera necesario.
         $userWeb = Role::where(['name' => 'user', 'guard_name' => 'web'])->firstOrFail();
-        $userWeb->givePermissionTo([
-            // user
-            //'user index',
-            //'user update',
-            //'user show',
-            //menu
-            //'menu users_list',
-        ]);
+        // $userWeb->syncPermissions([]); // Se puede descomentar y personalizar si se requiere
     }
 }

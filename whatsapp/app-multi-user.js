@@ -10,10 +10,15 @@ const {
   makeCacheableSignalKeyStore,
   useMultiFileAuthState,
   DisconnectReason,
-  makeInMemoryStore, // Se utiliza para mantener un store en memoria con métodos de ayuda.
+  makeInMemoryStore,
 } = require('@whiskeysockets/baileys');
 const Pino = require('pino');
 const QRCode = require('qrcode');
+const axios = require('axios'); // Para realizar la llamada HTTP externa
+const https = require('https'); // Para configurar el agente HTTPS
+
+// Agente HTTPS que ignora errores de certificado (útil en desarrollo con certificados autofirmados)
+const httpsAgent = new https.Agent({ rejectUnauthorized: false });
 
 const PORT = process.env.PORT || 3005;
 const STORE_FILE_PATH = './whatsapp_sessions';
@@ -31,8 +36,7 @@ logger.level = 'trace';
 const sessions = {};
 
 /**
- * Función para guardar los chats en un archivo JSON persistente.
- * Se guarda en la carpeta de la sesión (chats.json).
+ * Guarda los chats en un archivo JSON persistente (chats.json) en la carpeta de la sesión.
  */
 function saveChats(sessionId, chats) {
   try {
@@ -45,7 +49,7 @@ function saveChats(sessionId, chats) {
 }
 
 /**
- * Función para cargar los chats desde el archivo persistente.
+ * Carga los chats desde el archivo persistente.
  */
 function loadChats(sessionId) {
   try {
@@ -63,8 +67,7 @@ function loadChats(sessionId) {
 }
 
 /**
- * Función para guardar el historial de mensajes en un archivo JSON persistente.
- * Se guarda en la carpeta de la sesión (messages.json).
+ * Guarda el historial de mensajes en un archivo JSON persistente (messages.json) en la carpeta de la sesión.
  */
 function saveMessageHistory(sessionId, messages) {
   try {
@@ -77,7 +80,7 @@ function saveMessageHistory(sessionId, messages) {
 }
 
 /**
- * Función para cargar el historial de mensajes desde el archivo persistente.
+ * Carga el historial de mensajes desde el archivo persistente.
  */
 function loadMessageHistory(sessionId) {
   try {
@@ -99,28 +102,24 @@ function loadMessageHistory(sessionId) {
  * Cada sesión utiliza su propio directorio de autenticación y store.
  */
 async function startSession(sessionId) {
-  const authDir = `${STORE_FILE_PATH}/${sessionId}`;
+  const authDir = path.join(STORE_FILE_PATH, sessionId);
   if (!fs.existsSync(authDir)) fs.mkdirSync(authDir, { recursive: true });
 
   const { state, saveCreds } = await useMultiFileAuthState(authDir);
   const { version } = await fetchLatestBaileysVersion();
-
   console.log(`📲 Iniciando sesión para ${sessionId} con WhatsApp v${version.join('.')}`);
 
-  // Se crea un store en memoria para manejar chats y mensajes
   const store = makeInMemoryStore({ logger });
-  store.readFromFile(`${authDir}/store.json`);
+  store.readFromFile(path.join(authDir, 'store.json'));
 
-  // Intervalo para persistir el store cada 10 segundos
   const storeInterval = setInterval(() => {
     try {
-      store.writeToFile(`${authDir}/store.json`);
+      store.writeToFile(path.join(authDir, 'store.json'));
     } catch (error) {
       console.error(`❌ Error escribiendo el store para ${sessionId}:`, error);
     }
   }, 10_000);
 
-  // Se crea el socket de conexión
   const sock = makeWASocket({
     version,
     logger,
@@ -132,10 +131,8 @@ async function startSession(sessionId) {
     msgRetryCounterCache: new NodeCache(),
   });
 
-  // Vincula el store a los eventos del socket
   store.bind(sock.ev);
 
-  // Inicializamos la sesión con historial y chats persistidos
   sessions[sessionId] = {
     sock,
     state,
@@ -146,16 +143,71 @@ async function startSession(sessionId) {
     storeInterval
   };
 
-  // Captura de mensajes entrantes y actualización del historial
-  sock.ev.on('messages.upsert', (m) => {
+  // Evento para capturar mensajes (recibidos y enviados)
+  sock.ev.on('messages.upsert', async (m) => {
     console.log('Nuevo mensaje/upsert recibido:', m);
     if (m.type === 'notify' || m.type === 'append') {
       sessions[sessionId].messageHistory.push(...m.messages);
       saveMessageHistory(sessionId, sessions[sessionId].messageHistory);
+
+      // Llamada a la API externa, si está habilitada.
+      if (process.env.EXTERNAL_API_ENABLED === 'true' && process.env.EXTERNAL_API_URL) {
+        for (const msg of m.messages) {
+          try {
+            let mensajeTexto = "";
+            let imageData = null;
+
+            if (msg.message && msg.message.conversation) {
+              mensajeTexto = msg.message.conversation;
+            } else if (msg.message && msg.message.extendedTextMessage && msg.message.extendedTextMessage.text) {
+              mensajeTexto = msg.message.extendedTextMessage.text;
+            } else if (msg.message && msg.message.imageMessage) {
+              // Si es imagen, usamos el caption o "Only Image" si no hay caption.
+              if (msg.message.imageMessage.caption && typeof msg.message.imageMessage.caption === "string" && msg.message.imageMessage.caption.trim() !== "") {
+                mensajeTexto = msg.message.imageMessage.caption;
+              } else {
+                mensajeTexto = "Only Image";
+              }
+              if (msg.message.imageMessage.jpegThumbnail) {
+                imageData = msg.message.imageMessage.jpegThumbnail;
+                if (! (typeof imageData === "string")) {
+                  imageData = imageData.toString('base64');
+                }
+                // Se añade el prefijo al string de imagen.
+                imageData = "data:image/png;base64," + imageData;
+              }
+            } else {
+              mensajeTexto = JSON.stringify(msg.message);
+            }
+
+            const phone = msg.key.remoteJid.split('@')[0];
+            const status = msg.key.fromMe ? 'send' : 'received';
+
+            // Construimos el objeto a enviar con la estructura requerida.
+            const payload = {
+              token: process.env.EXTERNAL_API_TOKEN,
+              user_id: sessionId,    // aquí en lugar de "1"
+              phone: phone,
+              message: mensajeTexto,
+              status: status,
+              image: imageData || null
+            };
+
+            await axios.post(
+              process.env.EXTERNAL_API_URL,
+              payload,
+              { httpsAgent }
+            );
+            console.log(`✅ Mensaje (${status}) enviado a API externa para ${msg.key.remoteJid}`);
+          } catch (err) {
+            console.error(`❌ Error al enviar mensaje a API externa:`, err);
+          }
+        }
+      }
     }
   });
 
-  // Procesa los eventos del socket
+  // Procesa otros eventos del socket
   sock.ev.process(async (events) => {
     if (events['connection.update']) {
       const update = events['connection.update'];
@@ -235,7 +287,6 @@ app.get('/get-qr/:sessionId', async (req, res) => {
     return res.status(404).json({ error: 'Sesión no encontrada' });
   }
   if (!session.qrCode) {
-    // En lugar de devolver error, informamos que aún no se ha generado el QR.
     return res.status(200).json({ message: 'El código QR aún no se ha generado. Por favor, espere.' });
   }
   try {
@@ -281,11 +332,35 @@ app.get('/get-chats/:sessionId', async (req, res) => {
     if (!chats || chats.length === 0) {
       chats = session.chats || loadChats(sessionId);
     }
+    // Fallback: si no hay chats, se construye la lista a partir del historial de mensajes
+    if (!chats || chats.length === 0) {
+      const chatMap = {};
+      (session.messageHistory || []).forEach(msg => {
+        const remoteJid = msg.key && msg.key.remoteJid;
+        if (remoteJid) {
+          if (!chatMap[remoteJid]) {
+            chatMap[remoteJid] = {
+              id: remoteJid,
+              name: remoteJid,
+              lastMessage: msg.message,
+              unreadCount: 0,
+              messageTimestamp: msg.messageTimestamp
+            };
+          } else {
+            if (msg.messageTimestamp > (chatMap[remoteJid].messageTimestamp || 0)) {
+              chatMap[remoteJid].lastMessage = msg.message;
+              chatMap[remoteJid].messageTimestamp = msg.messageTimestamp;
+            }
+          }
+        }
+      });
+      chats = Object.values(chatMap);
+    }
     const mappedChats = chats.map(chat => ({
       jid: chat.id,
       name: chat.name || chat.id,
-      lastMessage: chat.lastMessage?.message?.conversation || null,
-      unreadCount: chat.unreadCount || 0,
+      lastMessage: chat.lastMessage ? (chat.lastMessage.conversation || JSON.stringify(chat.lastMessage)) : null,
+      unreadCount: chat.unreadCount || 0
     }));
     console.log(`Chats de ${sessionId}:`, mappedChats);
     res.json({ chats: mappedChats });
@@ -295,7 +370,7 @@ app.get('/get-chats/:sessionId', async (req, res) => {
   }
 });
 
-// Obtiene el historial de mensajes persistido para el chat indicado (por JID)
+// Obtiene el historial de mensajes para el chat indicado (por JID)
 app.get('/get-messages/:sessionId/:jid', async (req, res) => {
   const { sessionId, jid } = req.params;
   const session = sessions[sessionId];
@@ -342,9 +417,9 @@ app.post('/logout/:sessionId', async (req, res) => {
   }
   try {
     await session.sock.logout();
-    clearInterval(session.storeInterval); // Cancela el intervalo
+    clearInterval(session.storeInterval);
     delete sessions[sessionId];
-    const authDir = `${STORE_FILE_PATH}/${sessionId}`;
+    const authDir = path.join(STORE_FILE_PATH, sessionId);
     if (fs.existsSync(authDir)) {
       fs.rmSync(authDir, { recursive: true, force: true });
       console.log(`🗑️ Archivos eliminados para ${sessionId}`);
@@ -374,8 +449,8 @@ async function restoreSessions() {
   }
   console.log(`🔄 Restaurando ${sessionDirs.length} sesiones activas...`);
   for (const sessionId of sessionDirs) {
-    const authDir = `${STORE_FILE_PATH}/${sessionId}`;
-    if (!fs.existsSync(`${authDir}/creds.json`)) {
+    const authDir = path.join(STORE_FILE_PATH, sessionId);
+    if (!fs.existsSync(path.join(authDir, 'creds.json'))) {
       console.log(`⚠️ Sesión ${sessionId} no tiene archivos de autenticación, omitiendo...`);
       continue;
     }
@@ -390,5 +465,5 @@ async function restoreSessions() {
 
 app.listen(PORT, async () => {
   console.log(`🚀 Servidor corriendo en http://localhost:${PORT}`);
-  await restoreSessions(); // Restaura sesiones automáticamente al iniciar el servidor
+  await restoreSessions();
 });

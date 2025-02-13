@@ -1,0 +1,230 @@
+{
+    "openapi": "3.0.0",
+    "info": {
+        "title": "API de WhatsApp",
+        "description": "Documentación de la API para gestionar mensajes de WhatsApp.",
+        "version": "1.0.0"
+    },
+    "paths": {
+        "/api/whatsapp/messages": {
+            "post": {
+                "tags": [
+                    "Whatsapp Message"
+                ],
+                "summary": "Crear mensaje de WhatsApp",
+                "description": "Valida el token, almacena el mensaje en la base de datos y crea el contacto asociado si aún no existe. Además, si el mensaje es recibido, se evalúa si se debe enviar una respuesta automática.",
+                "operationId": "storeWhatsappMessage",
+                "requestBody": {
+                    "description": "Datos necesarios para crear el mensaje",
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "required": [
+                                    "token",
+                                    "user_id",
+                                    "phone",
+                                    "message",
+                                    "status"
+                                ],
+                                "properties": {
+                                    "token": {
+                                        "type": "string",
+                                        "example": "mi_token_secreto"
+                                    },
+                                    "user_id": {
+                                        "type": "integer",
+                                        "example": 1
+                                    },
+                                    "phone": {
+                                        "type": "string",
+                                        "example": "123456789"
+                                    },
+                                    "message": {
+                                        "type": "string",
+                                        "example": "Hola, ¿cómo estás?"
+                                    },
+                                    "status": {
+                                        "type": "string",
+                                        "enum": [
+                                            "send",
+                                            "received"
+                                        ],
+                                        "example": "received"
+                                    },
+                                    "image": {
+                                        "type": "string",
+                                        "example": "https://example.com/image.jpg",
+                                        "nullable": true
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "201": {
+                        "description": "Mensaje creado exitosamente y contacto creado si no existía.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "success": {
+                                            "type": "boolean",
+                                            "example": true
+                                        },
+                                        "message": {
+                                            "type": "string",
+                                            "example": "Mensaje de WhatsApp creado exitosamente y contacto creado si no existía."
+                                        },
+                                        "data": {
+                                            "type": "object"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "Token inválido.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "success": {
+                                            "type": "boolean",
+                                            "example": false
+                                        },
+                                        "message": {
+                                            "type": "string",
+                                            "example": "Token inválido."
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/whatsapp/send-message-now": {
+            "post": {
+                "tags": [
+                    "Whatsapp Message"
+                ],
+                "summary": "Enviar mensaje sin almacenar",
+                "description": "Valida el token y envía un mensaje a través de la API de Node sin guardarlo en la base de datos.",
+                "operationId": "sendMessageNow",
+                "requestBody": {
+                    "description": "Datos necesarios para enviar el mensaje",
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "required": [
+                                    "token",
+                                    "sessionId",
+                                    "jid",
+                                    "message"
+                                ],
+                                "properties": {
+                                    "token": {
+                                        "type": "string",
+                                        "example": "mi_token_secreto"
+                                    },
+                                    "sessionId": {
+                                        "type": "string",
+                                        "example": "1"
+                                    },
+                                    "jid": {
+                                        "type": "string",
+                                        "example": "123456789"
+                                    },
+                                    "message": {
+                                        "type": "string",
+                                        "example": "Hola, ¿cómo estás?"
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Mensaje enviado correctamente",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "success": {
+                                            "type": "boolean",
+                                            "example": true
+                                        },
+                                        "message": {
+                                            "type": "string",
+                                            "example": "Mensaje enviado correctamente"
+                                        },
+                                        "data": {
+                                            "type": "object"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "Token inválido.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "success": {
+                                            "type": "boolean",
+                                            "example": false
+                                        },
+                                        "message": {
+                                            "type": "string",
+                                            "example": "Token inválido."
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Error al enviar el mensaje vía Node",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "success": {
+                                            "type": "boolean",
+                                            "example": false
+                                        },
+                                        "message": {
+                                            "type": "string",
+                                            "example": "Error sending message via Node: ..."
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    },
+    "tags": [
+        {
+            "name": "Whatsapp Message",
+            "description": "Endpoints para el manejo de mensajes de WhatsApp"
+        }
+    ]
+}

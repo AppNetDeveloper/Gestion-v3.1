@@ -130,32 +130,35 @@ class User extends Authenticatable implements MustVerifyEmail, HasMedia
     }
 
     public function getAllowedButtons()
-{
+    {
+        // Verificar si el usuario tiene el permiso 'timecontrolstatus index'
+        if (!$this->hasPermissionTo('timecontrolstatus index')) {
+            // Si no tiene el permiso, no se muestran botones
+            return collect([]);
+        }
 
-    $currentStatusId = $this->getLastStatusId();
+        $currentStatusId = $this->getLastStatusId();
 
-    if (!$currentStatusId) {
-        return TimeControlStatus::where('table_name', 'Start Workday')->pluck('id');
+        if (!$currentStatusId) {
+            return TimeControlStatus::where('table_name', 'Start Workday')->pluck('id');
+        }
+
+        // Obtener las reglas permitidas para el estado actual
+        $rules = TimeControlStatusRules::where('time_control_status_id', $currentStatusId)
+            ->pluck('permission_id');
+
+        // Obtener el último registro con el estado actual y la fecha de creación más reciente
+        $lastEntry = TimeControl::where('time_control_status_id', $currentStatusId)
+            ->whereNotNull('created_at')
+            ->orderBy('created_at', 'desc')
+            ->first();
+
+        if (!$lastEntry) {
+            return TimeControlStatus::where('table_name', 'Start Workday')->pluck('id');
+        }
+
+        return TimeControlStatus::whereIn('id', $rules)->pluck('id');
     }
-
-    // Obtener las reglas permitidas
-    $rules = TimeControlStatusRules::where('time_control_status_id', $currentStatusId)
-        ->pluck('permission_id');
-
-    // Obtener el último registro con el estado actual y la fecha de creación más reciente
-    $lastEntry = TimeControl::where('time_control_status_id', $currentStatusId)
-        ->whereNotNull('created_at')
-        ->orderBy('created_at', 'desc')
-        ->first();
-
-    // Si no hay un registro con el estado actual, devolver permisos para iniciar la jornada
-    if (!$lastEntry) {
-        return TimeControlStatus::where('table_name', 'Start Workday')->pluck('id');
-    }
-
-    // Devolver permisos basados en el ID del último registro
-    return TimeControlStatus::whereIn('id', $rules)->pluck('id');
-}
 
 
     public function isValidStatus($statusId)
@@ -163,5 +166,13 @@ class User extends Authenticatable implements MustVerifyEmail, HasMedia
         return TimeControlStatus::where('id', $statusId)->exists();
     }
 
+    // app/Models/User.php
+
+    public function shiftDays()
+    {
+        return $this->belongsToMany(ShiftDay::class, 'shift_day_user', 'user_id', 'shift_day_id')
+                    ->using(ShiftDayUser::class)
+                    ->withTimestamps();
+    }
 
 }

@@ -65,25 +65,6 @@ class AppsController extends Controller
 
 
     /**
-     * Display a Calender view
-     */
-    public function calender()
-    {
-        $breadcrumbsItems = [
-            [
-                'name' => 'Calender',
-                'url' => '/calender',
-                'active' => true
-            ],
-        ];
-        return view('apps.calender', [
-            'pageTitle' => 'Calender ',
-            'breadcrumbItems' => $breadcrumbsItems,
-        ]);
-    }
-
-
-    /**
      * Display a todo view
      */
     public function todo()
