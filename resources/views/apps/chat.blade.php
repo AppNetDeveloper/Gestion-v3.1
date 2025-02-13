@@ -54,8 +54,4 @@
             </div>
         </div>
     </div>
-
-    @push('scripts')
-        @vite(['resources/js/custom/app-chat.js'])
-    @endpush
 </x-app-layout>

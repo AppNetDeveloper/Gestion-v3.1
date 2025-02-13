@@ -25,8 +25,16 @@ use App\Http\Controllers\ImageController;
 use App\Http\Controllers\ImageLogoController;
 use App\Http\Controllers\Api\ServerMonitorController;
 use App\Http\Controllers\LinkedinController;
-use App\Http\Controllers\OllamaController;    
+use App\Http\Controllers\OllamaController;
 use App\Http\Controllers\TaskerLinkedinController;
+use App\Http\Controllers\WhatsappController;
+use App\Http\Controllers\ContactController;
+use App\Http\Controllers\AutoProcessController;
+use App\Exports\ContactsExport;
+use Maatwebsite\Excel\Facades\Excel;
+use App\Http\Controllers\EventController;
+use App\Http\Controllers\NotificationController;
+use App\Http\Controllers\ShiftDayController;
 
 
 
@@ -80,7 +88,6 @@ Route::group(['middleware' => ['auth', 'verified']], function () {
     Route::get('chat', [AppsController::class, 'chat'])->name('chat');
     Route::get('email', [AppsController::class, 'email'])->name('email');
     Route::get('kanban', [AppsController::class, 'kanban'])->name('kanban');
-    Route::get('calender', [AppsController::class, 'calender'])->name('calender');
     Route::get('todo', [AppsController::class, 'todo'])->name('todo');
     Route::get('project', [AppsController::class, 'projects'])->name('project');
     Route::get('project-details', [AppsController::class, 'projectDetails'])->name('project-details');
@@ -103,13 +110,74 @@ Route::group(['middleware' => ['auth', 'verified']], function () {
     Route::get('/callback', [LinkedinController::class, 'handleLinkedInCallback'])->name('linkedin.callback');
     Route::post('/linkedin/post', [LinkedinController::class, 'publishPost'])->name('linkedin.post');
     Route::delete('/linkedin/disconnect', [LinkedinController::class, 'disconnect'])->name('linkedin.disconnect');
+    Route::put('/linkedin/{id}', [LinkedinController::class, 'update'])->name('tasker-linkedin.update');
+
+
+    //ShiftDay
+    Route::get('shiftdays/kanban', [ShiftDayController::class, 'kanban'])->name('shiftdays.kanban');
+    Route::post('/shift-days/{shiftDay}/update-users', [ShiftDayController::class, 'updateUsers'])->name('shiftday.updateUsers');
+
+    
+
+    //rutas para notificaciones
+    Route::middleware('auth')->group(function () {
+        // Vista completa de notificaciones
+        Route::get('/notifications', [NotificationController::class, 'index'])->name('notifications.index');
+        // Retorna los datos en JSON para DataTables
+        Route::get('/notifications/data', [NotificationController::class, 'data'])->name('notifications.data');
+        // Marca las notificaciones como vistas (AJAX)
+        Route::post('/notifications/mark-as-seen', [NotificationController::class, 'markAsSeen'])->name('notifications.markAsSeen');
+    });
+
+    //export contacts a excel
+    Route::get('/export-contacts', function () {
+        return Excel::download(new ContactsExport, 'contacts.xlsx');
+    })->name('contacts.export');
+
+    //calendario usuario
+    Route::middleware('auth')->group(function () {
+        // Muestra la vista del calendario (usando la vista 'calendar.index')
+        Route::get('/calendar', [EventController::class, 'index'])->name('calendar.index');
+
+        // Ruta para obtener los eventos (para FullCalendar vía AJAX)
+        Route::get('/events', [EventController::class, 'fetchEvents'])->name('events.fetch');
+
+        // Ruta para almacenar un nuevo evento
+        Route::post('/events', [EventController::class, 'store'])->name('events.store');
+        Route::put('/events/{id}', [EventController::class, 'update'])->name('events.update');
+        Route::delete('/events/{id}', [EventController::class, 'destroy'])->name('events.destroy');
+
+    });
+
+// Ruta para actualizar una tarea programada (en este ejemplo se usa el mismo controlador)
+Route::put('/linkedin/{id}', [LinkedinController::class, 'update'])->name('tasker-linkedin.update');
+
+//whatsapp viewer
+Route::middleware(['auth'])->group(function () {
+    // Ruta para ver la lista de contactos (teléfonos)
+    Route::get('/whatsapp', [WhatsappController::class, 'index'])->name('whatsapp.index');
+
+    // Ruta para ver la conversación de un teléfono en específico
+    Route::get('/whatsapp/{phone}', [WhatsappController::class, 'conversation'])->name('whatsapp.conversation');
+});
+// Rutas para eliminar mensajes (accionadas por AJAX)
+Route::delete('/whatsapp/message/{id}', [WhatsappController::class, 'destroyMessage'])->name('whatsapp.message.destroy');
+Route::delete('/whatsapp/chat/{phone}', [WhatsappController::class, 'destroyChat'])->name('whatsapp.chat.destroy');
+
+//contactos rutas
+Route::resource('contacts', ContactController::class)->middleware('auth');
+Route::post('/import-contacts', [ContactController::class, 'import'])->name('contacts.import');
+
+
+//auto response rutas para editar si se permite auto respuesta
+Route::post('/auto-response', [AutoProcessController::class, 'update'])->name('auto-response.update');
 
     //OLAMA
     Route::post('/ollama/process', [OllamaController::class, 'processPrompt'])->name('ollama.process');
 
     //TASKERLINKEDIN
         // Vista de tareas programadas
-    Route::get('tasker-linkedin', [TaskerLinkedinController::class, 'index'])->name('tasker.linkedin.index');   
+    Route::get('tasker-linkedin', [TaskerLinkedinController::class, 'index'])->name('tasker.linkedin.index');
         // Datos para DataTables (JSON)
     Route::get('tasker-linkedin/data', [TaskerLinkedinController::class, 'data'])->name('tasker.linkedin.data');
         // Guardar nueva tarea programada
@@ -117,7 +185,7 @@ Route::group(['middleware' => ['auth', 'verified']], function () {
     //borrar tarea programada
     Route::delete('tasker-linkedin/{task}', [TaskerLinkedinController::class, 'destroy'])->name('tasker.linkedin.destroy');
 
-    
+
     // ELEMENTS
     Route::get('widget-basic', [WidgetsController::class, 'basic'])->name('widget.basic');
     Route::get('widget-statistic', [WidgetsController::class, 'statistic'])->name('widget.statistic');

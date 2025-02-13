@@ -6,6 +6,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Session;
 use App\Models\LinkedinToken;
+use App\Models\TaskerLinkedin; // Modelo para las tareas programadas
 use Auth;
 use Illuminate\Support\Facades\Redirect;
 
@@ -39,44 +40,42 @@ class LinkedinController extends Controller
     public function handleLinkedInCallback(Request $request)
     {
         $code = $request->query('code');
-    
+
         if (!$code) {
             return redirect('/linkedin')->with('error', 'Authorization failed.');
         }
-    
+
         $response = Http::asForm()->post($this->tokenUrl, [
-            'grant_type' => 'authorization_code',
-            'code' => $code,
-            'redirect_uri' => $this->redirectUri,
-            'client_id' => $this->clientId,
+            'grant_type'    => 'authorization_code',
+            'code'          => $code,
+            'redirect_uri'  => $this->redirectUri,
+            'client_id'     => $this->clientId,
             'client_secret' => $this->clientSecret,
         ]);
-    
+
         $data = $response->json();
-    
+
         if (isset($data['access_token'])) {
             $userId = auth()->id();
-    
+
             if (!$userId) {
                 return redirect('/linkedin')->with('error', 'No hay usuario autenticado.');
             }
-    
+
             // Guardar el token en la base de datos
             LinkedinToken::updateOrCreate(
                 ['user_id' => $userId],
                 ['token' => $data['access_token']]
             );
-    
+
             \Log::info('Token guardado para el usuario: ' . $userId);
-    
+
             // Redirigir a /linkedin con mensaje de éxito
             return redirect('/linkedin')->with('success', 'LinkedIn conectado exitosamente.');
         } else {
             return redirect('/linkedin')->with('error', 'No se pudo obtener el token de LinkedIn.');
         }
     }
-    
-    
 
     public function index()
     {
@@ -92,12 +91,16 @@ class LinkedinController extends Controller
         }
 
         $content = $request->input('content', 'Publicación de prueba en LinkedIn desde Laravel.');
-        $memberId = $this->getLinkedInProfile()['id'];
+        $memberProfile = $this->getLinkedInProfile();
+        if (!$memberProfile) {
+            return response()->json(['error' => 'Unable to fetch LinkedIn profile.'], 400);
+        }
+        $memberId = $memberProfile['id'];
 
         $postData = [
-            "author" => "urn:li:person:$memberId",
-            "lifecycleState" => "PUBLISHED",
-            "specificContent" => [
+            "author"           => "urn:li:person:$memberId",
+            "lifecycleState"   => "PUBLISHED",
+            "specificContent"  => [
                 "com.linkedin.ugc.ShareContent" => [
                     "shareCommentary" => [
                         "text" => $content
@@ -105,15 +108,15 @@ class LinkedinController extends Controller
                     "shareMediaCategory" => "NONE"
                 ]
             ],
-            "visibility" => [
+            "visibility"       => [
                 "com.linkedin.ugc.MemberNetworkVisibility" => "PUBLIC"
             ]
         ];
 
         $response = Http::withHeaders([
-            'Authorization' => "Bearer {$token->token}",
-            'Content-Type' => 'application/json',
-            'X-Restli-Protocol-Version' => '2.0.0'
+            'Authorization'              => "Bearer {$token->token}",
+            'Content-Type'               => 'application/json',
+            'X-Restli-Protocol-Version'  => '2.0.0'
         ])->post($this->shareUrl, $postData);
 
         if ($response->successful()) {
@@ -141,6 +144,7 @@ class LinkedinController extends Controller
 
         return null;
     }
+
     public function disconnect()
     {
         $token = LinkedinToken::where('user_id', auth()->id())->first();
@@ -154,5 +158,43 @@ class LinkedinController extends Controller
         return response()->json(['success' => 'Has desvinculado tu cuenta de LinkedIn correctamente.']);
     }
 
+    /**
+     * Actualiza una tarea programada existente.
+     *
+     * Se actualizan los campos: prompt, publish_date y response.
+     *
+     * @param  \Illuminate\Http\Request  $request
+     * @param  int  $id
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function update(Request $request, $id)
+    {
+        // Buscamos la tarea que pertenezca al usuario autenticado
+        $task = TaskerLinkedin::where('id', $id)
+                    ->where('user_id', Auth::id())
+                    ->first();
 
+        if (!$task) {
+            return response()->json(['error' => 'Task not found or unauthorized.'], 404);
+        }
+
+        // Validamos los datos recibidos, incluyendo el campo response (opcional)
+        $validated = $request->validate([
+            'prompt'       => 'required|string',
+            'publish_date' => 'required|date',
+            'response'     => 'nullable|string'
+        ]);
+
+        $task->prompt = $validated['prompt'];
+        $task->publish_date = $validated['publish_date'];
+        $task->response = $validated['response'] ?? null;
+
+        // Opcional: reiniciar otros campos si se requiere
+        // $task->status = 'pending';
+        // $task->error = null;
+
+        $task->save();
+
+        return response()->json(['success' => 'Task updated successfully.']);
+    }
 }

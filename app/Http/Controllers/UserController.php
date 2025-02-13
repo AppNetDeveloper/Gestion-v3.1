@@ -102,15 +102,22 @@ class UserController extends Controller
      */
     public function store(StoreUserRequest $request)
     {
-        $user = User::create($request->safe(['name', 'email'])
-            + [
-                'password' => bcrypt($request->validated(['password'])),
-                'email_verified_at' => now(),
-            ]);
-        $user->assignRole([$request->validated('role')]);
+        $validated = $request->validated();
+
+        $user = User::create([
+            'name'              => $validated['name'],
+            'email'             => $validated['email'],
+            'password'          => bcrypt($validated['password']),
+            'email_verified_at' => now(),
+        ]);
+
+        // Buscar el rol por su ID y asignarlo al usuario
+        $role = Role::findById($validated['role'], 'web');
+        $user->assignRole($role);
 
         return redirect()->route('users.index')->with('message', 'User created successfully');
     }
+
 
     /**
      * Display the specified resource.
@@ -183,13 +190,21 @@ class UserController extends Controller
      */
     public function update(UpdateUserRequest $request, User $user)
     {
-        $user->update($request->safe(['name', 'email'])
-            + ['password' => bcrypt($request->validated(['password']))]);
+        $validated = $request->validated();
 
-        $user->syncRoles([$request->validated(['role'])]);
+        $user->update([
+            'name'     => $validated['name'],
+            'email'    => $validated['email'],
+            'password' => bcrypt($validated['password']),
+        ]);
+
+        // Buscar el rol por su ID y sincronizarlo
+        $role = Role::findById($validated['role'], 'web');
+        $user->syncRoles($role);
 
         return redirect()->route('users.index')->with('message', 'User updated successfully');
     }
+
 
     /**
      * Remove the specified resource from storage.

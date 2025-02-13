@@ -8,10 +8,20 @@
     <x-favicon />
     <title>{{ config('app.name', 'AppNetDeveloper') }}</title>
 
-    {{-- Scripts --}}
+    {{-- Scripts de Vite (CSS/JS principal) --}}
     @vite(['resources/css/app.scss', 'resources/js/custom/store.js'])
+
+    {{-- PWA (si corresponde) --}}
     @laravelPWA
+
+    {{-- chart.js u otras librerías globales --}}
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <!--
+      AÑADE ESTA LÍNEA PARA INYECTAR LOS STYLES
+      que empujes con @push('styles')
+    -->
+    @stack('styles')
 </head>
 
 <body class="font-inter dashcode-app" id="body_class">
@@ -35,8 +45,9 @@
                     <div class="page-content">
                         <div class="transition-all duration-150 container-fluid" id="page_layout">
                             <main id="content_layout">
-                                <!-- Page Content -->
-                                {{ $slot }}
+                                @isset($slot)
+                                    {{ $slot }}
+                                @endisset
                             </main>
                         </div>
                     </div>
@@ -50,11 +61,13 @@
         </div>
     </div>
 
+    {{-- Scripts de Vite (JS principales al final) --}}
     @vite(['resources/js/app.js', 'resources/js/main.js'])
 
-
-
+    <!--
+      Ya existe @stack('scripts'),
+      que inyectará los scripts que empujes desde tus vistas
+    -->
     @stack('scripts')
 </body>
-
 </html>

@@ -1,88 +1,65 @@
 <x-app-layout>
     <div class="space-y-8">
-        {{-- <div>--}}
-        {{-- <x-breadcrumb :page-title="$pageTitle" :breadcrumb-items="$breadcrumbItems" />--}}
-        {{-- </div>--}}
-
-
-        <div class="flex md:space-x-5 app_height overflow-hidden relative rtl:space-x-reverse">
-            <div class="email-sidebar ">
-                <div class="h-full card">
-                    <div class="card-body py-6 h-full flex flex-col">
-                        <div class="flex-1 h-full px-6">
-                            <button class="btn inline-flex justify-center btn-dark w-full" data-bs-toggle="modal" data-bs-target="#newEmailModal">
-                                <span class="flex items-center">
-                                    <iconify-icon class="text-xl ltr:mr-2 rtl:ml-2" icon="ph:plus-bold"></iconify-icon>
-                                    <span>Compose</span>
-                                </span>
-                            </button>
-                        </div>
-                        <div class="h-full px-6 " data-simplebar="data-simplebar">
-                            <ul class="email-categories list mt-6">
-                                <x-email.topfilter />
-                            </ul>
-                            <div class="block py-4 text-slate-800 dark:text-slate-400 font-semibold text-xs uppercase">
-                                Tags
-                            </div>
-                            <ul class="email-categories list">
-                                <ul class="email-categories list">
-                                    <x-email.bottomfilter />
-                                </ul>
-                        </div>
-                    </div>
+        <!-- Calendario y filtros -->
+        <div class="dashcode-calender">
+            <h4 class="font-medium lg:text-2xl text-xl capitalize text-slate-900 inline-block ltr:pr-4 rtl:pl-4 mb-1 sm:mb-0 mb-6">
+                Calendario
+            </h4>
+            <div class="grid grid-cols-12 gap-4">
+                <!-- Sidebar de acciones y filtros -->
+                <div class="col-span-12 lg:col-span-3 card p-6">
+                    <button class="btn btn-dark block w-full add-event">
+                        Añadir Evento
+                    </button>
+                    <!-- Puedes agregar aquí los filtros de categorías -->
                 </div>
-            </div>
-            <div class="email-overlay"></div>
-            <div class="flex-1 md:w-[calc(100%-320px)]">
-                <div class="h-full card">
-                    <div class="p-0  h-full relative card-body">
-                        <x-email.email-header />
-                        <div class="h-full all-todos overflow-x-hidden" data-simplebar="data-simplebar">
-                            <ul class="divide-y divide-slate-100 dark:divide-slate-700 -mb-6 h-full email-list">
-                                <x-email.emails />
-                                <x-email.no-result />
-                            </ul>
-                        </div>
-                        <x-email.single-email />
-                    </div>
+                <!-- Calendario -->
+                <div class="col-span-12 lg:col-span-9 card p-6">
+                    <div id="calendar"></div>
                 </div>
             </div>
         </div>
-        <div class="modal fade fixed top-0 left-0 hidden w-full h-full outline-none overflow-x-hidden overflow-y-auto" id="newEmailModal" tabindex="-1" aria-hidden="true">
-            <div class="modal-dialog relative w-auto pointer-events-none">
-                <div class="modal-content border-none shadow-lg relative flex flex-col lg:w-[576px] w-full pointer-events-auto bg-white
-          bg-clip-padding rounded-md outline-none text-current">
-                    <div class="relative bg-white rounded-lg shadow dark:bg-slate-700">
-                        <!-- Modal header -->
-                        <div class="flex items-center justify-between p-5 border-b rounded-t dark:border-slate-600 bg-slate-900 dark:bg-slate-700">
-                            <h3 class="text-base font-medium text-white dark:text-white capitalize">
-                                Compose Email
-                            </h3>
-                            <button type="button" class="text-slate-400 bg-transparent hover:text-slate-900 rounded-lg text-sm p-1.5 ml-auto inline-flex items-center
-                dark:hover:bg-slate-600 dark:hover:text-white" data-bs-dismiss="modal">
-                                <svg aria-hidden="true" class="w-5 h-5" fill="#ffffff" viewbox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
-                                    <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10
-                    11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd"></path>
-                                </svg>
-                                <span class="sr-only">Close modal</span>
+
+        <!-- Modal para agregar evento -->
+        <div class="addmodal-wrapper" id="addeventModal" style="display:none;">
+            <div class="modal-overlay"></div>
+            <div class="modal-content">
+                <div class="flex min-h-full justify-center text-center p-6 items-start">
+                    <div class="w-full transform overflow-hidden rounded-md bg-white dark:bg-slate-800 text-left align-middle shadow-xl transition-all max-w-xl">
+                        <div class="relative overflow-hidden py-4 px-5 text-white flex justify-between bg-slate-900 dark:bg-slate-800">
+                            <h2 class="capitalize leading-6 tracking-wider font-medium text-base text-white">Evento</h2>
+                            <button class="text-[22px] close-event-modal">
+                                <iconify-icon icon="heroicons:x-mark"></iconify-icon>
                             </button>
                         </div>
-                        <!-- Modal body -->
-                        <div class="p-6 space-y-4">
-                            <form class="flex flex-col space-y-3">
-                                <div class="input-area">
-                                    <label for="email" class="form-label">To</label>
-                                    <input id="email" type="text" class="form-control" placeholder="Email">
+                        <div class="px-6 py-8">
+                            <form id="add-event-form" class="space-y-5">
+                                <div class="fromGroup">
+                                    <label for="event-title" class="form-label">Título:</label>
+                                    <input type="text" id="event-title" name="event-title" placeholder="Añadir Título" class="form-control" required>
                                 </div>
-                                <div class="input-area">
-                                    <label for="subject" class="form-label">Subject</label>
-                                    <input id="subject" type="text" class="form-control" placeholder="Enter Title">
+                                <div class="fromGroup">
+                                    <label for="event-start-date" class="form-label">Fecha Inicio</label>
+                                    <input class="form-control py-2" id="event-start-date" name="event-start-date" type="datetime-local" required>
                                 </div>
-                                <div class="!mt-7 rounded">
-                                    <div id="editor-container" class="h-32 dark:text-white"></div>
+                                <div class="fromGroup">
+                                    <label for="event-end-date" class="form-label">Fecha Fin</label>
+                                    <input class="form-control py-2" id="event-end-date" name="event-end-date" type="datetime-local">
                                 </div>
-                                <div class="flex items-center justify-end rounded-b dark:border-slate-600">
-                                    <button data-bs-dismiss="modal" class="btn inline-flex justify-center text-white bg-black-500">Send</button>
+                                <div class="fromGroup">
+                                    <label for="event-category" class="form-label">Categoría:</label>
+                                    <select id="event-category" name="event-category" required class="form-control">
+                                        <option value="">Selecciona una categoría</option>
+                                        <option value="business">Negocios</option>
+                                        <option value="personal">Personal</option>
+                                        <option value="holiday">Vacaciones</option>
+                                        <option value="family">Familia</option>
+                                        <option value="meeting">Reunión</option>
+                                        <option value="etc">Otros</option>
+                                    </select>
+                                </div>
+                                <div class="text-right">
+                                    <button type="submit" id="submit-button" class="btn btn-dark">Añadir Evento</button>
                                 </div>
                             </form>
                         </div>
@@ -92,7 +69,62 @@
         </div>
     </div>
 
-    @push('scripts')
-    @vite(['resources/js/custom/app-email.js'])
-    @endpush
+    <!-- Incluir FullCalendar CSS y JS desde CDN -->
+    <link href='https://cdn.jsdelivr.net/npm/fullcalendar@6.1.8/index.global.min.css' rel='stylesheet' />
+    <script src='https://cdn.jsdelivr.net/npm/fullcalendar@6.1.8/index.global.min.js'></script>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // Inicialización de FullCalendar
+            var calendarEl = document.getElementById('calendar');
+            var calendar = new FullCalendar.Calendar(calendarEl, {
+                initialView: 'dayGridMonth',
+                headerToolbar: {
+                    left: 'prev,next today',
+                    center: 'title',
+                    right: 'dayGridMonth,timeGridWeek,timeGridDay'
+                },
+                events: {
+                    url: "{{ route('events.fetch') }}",
+                    method: 'GET'
+                }
+            });
+            calendar.render();
+
+            // Mostrar el modal para agregar evento
+            document.querySelector('.add-event').addEventListener('click', function() {
+                document.getElementById('addeventModal').style.display = 'block';
+            });
+            // Cerrar el modal
+            document.querySelector('.close-event-modal').addEventListener('click', function() {
+                document.getElementById('addeventModal').style.display = 'none';
+            });
+
+            // Envío del formulario para agregar evento vía AJAX
+            document.getElementById('add-event-form').addEventListener('submit', function(e) {
+                e.preventDefault();
+
+                var formData = new FormData(this);
+
+                fetch("{{ route('events.store') }}", {
+                    method: 'POST',
+                    headers: {
+                        'X-CSRF-TOKEN': "{{ csrf_token() }}"
+                    },
+                    body: formData
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if(data.success) {
+                        // Refrescar eventos en el calendario
+                        calendar.refetchEvents();
+                        // Ocultar modal y resetear formulario
+                        document.getElementById('addeventModal').style.display = 'none';
+                        this.reset();
+                    }
+                })
+                .catch(error => console.error('Error:', error));
+            });
+        });
+    </script>
 </x-app-layout>
