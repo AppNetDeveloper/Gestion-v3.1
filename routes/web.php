@@ -116,8 +116,9 @@ Route::group(['middleware' => ['auth', 'verified']], function () {
     //ShiftDay
     Route::get('shiftdays/kanban', [ShiftDayController::class, 'kanban'])->name('shiftdays.kanban');
     Route::post('/shift-days/{shiftDay}/update-users', [ShiftDayController::class, 'updateUsers'])->name('shiftday.updateUsers');
+    Route::delete('/shift-days/{shiftDay}/users', [ShiftDayController::class, 'destroyUsers'])->name('shift-days.destroy-users');
 
-    
+
 
     //rutas para notificaciones
     Route::middleware('auth')->group(function () {

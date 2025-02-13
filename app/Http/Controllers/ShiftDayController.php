@@ -103,7 +103,8 @@ class ShiftDayController extends Controller
         $daysOfWeek = ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY', 'SUNDAY'];
 
         // Obtiene todos los usuarios reales
-        $users = User::all();
+        $users = User::with('permissions')->get();
+
 
         return view('shiftdays.kanban', compact('shiftDaysGrouped', 'daysOfWeek', 'users'));
     }
@@ -118,6 +119,14 @@ class ShiftDayController extends Controller
         // Actualiza la relación: crea, elimina o mantiene según corresponda
         $shiftDay->users()->sync($data['users']);
 
+        return response()->json(['success' => true]);
+    }
+    /**
+     * Elimina todas las asignaciones de usuarios de un ShiftDay.
+     */
+    public function destroyUsers(ShiftDay $shiftDay)
+    {
+        $shiftDay->users()->detach();
         return response()->json(['success' => true]);
     }
 
