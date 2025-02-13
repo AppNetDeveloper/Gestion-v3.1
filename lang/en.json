@@ -324,6 +324,7 @@
     "The event has been deleted successfully": "The event has been deleted successfully",
     "There was a problem deleting the event": "There was a problem deleting the event",
     "The event has been added successfully": "The event has been added successfully",
-    "There was a problem saving the event": "There was a problem saving the event"
+    "There was a problem saving the event": "There was a problem saving the event",
+    "Shift Day": "Shift Day"
 
 }
