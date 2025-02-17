@@ -18,8 +18,6 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Intervention\Image\Facades\Image;
 
-
-
 class User extends Authenticatable implements MustVerifyEmail, HasMedia
 {
     use HasApiTokens, HasFactory, Notifiable, HasRoles, SoftDeletes, MustVerifyNewEmail, InteractsWithMedia;
@@ -47,20 +45,14 @@ class User extends Authenticatable implements MustVerifyEmail, HasMedia
         'type_of_contract_id',
         'birthdate',
         'pin',
-
+        // Nuevos campos IMAP:
+        'imap_host',
+        'imap_port',
+        'imap_encryption',
+        'imap_username',
+        'imap_password',
     ];
-    public function typeOfContract()
-    {
-        return $this->belongsTo(TypeOfContract::class);
-    }
-    public function jobPosicion()
-    {
-        return $this->belongsTo(JobPosicion::class);
-    }
-    public function shift()
-    {
-        return $this->belongsTo(Shift::class);
-    }
+
     /**
      * The attributes that should be hidden for serialization.
      *
@@ -69,6 +61,8 @@ class User extends Authenticatable implements MustVerifyEmail, HasMedia
     protected $hidden = [
         'password',
         'remember_token',
+        // Ocultamos la contraseña IMAP para mayor seguridad
+        'imap_password',
     ];
 
     /**
@@ -80,6 +74,20 @@ class User extends Authenticatable implements MustVerifyEmail, HasMedia
         'email_verified_at' => 'datetime',
     ];
 
+    public function typeOfContract()
+    {
+        return $this->belongsTo(TypeOfContract::class);
+    }
+
+    public function jobPosicion()
+    {
+        return $this->belongsTo(JobPosicion::class);
+    }
+
+    public function shift()
+    {
+        return $this->belongsTo(Shift::class);
+    }
 
     public function registerMediaConversions(Media $media = null): void
     {
@@ -100,9 +108,10 @@ class User extends Authenticatable implements MustVerifyEmail, HasMedia
     }
 
     /**
-     * Local scope to exclude auth user
-     * @param $query
-     * @return mixed
+     * Local scope to exclude auth user.
+     *
+     * @param Builder $query
+     * @return Builder
      */
     public function scopeWithoutAuthUser($query): mixed
     {
@@ -110,14 +119,16 @@ class User extends Authenticatable implements MustVerifyEmail, HasMedia
     }
 
     /**
-     * Local scope to exclude super admin
-     * @param $query
-     * @return mixed
+     * Local scope to exclude super admin.
+     *
+     * @param Builder $query
+     * @return Builder
      */
     public function scopeWithoutSuperAdmin($query): mixed
     {
         return $query->where('id', '!=', 1);
     }
+
     public function timeControlRecords()
     {
         return $this->hasMany('App\Models\TimeControl');
@@ -160,13 +171,10 @@ class User extends Authenticatable implements MustVerifyEmail, HasMedia
         return TimeControlStatus::whereIn('id', $rules)->pluck('id');
     }
 
-
     public function isValidStatus($statusId)
     {
         return TimeControlStatus::where('id', $statusId)->exists();
     }
-
-    // app/Models/User.php
 
     public function shiftDays()
     {
@@ -174,5 +182,5 @@ class User extends Authenticatable implements MustVerifyEmail, HasMedia
                     ->using(ShiftDayUser::class)
                     ->withTimestamps();
     }
-
 }
+

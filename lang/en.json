@@ -355,6 +355,27 @@
     "THURSDAY": "Thursday",
     "FRIDAY": "Friday",
     "SATURDAY": "Saturday",
-    "SUNDAY": "Sunday"
+    "SUNDAY": "Sunday",
+    "Campaigns": "Campañas",
+    "Campaign Prompt": "Instrucción de la Campaña",
+    "Enter your campaign prompt...": "Ingrese la instrucción de la campaña...",
+    "Campaign Start Date & Time": "Fecha y Hora de Inicio de la Campaña",
+    "Select date and time": "Seleccione fecha y hora",
+    "Select Model": "Seleccione el Modelo",
+    "WhatsApp": "WhatsApp",
+    "SMS": "SMS",
+    "Create Campaign": "Crear Campaña",
+    "My Scheduled Campaigns": "Mis Campañas Programadas",
+    "Model": "Modelo",
+    "Campaign Start": "Inicio de Campaña",
+    "This will delete the campaign permanently.": "Esto eliminará la campaña de forma permanente.",
+    "Deleted!": "¡Eliminado!",
+    "An error occurred while deleting the campaign": "Ocurrió un error al eliminar la campaña",
+    "Edit Campaign": "Editar Campaña",
+    "Please select a date and time": "Por favor, seleccione una fecha y hora",
+    "Please enter a prompt": "Por favor, ingrese una instrucción",
+    "Updated!": "¡Actualizado!",
+    "An error occurred while updating the campaign": "Ocurrió un error al actualizar la campaña"
+
 
 }

@@ -52,7 +52,7 @@ class ProcessOllamaTasks extends Command
     public function handle()
     {
         $this->info("Starting infinite loop for processing Ollama tasks.");
-        
+
         // Bucle infinito
         while (true) {
             try {
@@ -78,10 +78,10 @@ class ProcessOllamaTasks extends Command
 
                     try {
                         // Construir el prompt completo
-                        $prefix = "Crea una publicación profesional y atractiva para LinkedIn, pero sin escribir nada de cabezal sobre te escribo una publicacion o algo parecido, siguiendo estas directrices:";
-                        $textArea = $task->prompt;
+                        $prefix = "Crea una publicación profesional y atractiva para LinkedIn, pero sin escribir nada de cabezal sobre te escribo una publicacion o algo parecido, pero sin poner aqui tienes una publicacion para linkedin etc, siguiendo estas directrices:";
+                        $prompt = $task->prompt;
                         $suffix = "Mantén un tono profesional, cercano y humano. Usa un lenguaje claro, inspirador y persuasivo que motive a la acción. Si no tienes las informaciones para completar tus textos, no pongas la parte que te falta. Pon solo datos concretos y que tienes; no inventes nada y tampoco dejes partes para que el usuario las complete. Si no existen los datos como nombre, usuario, empresa, etc., no uses esto.";
-                        $prompt = $prefix . " " . $textArea . " " . $suffix;
+                        //$prompt = $prefix . " " . $textArea . " " . $suffix;
 
                         // Preparar la carga útil para la API de Ollama
                         $payload = [
@@ -170,7 +170,7 @@ class ProcessOllamaTasks extends Command
             // Espera unos segundos antes de la siguiente iteración
             sleep(5);
         }
-        
+
         // Nunca se alcanza este return, pero se requiere por la firma.
         return 0;
     }

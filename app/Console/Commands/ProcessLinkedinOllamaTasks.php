@@ -47,7 +47,7 @@ class ProcessLinkedinOllamaTasks extends Command
             try {
                 // Buscamos tareas en tasker_linkedins que:
                 // - Tengan prompt definido.
-                // - Tengan status 'pending' (o el estado que determines) 
+                // - Tengan status 'pending' (o el estado que determines)
                 // - Y, o bien no tienen asignado ollama_tasker_id, o tienen asignado pero aun no se recibió respuesta.
                 $tasks = TaskerLinkedin::where('status', 'pending')
                     ->whereNotNull('prompt')
@@ -72,11 +72,12 @@ class ProcessLinkedinOllamaTasks extends Command
                 foreach ($tasks as $task) {
                     $this->info("Processing task ID: {$task->id}");
 
-                    // Construir el prompt completo.
-                    $prefix = "Crea una publicación profesional y atractiva para LinkedIn, pero sin escribir nada de cabezal sobre te escribo una publicacion o algo parecido, siguiendo estas directrices:";
-                    $textArea = $task->prompt;
-                    $suffix = "Mantén un tono profesional, cercano y humano. Usa un lenguaje claro, inspirador y persuasivo que motive a la acción. Si no tienes las informaciones para completar tus textos, no pongas la parte que te falta. Pon solo datos concretos y que tienes; no inventes nada y tampoco dejes partes para que el usuario las complete.";
-                    $fullPrompt = $prefix . " " . $textArea . " " . $suffix;
+                     // Construir el prompt completo
+                     $prefix = "Crea una publicación profesional y atractiva para LinkedIn, pero sin escribir nada de cabezal sobre te escribo una publicacion o algo parecido, siguiendo estas directrices:";
+                     $textArea = $task->prompt;
+                     $suffix = "Mantén un tono profesional, cercano y humano. Usa un lenguaje claro, inspirador y persuasivo que motive a la acción. Si no tienes las informaciones para completar tus textos, no pongas la parte que te falta. Pon solo datos concretos y que tienes; no inventes nada y tampoco dejes partes para que el usuario las complete. Si no existen los datos como nombre, usuario, empresa, etc., no uses esto.";
+                     $fullPrompt = $prefix . " " . $textArea . " " . $suffix;
+
 
                     // Si la tarea aún no tiene asignado un ollama_tasker_id, la creamos.
                     if (is_null($task->ollama_tasker_id)) {
