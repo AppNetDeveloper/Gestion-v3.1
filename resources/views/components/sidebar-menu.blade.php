@@ -76,8 +76,16 @@
             <li>
                 <a href="{{ route('contacts.index') }}" class="navItem {{ (\Request::route()->getName() == 'contacts.index') ? 'active' : '' }}">
                     <span class="flex items-center">
-                        <iconify-icon class="nav-icon" icon="hugeicons:message-01"></iconify-icon>
+                        <iconify-icon class="nav-icon" icon="mdi:contact-outline"></iconify-icon>
                         <span>{{ __('Contacts') }}</span>
+                    </span>
+                </a>
+            </li>
+            <li>
+                <a href="{{ route('campaigns.index') }}" class="navItem {{ (\Request::route()->getName() == 'campaigns.index') ? 'active' : '' }}">
+                    <span class="flex items-center">
+                        <iconify-icon class="nav-icon" icon="proicons:send"></iconify-icon>
+                        <span>{{ __('Campaigns') }}</span>
                     </span>
                 </a>
             </li>

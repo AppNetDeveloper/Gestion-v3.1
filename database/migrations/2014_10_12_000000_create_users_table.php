@@ -7,13 +7,14 @@ use Illuminate\Support\Facades\Schema;
 return new class extends Migration
 {
     /**
-     * Run the migrations.
+     * Ejecuta las migraciones.
      *
      * @return void
      */
     public function up()
     {
         Schema::create('users', function (Blueprint $table) {
+            // Campos básicos
             $table->id();
             $table->string('name');
             $table->string('email')->unique();
@@ -28,25 +29,38 @@ return new class extends Migration
 
             $table->unsignedBigInteger('shift_id')->nullable();
             $table->foreign('shift_id')->references('id')->on('shift')->onDelete('cascade');
-            $table->string('point_control_enable', 1)->default('1')->nullable();
 
+            $table->string('point_control_enable', 1)->default('1')->nullable();
             $table->string('time_control_enable', 1)->default('1')->nullable();
 
             $table->date('birthdate')->nullable();
-
             $table->timestamp('email_verified_at')->nullable();
             $table->string('password');
+
+            // Campos para las credenciales IMAP
+            $table->string('imap_host')->nullable();
+            $table->integer('imap_port')->nullable();
+            $table->string('imap_encryption')->nullable(); // Ejemplo: 'ssl' o 'tls'
+            $table->string('imap_username')->nullable();
+            $table->string('imap_password')->nullable();
+
+            // Campos para las credenciales SMTP
+            $table->string('smtp_host')->nullable();
+            $table->integer('smtp_port')->nullable();
+            $table->string('smtp_encryption')->nullable(); // Ejemplo: 'ssl' o 'tls'
+            $table->string('smtp_username')->nullable();
+            $table->string('smtp_password')->nullable();
+
             $table->string('pin')->unique()->nullable();
 
             $table->rememberToken();
-
             $table->timestamps();
             $table->timestamp('deleted_at')->nullable();
         });
     }
 
     /**
-     * Reverse the migrations.
+     * Revierte las migraciones.
      *
      * @return void
      */

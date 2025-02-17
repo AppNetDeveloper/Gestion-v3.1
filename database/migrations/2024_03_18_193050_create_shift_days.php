@@ -17,7 +17,7 @@ return new class extends Migration
             $table->id();
             $table->unsignedBigInteger('shift_id');
             $table->foreign('shift_id')->references('id')->on('shift')->onDelete('cascade');
-            $table->string('day_of_week'); // LUNES, MARTES, ...
+            $table->string('day_of_week'); // LUNES, MARTES, ... en ingles
             $table->time('start_time');
             $table->time('end_time');
             $table->string('effective_hours');

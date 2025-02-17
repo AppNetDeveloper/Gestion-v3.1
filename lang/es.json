@@ -355,7 +355,24 @@
     "THURSDAY": "Jueves",
     "FRIDAY": "Viernes",
     "SATURDAY": "Sábado",
-    "SUNDAY": "Domingo"
-
-
+    "SUNDAY": "Domingo",
+    "Campaigns": "Campaigns",
+    "Campaign Prompt": "Prompt de la Campaña",
+    "Enter your campaign prompt...": "Enter your campaign prompt...",
+    "Campaign Start Date & Time": "Fecha Hora Campaña",
+    "Select date and time": "Seleciona fecha y hora",
+    "Select Model": "Select Model",
+    "WhatsApp": "WhatsApp",
+    "SMS": "SMS",
+    "Create Campaign": "Crear Campaña",
+    "My Scheduled Campaigns": "Mis campañas programadas",
+    "Campaign Start": "Inicio Campaña",
+    "This will delete the campaign permanently.": "This will delete the campaign permanently.",
+    "Deleted!": "Deleted!",
+    "An error occurred while deleting the campaign": "An error occurred while deleting the campaign",
+    "Edit Campaign": "Edit Campaign",
+    "Please select a date and time": "Please select a date and time",
+    "Please enter a prompt": "Please enter a prompt",
+    "Updated!": "Updated!",
+    "An error occurred while updating the campaign": "An error occurred while updating the campaign"
   }

@@ -35,7 +35,8 @@ use Maatwebsite\Excel\Facades\Excel;
 use App\Http\Controllers\EventController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\ShiftDayController;
-
+use App\Http\Controllers\EmailController;
+use App\Http\Controllers\CampaignController;
 
 
 require __DIR__ . '/auth.php';
@@ -112,13 +113,34 @@ Route::group(['middleware' => ['auth', 'verified']], function () {
     Route::delete('/linkedin/disconnect', [LinkedinController::class, 'disconnect'])->name('linkedin.disconnect');
     Route::put('/linkedin/{id}', [LinkedinController::class, 'update'])->name('tasker-linkedin.update');
 
+    //campañas public
+
+    Route::middleware('auth')->group(function () {
+        Route::get('/campaigns', [CampaignController::class, 'index'])->name('campaigns.index');
+        Route::get('/campaigns/create', [CampaignController::class, 'create'])->name('campaigns.create');
+        Route::post('/campaigns', [CampaignController::class, 'store'])->name('campaigns.store');
+        Route::get('/campaigns/data', [CampaignController::class, 'data'])->name('campaigns.data');
+        Route::put('/campaigns/{id}', [CampaignController::class, 'update'])->name('campaigns.update');
+        Route::delete('/campaigns/{id}', [CampaignController::class, 'destroy'])->name('campaigns.destroy');
+    });
+
 
     //ShiftDay
     Route::get('shiftdays/kanban', [ShiftDayController::class, 'kanban'])->name('shiftdays.kanban');
     Route::post('/shift-days/{shiftDay}/update-users', [ShiftDayController::class, 'updateUsers'])->name('shiftday.updateUsers');
     Route::delete('/shift-days/{shiftDay}/users', [ShiftDayController::class, 'destroyUsers'])->name('shift-days.destroy-users');
 
+    // Emails Rutas protegidas por el middleware de autenticación
+    Route::middleware(['auth'])->group(function () {
+        // Ruta para listar los correos
+        Route::get('/emails', [EmailController::class, 'index'])->name('emails.index');
 
+        // Ruta para mostrar el detalle de un correo (usando el UID)
+        Route::get('/emails/{uid}', [EmailController::class, 'show'])->name('emails.show');
+
+        // Ruta para actualizar la configuración IMAP
+        Route::post('/emails/settings', [EmailController::class, 'updateSettings'])->name('emails.settings.update');
+    });
 
     //rutas para notificaciones
     Route::middleware('auth')->group(function () {
