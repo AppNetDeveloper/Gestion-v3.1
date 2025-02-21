@@ -1,3 +1,4 @@
+@use "sass:meta";
 @import 'plugins/animate.css';
 @import 'plugins/sidebar-menu.css';
 @import 'plugins/SimpleBar.css';
@@ -15,7 +16,7 @@
 @import 'plugins/sidebar-menu.css';
 @import 'plugins/swiper-bundle.min.css';
 @import 'plugins/zabuto_calendar.min.css';
-@import "../sass/base.scss";
+@include meta.load-css("../sass/base.scss");
 
 /* @import 'plugins/rt-plugins.css';
 @import 'plugins/app.css' */
