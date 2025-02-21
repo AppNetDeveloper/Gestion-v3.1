@@ -89,6 +89,17 @@
                     </span>
                 </a>
             </li>
+            @canany(['servermonitor show', 'servermonitorbusynes show'])
+                <li>
+                    <a href="{{ route('servermonitor.index') }}"
+                    class="navItem {{ (\Request::route()->getName() == 'servermonitor.index') ? 'active' : '' }}">
+                        <span class="flex items-center">
+                            <iconify-icon class="nav-icon" icon="solar:server-outline"></iconify-icon>
+                            <span>{{ __('Server Monitor') }}</span>
+                        </span>
+                    </a>
+                </li>
+            @endcanany
             <li>
                 <a href="{{ route('kanban') }}" class="navItem {{ (\Request::route()->getName() == 'kanban') ? 'active' : '' }}">
                     <span class="flex items-center">

@@ -1,5 +1,5 @@
 <?php
-// app/Models/HostList.php
+
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
@@ -10,7 +10,7 @@ class HostList extends Model
 {
     use HasApiTokens, HasFactory;
 
-    protected $fillable = ['host', 'token', 'name'];
+    protected $fillable = ['host', 'token', 'name', 'user_id'];
 
     public function hostMonitors()
     {

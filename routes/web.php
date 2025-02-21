@@ -23,7 +23,6 @@ use App\Http\Controllers\TimeControlController;
 use App\Http\Controllers\DebugController;
 use App\Http\Controllers\ImageController;
 use App\Http\Controllers\ImageLogoController;
-use App\Http\Controllers\Api\ServerMonitorController;
 use App\Http\Controllers\LinkedinController;
 use App\Http\Controllers\OllamaController;
 use App\Http\Controllers\TaskerLinkedinController;
@@ -37,6 +36,9 @@ use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\ShiftDayController;
 use App\Http\Controllers\EmailController;
 use App\Http\Controllers\CampaignController;
+use App\Http\Controllers\ServerMonitorController;
+use App\Http\Controllers\HostListController;
+
 
 
 require __DIR__ . '/auth.php';
@@ -112,6 +114,20 @@ Route::group(['middleware' => ['auth', 'verified']], function () {
     Route::post('/linkedin/post', [LinkedinController::class, 'publishPost'])->name('linkedin.post');
     Route::delete('/linkedin/disconnect', [LinkedinController::class, 'disconnect'])->name('linkedin.disconnect');
     Route::put('/linkedin/{id}', [LinkedinController::class, 'update'])->name('tasker-linkedin.update');
+
+
+
+    // Ruta unificada para el dashboard de monitoreo y gestión
+    Route::get('servermonitor', [ServerMonitorController::class, 'index'])->name('servermonitor.index');
+
+    // Ruta para obtener el último dato de monitoreo vía AJAX
+    Route::get('servermonitor/latest/{host}', [ServerMonitorController::class, 'getLatest'])
+        ->name('servermonitor.latest');
+        // Nueva ruta para obtener el historial (últimos 20 registros)
+    Route::get('servermonitor/history/{host}', [ServerMonitorController::class, 'getHistory'])
+    ->name('servermonitor.history');
+    Route::resource('hosts', HostListController::class);
+
 
     //campañas public
 
