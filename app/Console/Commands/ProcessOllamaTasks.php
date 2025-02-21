@@ -80,7 +80,7 @@ class ProcessOllamaTasks extends Command
                         // Construir el prompt completo
                         $prefix = "Crea una publicación profesional y atractiva para LinkedIn, pero sin escribir nada de cabezal sobre te escribo una publicacion o algo parecido, pero sin poner aqui tienes una publicacion para linkedin etc, siguiendo estas directrices:";
                         $prompt = $task->prompt;
-                        $suffix = "Mantén un tono profesional, cercano y humano. Usa un lenguaje claro, inspirador y persuasivo que motive a la acción. Si no tienes las informaciones para completar tus textos, no pongas la parte que te falta. Pon solo datos concretos y que tienes; no inventes nada y tampoco dejes partes para que el usuario las complete. Si no existen los datos como nombre, usuario, empresa, etc., no uses esto.";
+                        $suffix = "Mantén un tono profesional, cercano y humano. Usa un lenguaje claro, inspirador y persuasivo que motive a la acción. Si no tienes las informaciones para completar tus textos, no pongas la parte que te falta. Pon solo datos concretos y que tienes; no inventes nada y tampoco dejes partes para que el usuario las complete. Si no existen los datos como nombre, usuario, empresa, etc., no uses esto. Y no pones nunca Aqui tienes o Aqui esta  tu texto . Escribe directamente el texto. No pongas nada más que el texto, no pongas nada de comentarios o explicaciones adicionales.";
                         //$prompt = $prefix . " " . $textArea . " " . $suffix;
 
                         // Preparar la carga útil para la API de Ollama

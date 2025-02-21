@@ -459,7 +459,7 @@ schtasks /create /tn "AppNetDeveloper Monitor" /tr "python C:\AppNetDeveloper\ap
 `,
                                         icon: 'info',
                                         confirmButtonText: 'Entendido',
-                                        width: (window.innerWidth < 800 ? '90%' : '800px')
+                                        width: (window.innerWidth < 800 ? '90%' : '80%')
                                     });
                                 }else if(result.value === 'linux'){
                                     Swal.fire({
@@ -532,18 +532,29 @@ if __name__ == '__main__':
 <p><strong>4.</strong> {{ __("install_step_4") }}</p>
 <p><strong>5.</strong> {{ __("install_step_5") }}</p>
 <pre style="text-align: left;">
-[program:appnetdev-monitor]
-command=python3 /root/appnetdev-monitor.py
-autostart=true
-autorestart=true
-stderr_logfile=/var/log/appnetdev-monitor.err.log
-stdout_logfile=/var/log/appnetdev-monitor.out.log
+[Unit]
+Description=AppNetDev Monitor Service
+After=network.target
+
+[Service]
+Type=simple
+# Especifica el usuario con el que se ejecutará el servicio (en este caso, root)
+User=root
+# Ruta al intérprete de Python, asegúrate de que sea la correcta en tu sistema
+ExecStart=/usr/bin/python3 /root/appnetdev-monitor.py
+Restart=on-failure
+# Opcional: define el entorno de trabajo si es necesario
+WorkingDirectory=/root
+
+[Install]
+WantedBy=multi-user.target
+
 </pre>
 <p><strong>6.</strong> {{ __("install_step_6") }}</p>
 `,
                                         icon: 'info',
                                         confirmButtonText: 'Entendido',
-                                        width: (window.innerWidth < 800 ? '90%' : '800px')
+                                        width: (window.innerWidth  < 800 ? '90%' : '80%')
                                     });
                                 }
                             }
