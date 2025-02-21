@@ -73,10 +73,11 @@ class ProcessLinkedinOllamaTasks extends Command
                     $this->info("Processing task ID: {$task->id}");
 
                      // Construir el prompt completo
-                     $prefix = "Crea una publicación profesional y atractiva para LinkedIn, pero sin escribir nada de cabezal sobre te escribo una publicacion o algo parecido, siguiendo estas directrices:";
+                     $prefix = "Crea una publicación profesional y atractiva para LinkedIn utilizando los siguientes datos:";
                      $textArea = $task->prompt;
-                     $suffix = "Mantén un tono profesional, cercano y humano. Usa un lenguaje claro, inspirador y persuasivo que motive a la acción. Si no tienes las informaciones para completar tus textos, no pongas la parte que te falta. Pon solo datos concretos y que tienes; no inventes nada y tampoco dejes partes para que el usuario las complete. Si no existen los datos como nombre, usuario, empresa, etc., no uses esto.";
+                     $suffix = "Mantén un tono profesional, cercano y humano. Emplea el idioma y lenguaje de los datos proporcionados. Usa un lenguaje claro, inspirador y persuasivo que motive a la acción. Si falta información, omite esa parte. Utiliza únicamente datos concretos y verificables, sin inventar nada ni dejar espacios incompletos. No agregues encabezados, comentarios o explicaciones adicionales.";
                      $fullPrompt = $prefix . " " . $textArea . " " . $suffix;
+
 
 
                     // Si la tarea aún no tiene asignado un ollama_tasker_id, la creamos.

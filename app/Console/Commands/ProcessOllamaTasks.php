@@ -5,6 +5,8 @@ namespace App\Console\Commands;
 use Illuminate\Console\Command;
 use App\Models\OllamaTasker;
 use GuzzleHttp\Client;
+use GuzzleHttp\Pool;
+use GuzzleHttp\Exception\RequestException;
 
 class ProcessOllamaTasks extends Command
 {
@@ -38,9 +40,11 @@ class ProcessOllamaTasks extends Command
     {
         parent::__construct();
 
-        // Configuramos Guzzle con un timeout largo (por ejemplo, 300 segundos)
+        // Usamos la variable OLLAMA_CONNECTION_TIMEOUT, por defecto 300 segundos si no está definida.
+        $timeout = (int) env('OLLAMA_CONNECTION_TIMEOUT', 300);
+
         $this->client = new Client([
-            'timeout' => 300,
+            'timeout' => $timeout,
         ]);
     }
 
@@ -53,19 +57,22 @@ class ProcessOllamaTasks extends Command
     {
         $this->info("Starting infinite loop for processing Ollama tasks.");
 
+        // Valor de concurrencia. Si no se define en .env, se usa 1.
+        $concurrency = (int) env('OLLAMA_MULTI_TASK', 1);
+        $fullUrl = rtrim(env('OLLAMA_URL'), '/') . '/api/chat';
+
         // Bucle infinito
         while (true) {
             try {
                 // Buscar tareas pendientes en ollama_taskers:
                 // tareas con prompt definido y sin respuesta (null o cadena vacía)
                 $tasks = OllamaTasker::whereNotNull('prompt')
-                                        ->where(function ($query) {
-                                            $query->whereNull('response')
-                                                ->orWhere('response', '');
-                                        })
-                                        ->whereNull('error') // Solo procesamos tareas sin error previo
-                                        ->get();
-
+                    ->where(function ($query) {
+                        $query->whereNull('response')
+                              ->orWhere('response', '');
+                    })
+                    ->whereNull('error') // Solo procesamos tareas sin error previo
+                    ->get();
 
                 if ($tasks->isEmpty()) {
                     $this->info("No pending Ollama tasks found. Sleeping for 10 seconds.");
@@ -73,17 +80,14 @@ class ProcessOllamaTasks extends Command
                     continue;
                 }
 
-                foreach ($tasks as $task) {
-                    $this->info("Processing Ollama task ID: {$task->id}");
+                // Crear un array para relacionar el índice con la tarea correspondiente
+                $taskList = $tasks->all();
 
-                    try {
-                        // Construir el prompt completo
-                        $prefix = "Crea una publicación profesional y atractiva para LinkedIn, pero sin escribir nada de cabezal sobre te escribo una publicacion o algo parecido, pero sin poner aqui tienes una publicacion para linkedin etc, siguiendo estas directrices:";
+                // Generador de solicitudes asíncronas
+                $requests = function () use ($taskList, $fullUrl) {
+                    foreach ($taskList as $task) {
+                        // Construir el prompt completo (se pueden incluir prefijos y sufijos según necesidad)
                         $prompt = $task->prompt;
-                        $suffix = "Mantén un tono profesional, cercano y humano. Usa un lenguaje claro, inspirador y persuasivo que motive a la acción. Si no tienes las informaciones para completar tus textos, no pongas la parte que te falta. Pon solo datos concretos y que tienes; no inventes nada y tampoco dejes partes para que el usuario las complete. Si no existen los datos como nombre, usuario, empresa, etc., no uses esto. Y no pones nunca Aqui tienes o Aqui esta  tu texto . Escribe directamente el texto. No pongas nada más que el texto, no pongas nada de comentarios o explicaciones adicionales.";
-                        //$prompt = $prefix . " " . $textArea . " " . $suffix;
-
-                        // Preparar la carga útil para la API de Ollama
                         $payload = [
                             'model'    => env('OLLAMA_MODEL_DEFAULT'),
                             'messages' => [
@@ -94,79 +98,88 @@ class ProcessOllamaTasks extends Command
                             ],
                         ];
 
-                        $fullUrl = rtrim(env('OLLAMA_URL'), '/') . '/api/chat';
-                        $this->info("Calling Ollama API for task ID {$task->id}");
+                        yield function () use ($fullUrl, $payload) {
+                            return $this->client->postAsync($fullUrl, [
+                                'json'    => $payload,
+                                'headers' => [
+                                    'Content-Type' => 'application/json',
+                                ],
+                            ]);
+                        };
+                    }
+                };
 
-                        // Realizar la petición con streaming
-                        $response = $this->client->request('POST', $fullUrl, [
-                            'json'   => $payload,
-                            'stream' => true,
-                            'headers' => [
-                                'Content-Type' => 'application/json',
-                            ],
-                        ]);
+                $this->info("Processing " . count($taskList) . " tasks concurrently (concurrency: {$concurrency}).");
 
-                        $body = $response->getBody();
-                        $combinedContent = '';
-                        $buffer = '';
+                $pool = new Pool($this->client, $requests(), [
+                    'concurrency' => $concurrency,
+                    'fulfilled' => function ($response, $index) use ($taskList) {
+                        // Se ha completado una solicitud. Procesamos la respuesta
+                        $task = $taskList[$index];
+                        try {
+                            $bodyContent = $response->getBody()->getContents();
 
-                        $this->info("Reading stream for task ID: {$task->id}");
+                            if (empty($bodyContent)) {
+                                $this->error("No content found from API for task ID: {$task->id}");
+                                $task->error = 'No content found from API';
+                                $task->save();
+                                return;
+                            }
 
-                        while (!$body->eof()) {
-                            // Leer un bloque (1024 bytes, por ejemplo)
-                            $chunk = $body->read(1024);
-                            $this->info("Chunk read (length " . strlen($chunk) . ") for task ID: {$task->id}");
-                            $buffer .= $chunk;
-                            while (($pos = strpos($buffer, "\n")) !== false) {
-                                $line = substr($buffer, 0, $pos);
-                                $buffer = substr($buffer, $pos + 1);
+                            // Procesar cada línea y combinar los fragmentos
+                            $combinedContent = '';
+                            $lines = explode("\n", $bodyContent);
+                            foreach ($lines as $line) {
                                 $line = trim($line);
                                 if (empty($line)) {
                                     continue;
                                 }
-                                $this->info("Processing line for task ID {$task->id}: " . substr($line, 0, 100));
                                 $decoded = json_decode($line, true);
-                                if (!$decoded) {
-                                    $this->error("Error decoding line for task ID {$task->id}: " . $line);
+                                if (!$decoded || !isset($decoded['message']['content'])) {
                                     continue;
                                 }
-                                if (isset($decoded['message']['content'])) {
-                                    $this->info("Fragment: " . $decoded['message']['content'] . " for task ID: {$task->id}");
-                                    $combinedContent .= $decoded['message']['content'];
-                                }
-                                if (isset($decoded['done']) && $decoded['done'] === true) {
-                                    $this->info("Done flag found for task ID: {$task->id}. Ending stream read.");
-                                    break 2; // Sale de ambos bucles
-                                }
+                                $combinedContent .= $decoded['message']['content'];
                             }
-                        }
 
-                        if (empty($combinedContent)) {
-                            $this->error("No content found from API for task ID: {$task->id}");
-                            $task->error = 'No content found from API';
-                            // En caso de error, se guarda en la columna error
+                            if (empty($combinedContent)) {
+                                $this->error("Combined content empty for task ID: {$task->id}");
+                                $task->error = 'Combined content empty';
+                                $task->save();
+                                return;
+                            }
+
+                            // Limpiar el contenido (eliminar secciones entre <think> y </think>)
+                            $cleanContent = $this->cleanContent($combinedContent);
+                            $task->response = $cleanContent;
                             $task->save();
-                            continue;
+
+                            $this->info("Ollama task ID {$task->id} processed successfully.");
+                        } catch (\Exception $e) {
+                            $this->error("Error processing response for task ID {$task->id}: " . $e->getMessage());
+                            $task->error = $e->getMessage();
+                            $task->save();
                         }
-
-                        // Limpiar el contenido (eliminar secciones entre <think> y </think>)
-                        $cleanContent = $this->cleanContent($combinedContent);
-                        // Actualizamos la tarea en ollama_taskers con la respuesta recibida
-                        $task->response = $cleanContent;
-                        // Si se desea, se podría actualizar algún campo de status
+                    },
+                    'rejected' => function ($reason, $index) use ($taskList) {
+                        // En caso de error en la solicitud
+                        $task = $taskList[$index];
+                        $errorMessage = $reason instanceof RequestException
+                            ? $reason->getMessage()
+                            : 'Unknown error';
+                        $this->error("Error processing task ID {$task->id}: {$errorMessage}");
+                        $task->error = $errorMessage;
                         $task->save();
+                    },
+                ]);
 
-                        $this->info("Ollama task ID {$task->id} processed successfully.");
+                // Ejecutar todas las solicitudes concurrentes y esperar a que terminen
+                $promise = $pool->promise();
+                $promise->wait();
 
-                    } catch (\Exception $e) {
-                        $this->error("Error processing Ollama task ID {$task->id}: " . $e->getMessage());
-                        $task->error = $e->getMessage();
-                        $task->save();
-                    }
-                }
             } catch (\Exception $e) {
                 $this->error("Exception in processing loop: " . $e->getMessage());
             }
+
             // Espera unos segundos antes de la siguiente iteración
             sleep(5);
         }
