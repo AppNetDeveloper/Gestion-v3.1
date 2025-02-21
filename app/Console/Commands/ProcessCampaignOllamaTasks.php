@@ -78,19 +78,19 @@ class ProcessCampaignOllamaTasks extends Command
 
                                 switch ($campaign->model) {
                                     case 'whatsapp':
-                                        $prompt_end = " Mantén un tono profesional, cercano y humano, con un mensaje breve para WhatsApp.";
+                                        $prompt_end = " Mantén un tono profesional, cercano y humano, con un mensaje breve para WhatsApp. No pongas nada más que el texto, no pongas nada de comentarios o explicaciones adicionales.";
                                         break;
                                     case 'sms':
-                                        $prompt_end = " Mantén un tono profesional y conciso, ya que es un SMS con pocos caracteres.";
+                                        $prompt_end = " Mantén un tono profesional y conciso, ya que es un SMS con pocos caracteres. No pongas nada más que el texto, no pongas nada de comentarios o explicaciones adicionales.";
                                         break;
                                     case 'telegram':
-                                        $prompt_end = " Mantén un tono profesional y cercano, con un mensaje adecuado para Telegram.";
+                                        $prompt_end = " Mantén un tono profesional y cercano, con un mensaje adecuado para Telegram. No pongas nada más que el texto, no pongas nada de comentarios o explicaciones adicionales.";
                                         break;
                                     case 'email':
-                                        $prompt_end = " Mantén un tono profesional, cercano y humano, con un mensaje adecuado para email.";
+                                        $prompt_end = " Mantén un tono profesional, cercano y humano, con un mensaje adecuado para email.No pongas nada más que el texto, no pongas nada de comentarios o explicaciones adicionales.";
                                         break;
                                     default:
-                                        $prompt_end = " Mantén un tono profesional y humano.";
+                                        $prompt_end = " Mantén un tono profesional y humano. No pongas nada más que el texto, no pongas nada de comentarios o explicaciones adicionales.";
                                         break;
                                 }
                                 $lineInfo = " [Contacto ID: {$campaignDetail->contact_id}]";

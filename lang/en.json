@@ -395,19 +395,25 @@
     "windows": "Windows",
     "windows_proximamente": "Coming soon",
     "install_instructions_linux": "Instructions for Linux",
-    "install_step_1": "Edit the file: <code>sudo nano /root/appnetdev-monitor.py</code> and paste the following script:",
+    "install_step_1": "Edit the file: <code>udo nano /root/appnetdev-monitor.py</code> and paste the following script:",
     "install_step_2": "Save the file with <code>Ctrl+X</code>.",
     "install_step_3": "Install dependencies: <code> pip install requests psutil --break-system-packages </code>.",
-    "install_step_4": "Install Supervisor: <code> sudo apt-get install supervisor </code>.",
-    "install_step_5": "Create a config file at <code>/etc/supervisor/conf.d/appnetdev-monitor.conf</code> with the following content:",
-    "install_step_6": "Update Supervisor: <code>sudo supervisorctl reread && sudo supervisorctl update</code>.",
+    "install_step_4": "Install Supervisor: <code> pip install psutil --break-system-packages </code>.",
+    "install_step_5": "Create a config file at <code>sudo nano /etc/systemd/system/appnetdev-monitor.service</code> with the following content:",
+    "install_step_6": "Update Supervisor: <code>sudo systemctl daemon-reload && sudo systemctl start appnetdev-monitor.service && sudo systemctl enable appnetdev-monitor.service && sudo systemctl status appnetdev-monitor.service</code>.",
     "install_instructions_windows": "Instalación en Windows",
     "install_step_windows_1": "Crea el archivo: <code>C:\\AppNetDeveloper\\appnetdev-monitor.py</code> y pega el siguiente script:",
     "install_step_windows_2": "Guarda el archivo (puedes usar Notepad o tu editor preferido).",
     "install_step_windows_3": "Abre el CMD como administrador y ejecuta:",
     "install_step_windows_4": "Esto creará una tarea en el Programador de Tareas para ejecutar el script al iniciar el sistema:",
-    "install_step_windows_5": "Reinicia el sistema para que la tarea se active."
-
+    "install_step_windows_5": "Reinicia el sistema para que la tarea se active.",
+    "Create a new host": "Create a new host",
+    "Name of the server": "Name of the server",
+    "IP address or hostname": "Ip address or hostname of the server",
+    "Token for authentication": "Token for authentication",
+    "Create Server": "Crear Servidor",
+    "Back to List": "Volver a la lista",
+    "Ip Address or Hostname of the server": "Ip address or hostname of the server"
 
 
 }
