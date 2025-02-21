@@ -80,7 +80,7 @@ class CheckNotifications extends Command
                         $response = $client->post($apiUrl, [
                             'json' => [
                                 'token'     => env('WHATSAPP_API_TOKEN'),
-                                'sessionId' => '1', // Ajusta el sessionId según corresponda
+                                'sessionId' => env('WHATSAPP_ID_SERVER'), // Ajusta el sessionId según corresponda
                                 'jid'       => $phone, // El número debe estar en el formato correcto, ej: 34619929305
                                 'message'   => $notification->message,
                             ]

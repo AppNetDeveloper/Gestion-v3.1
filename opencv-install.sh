@@ -16,7 +16,7 @@
 
 # VERSION TO BE INSTALLED
 
-OPENCV_VERSION='4.8.1'
+OPENCV_VERSION='4.11.0'
 
 
 # 1. KEEP UBUNTU OR DEBIAN UP TO DATE
@@ -26,6 +26,7 @@ sudo apt-get -y update
 # sudo apt-get -y dist-upgrade  # Uncomment this line to, in addition to 'upgrade', handles changing dependencies with new versions of packages
 # sudo apt-get -y autoremove    # Uncomment this line to remove packages that are now no longer needed
 
+sudo cd /usr/local/src
 
 # 2. INSTALL THE DEPENDENCIES
 
