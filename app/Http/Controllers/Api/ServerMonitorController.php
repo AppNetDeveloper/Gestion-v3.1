@@ -6,8 +6,9 @@ use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use App\Models\HostList;
 use App\Models\HostMonitor;
+use App\Models\Notification;
+use App\Models\User;
 use Carbon\Carbon;
-
 
 class ServerMonitorController extends Controller
 {
@@ -34,11 +35,14 @@ class ServerMonitorController extends Controller
             'disk' => 'required|numeric',
             'cpu' => 'required|numeric',
         ]);
-        // Obtener el host de la tabla host_lists
+
+        // Obtener el host mediante el token
         $host = HostList::where('token', $request->token)->first();
-         // Llamar al método de limpieza
+
+        // Llamar al método de limpieza de registros antiguos
         $this->deleteOldRecords($host);
-        // Crear el registro en la tabla host_monitors
+
+        // Crear el registro en host_monitors
         $hostMonitor = HostMonitor::create([
             'id_host' => $host->id,
             'total_memory' => $request->total_memory,
@@ -49,9 +53,64 @@ class ServerMonitorController extends Controller
             'cpu' => $request->cpu,
         ]);
 
-        return response()->json(['message' => 'Data stored successfully', 'data' => $hostMonitor], 201);
-    }
+        // Verificar si alguna métrica excede el umbral (80%)
+        if ($request->cpu > 80 || $request->memory_used_percent > 80 || $request->disk > 80) {
 
+            // Consultar el registro anterior para este host (excluyendo el actual)
+            $previousRecord = HostMonitor::where('id_host', $host->id)
+                ->where('id', '<', $hostMonitor->id)
+                ->orderBy('id', 'desc')
+                ->first();
+
+            // Si existe un registro anterior y también excede el umbral, no se envía la alerta
+            $sendAlert = true;
+            if ($previousRecord) {
+                if ($previousRecord->cpu > 80 || $previousRecord->memory_used_percent > 80 || $previousRecord->disk > 80) {
+                    $sendAlert = false;
+                }
+            }
+
+            if ($sendAlert) {
+                // Construir la URL para servermonitor evitando barras duplicadas
+                $monitorUrl = rtrim(config('app.url'), '/') . '/servermonitor';
+
+                // Crear el mensaje de alerta
+                $alertMessage = "Server Monitor Alert: Host '{$host->name}' metrics exceeded threshold. "
+                              . "Check at {$monitorUrl}. CPU: {$request->cpu}%, Memory used: {$request->memory_used_percent}%, Disk: {$request->disk}%.";
+
+                // Si el host tiene un user_id asignado, se crea la notificación para ese usuario
+                if ($host->user_id) {
+                    Notification::create([
+                        'user_id' => $host->user_id,
+                        'message' => $alertMessage,
+                        'sended'  => 0, // No enviada aún
+                        'seen'    => 0, // No vista en la app
+                    ]);
+                } else {
+                    // Si user_id es NULL, buscar todos los usuarios que tengan asignado el permiso
+                    $userIds = User::whereHas('permissions', function($query) {
+                        $query->where('name', 'servermonitorbusynes show')
+                              ->where('module_name', 'servermonitorbusynes');
+                    })->pluck('id')->toArray();
+
+                    // Crear una notificación para cada usuario encontrado
+                    foreach ($userIds as $userId) {
+                        Notification::create([
+                            'user_id' => $userId,
+                            'message' => $alertMessage,
+                            'sended'  => 0,
+                            'seen'    => 0,
+                        ]);
+                    }
+                }
+            }
+        }
+
+        return response()->json([
+            'message' => 'Data stored successfully',
+            'data' => $hostMonitor
+        ], 201);
+    }
     /**
      * Display the specified resource.
      */
@@ -75,8 +134,13 @@ class ServerMonitorController extends Controller
     {
         //
     }
+
+    /**
+     * Eliminar registros antiguos de host_monitors.
+     */
     private function deleteOldRecords(HostList $host)
     {
         $host->hostMonitors()->where('created_at', '<', Carbon::now()->subDays(7))->delete();
     }
 }
+

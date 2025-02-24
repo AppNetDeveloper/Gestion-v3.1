@@ -105,6 +105,7 @@ class CheckNotifications extends Command
             }
 
             // Espera 60 segundos antes de la siguiente verificación.
+            $this->info('Esperando 60 segundos antes de la próxima verificación...');
             sleep(60);
         }
     }

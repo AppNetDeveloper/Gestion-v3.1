@@ -413,7 +413,11 @@
     "Token for authentication": "Token for authentication",
     "Create Server": "Crear Servidor",
     "Back to List": "Volver a la lista",
-    "Ip Address or Hostname of the server": "Ip address or hostname of the server"
-
+    "Ip Address or Hostname of the server": "Ip address or hostname of the server",
+    "notifications.event_start": "Your event ':title' is starting in one hour. Please check it at :url.",
+    "server_check_start": "Starting infinite loop to check server status every 3 minutes...",
+    "no_monitor_records": "Server ':name' has no monitoring records.",
+    "server_down_alert": "Alert: Server ':name' has not sent data in the last 3 minutes. Last record: :last_record.",
+    "error": "Error: :error"
 
 }
