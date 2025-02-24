@@ -21,6 +21,8 @@ export default defineConfig({
         'resources/js/custom/map-active.js',
         'resources/js/custom/app-todo.js',
         'resources/js/plugins/jquery.mousewheel.js',
+        'resources/css/plugins/select2.min.css',
+        'resources/js/plugins/Select2.min.js',
       ],
       refresh: true,
     }),

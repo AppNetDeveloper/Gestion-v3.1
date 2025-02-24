@@ -14,7 +14,9 @@ class Event extends Model
         'title',
         'start_date',
         'end_date',
-        'category'
+        'category',
+        'video_conferencia',
+        'contact_id',
     ];
 
     public function user()

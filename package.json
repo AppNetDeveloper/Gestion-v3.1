@@ -52,8 +52,9 @@
         "plyr": "^3.7.8",
         "qrcode": "^1.5.4",
         "resize-observer-polyfill": "^1.5.1",
+        "select2": "^4.1.0-rc.0",
         "simplebar": "^6.3.0",
-        "sweetalert2": "^11.6.10",
+        "sweetalert2": "^11.17.2",
         "tippy.js": "^6.3.7",
         "tw-elements": "1.0.0-alpha13"
     }

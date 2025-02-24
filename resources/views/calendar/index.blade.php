@@ -1,4 +1,14 @@
 <x-app-layout>
+    <head>
+        <!-- Incluir CSS de Select2 desde CDN -->
+        <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+        <!-- Incluir jQuery y Select2 desde CDN con defer -->
+        <script src="https://code.jquery.com/jquery-3.6.0.min.js" defer></script>
+        <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js" defer></script>
+        <!-- Cargar el bundle compilado con Vite -->
+        @vite(['resources/js/app.js'])
+    </head>
+
     <div class="space-y-8">
         <!-- Calendario y filtros -->
         <div class="dashcode-calender">
@@ -20,14 +30,18 @@
         </div>
     </div>
 
-    <!-- Incluir FullCalendar CSS y JS desde CDN -->
-    <link href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.8/index.global.min.css" rel="stylesheet" />
-    <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.8/index.global.min.js"></script>
-    <!-- Incluir SweetAlert2 -->
-    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <!-- Opciones para contactos (se asume que $contacts se pasa desde el controlador) -->
+    <script>
+        const contactOptions = `
+            <option value="">{{ __("Select a contact") }}</option>
+            @foreach($contacts as $contact)
+                <option value="{{ $contact->id }}">{{ $contact->name }}</option>
+            @endforeach
+        `;
+    </script>
 
     <script>
-        // Función auxiliar para formatear fechas a formato "YYYY-MM-DDTHH:MM"
+        // Función auxiliar para formatear fechas a "YYYY-MM-DDTHH:MM"
         function formatDateTimeLocal(date) {
             if (!date) return '';
             const d = new Date(date);
@@ -39,18 +53,39 @@
             return `${year}-${month}-${day}T${hours}:${minutes}`;
         }
 
-        document.addEventListener('DOMContentLoaded', function() {
-            console.log('DOMContentLoaded fired');
+        // Función para generar el HTML del formulario (crear/editar evento)
+        function generateEventForm(data = {}) {
+            return `
+                <input id="swal-event-title" class="swal2-input" placeholder="{{ __("Title") }}" value="${data.title || ''}">
+                <input id="swal-event-start-date" type="datetime-local" class="swal2-input" placeholder="{{ __("Start Date") }}" value="${data.start_date || ''}">
+                <input id="swal-event-end-date" type="datetime-local" class="swal2-input" placeholder="{{ __("End Date (optional)") }}" value="${data.end_date || ''}">
+                <input id="swal-event-video_conferencia" class="swal2-input" placeholder="{{ __("Video Conferencia (Optional)") }}" value="${data.video_conferencia || ''}">
+                <select id="swal-event-contact" class="swal2-input">
+                    ${contactOptions}
+                </select>
+                <select id="swal-event-category" class="swal2-input">
+                    <option value="">{{ __("Select a category") }}</option>
+                    <option value="business" ${(data.category === 'business') ? 'selected' : ''}>{{ __("Business") }}</option>
+                    <option value="personal" ${(data.category === 'personal') ? 'selected' : ''}>{{ __("Personal") }}</option>
+                    <option value="holiday" ${(data.category === 'holiday') ? 'selected' : ''}>{{ __("Holiday") }}</option>
+                    <option value="family" ${(data.category === 'family') ? 'selected' : ''}>{{ __("Family") }}</option>
+                    <option value="meeting" ${(data.category === 'meeting') ? 'selected' : ''}>{{ __("Meeting") }}</option>
+                    <option value="etc" ${(data.category === 'etc') ? 'selected' : ''}>{{ __("Others") }}</option>
+                </select>
+            `;
+        }
 
-            // Forzar URLs seguras reemplazando http:// por https://
+        document.addEventListener('DOMContentLoaded', function() {
+            // Rutas seguras para eventos
             var eventsFetchUrl = "{{ str_replace('http://', 'https://', route('events.fetch')) }}";
             var eventsStoreUrl = "{{ str_replace('http://', 'https://', route('events.store')) }}";
             var updateUrlTemplate = "{{ str_replace('http://', 'https://', route('events.update', ['id' => ':id'])) }}";
             var destroyUrlTemplate = "{{ str_replace('http://', 'https://', route('events.destroy', ['id' => ':id'])) }}";
 
-            // Inicializar FullCalendar con eventClick para editar eventos
+            // Inicializar FullCalendar (usando FullCalendar importado vía bundle)
             var calendarEl = document.getElementById('calendar');
-            var calendar = new FullCalendar.Calendar(calendarEl, {
+            var calendar = new Calendar(calendarEl, {
+                plugins: [ dayGridPlugin, timeGridPlugin, listPlugin ],
                 initialView: 'dayGridMonth',
                 headerToolbar: {
                     left: 'prev,next today',
@@ -62,30 +97,29 @@
                     method: 'GET'
                 },
                 eventClick: function(info) {
-                    console.log("Evento clickeado: ", info.event);
                     var eventObj = info.event;
-                    // Preparar valores para el formulario de edición
-                    var title = eventObj.title;
-                    var startDate = formatDateTimeLocal(eventObj.start);
-                    var endDate = eventObj.end ? formatDateTimeLocal(eventObj.end) : '';
-                    var category = eventObj.extendedProps.category || '';
+                    const eventData = {
+                        title: eventObj.title,
+                        start_date: formatDateTimeLocal(eventObj.start),
+                        end_date: eventObj.end ? formatDateTimeLocal(eventObj.end) : '',
+                        video_conferencia: eventObj.extendedProps.video_conferencia || '',
+                        contact_id: eventObj.extendedProps.contact_id || '',
+                        category: eventObj.extendedProps.category || ''
+                    };
 
                     Swal.fire({
                         title: '{{ __("Edit Event") }}',
                         width: 1200,
-                        html:
-                            '<input id="swal-event-title" class="swal2-input" placeholder="{{ __("Title") }}" value="' + title + '">' +
-                            '<input id="swal-event-start-date" type="datetime-local" class="swal2-input" placeholder="{{ __("Start Date") }}" value="' + startDate + '">' +
-                            '<input id="swal-event-end-date" type="datetime-local" class="swal2-input" placeholder="{{ __("End Date (optional)") }}" value="' + endDate + '">' +
-                            '<select id="swal-event-category" class="swal2-input">' +
-                                '<option value="">{{ __("Select a category") }}</option>' +
-                                '<option value="business" ' + (category === 'business' ? 'selected' : '') + '>{{ __("Business") }}</option>' +
-                                '<option value="personal" ' + (category === 'personal' ? 'selected' : '') + '>{{ __("Personal") }}</option>' +
-                                '<option value="holiday" ' + (category === 'holiday' ? 'selected' : '') + '>{{ __("Holiday") }}</option>' +
-                                '<option value="family" ' + (category === 'family' ? 'selected' : '') + '>{{ __("Family") }}</option>' +
-                                '<option value="meeting" ' + (category === 'meeting' ? 'selected' : '') + '>{{ __("Meeting") }}</option>' +
-                                '<option value="etc" ' + (category === 'etc' ? 'selected' : '') + '>{{ __("Others") }}</option>' +
-                            '</select>',
+                        html: generateEventForm(eventData),
+                        didOpen: () => {
+                            // Inicializar Select2 (usando CDN)
+                            $('#swal-event-contact').select2({
+                                dropdownParent: Swal.getPopup()
+                            });
+                            if(eventData.contact_id) {
+                                $('#swal-event-contact').val(eventData.contact_id).trigger('change');
+                            }
+                        },
                         focusConfirm: false,
                         showCancelButton: true,
                         confirmButtonText: '{{ __("Save Changes") }}',
@@ -95,7 +129,10 @@
                             const newTitle = document.getElementById('swal-event-title').value;
                             const newStartDate = document.getElementById('swal-event-start-date').value;
                             const newEndDate = document.getElementById('swal-event-end-date').value;
+                            const newVideoConferencia = document.getElementById('swal-event-video_conferencia').value;
+                            const newContact = document.getElementById('swal-event-contact').value;
                             const newCategory = document.getElementById('swal-event-category').value;
+
                             if (!newTitle || !newStartDate || !newCategory) {
                                 Swal.showValidationMessage('{{ __("Please complete the required fields: Title, Start Date, and Category") }}');
                                 return false;
@@ -104,19 +141,21 @@
                                 title: newTitle,
                                 start_date: newStartDate,
                                 end_date: newEndDate,
+                                video_conferencia: newVideoConferencia,
+                                contact_id: newContact,
                                 category: newCategory
                             };
                         }
                     }).then((result) => {
                         if (result.isConfirmed) {
-                            // Actualizar el evento
                             var updatedData = result.value;
-                            console.log("Datos actualizados: ", updatedData);
                             var updateUrl = updateUrlTemplate.replace(':id', eventObj.id);
                             var formData = new FormData();
                             formData.append('event-title', updatedData.title);
                             formData.append('event-start-date', updatedData.start_date);
                             formData.append('event-end-date', updatedData.end_date);
+                            formData.append('event-video_conferencia', updatedData.video_conferencia);
+                            formData.append('event-contact_id', updatedData.contact_id);
                             formData.append('event-category', updatedData.category);
 
                             fetch(updateUrl, {
@@ -129,7 +168,6 @@
                             })
                             .then(response => response.json())
                             .then(data => {
-                                console.log("Respuesta del servidor (update): ", data);
                                 if (data.success) {
                                     calendar.refetchEvents();
                                     Swal.fire('{{ __("Success") }}', '{{ __("The event has been updated successfully") }}', 'success');
@@ -138,11 +176,9 @@
                                 }
                             })
                             .catch(error => {
-                                console.error("Error en la petición fetch (update): ", error);
                                 Swal.fire('{{ __("Error") }}', '{{ __("Error in the request") }}', 'error');
                             });
                         } else if (result.isDenied) {
-                            // Solicitar confirmación para eliminar el evento
                             Swal.fire({
                                 title: '{{ __("Are you sure?") }}',
                                 text: '{{ __("This action cannot be undone") }}',
@@ -162,7 +198,6 @@
                                     })
                                     .then(response => response.json())
                                     .then(data => {
-                                        console.log("Respuesta del servidor (destroy): ", data);
                                         if (data.success) {
                                             calendar.refetchEvents();
                                             Swal.fire('{{ __("Deleted") }}', '{{ __("The event has been deleted successfully") }}', 'success');
@@ -171,7 +206,6 @@
                                         }
                                     })
                                     .catch(error => {
-                                        console.error("Error en la petición fetch (destroy): ", error);
                                         Swal.fire('{{ __("Error") }}', '{{ __("Error in the request") }}', 'error');
                                     });
                                 }
@@ -180,28 +214,20 @@
                     });
                 }
             });
+
             calendar.render();
 
-            // Funcionalidad para añadir un nuevo evento
-            var addEventBtn = document.querySelector('.add-event');
-            addEventBtn.addEventListener('click', function() {
-                console.log("Botón '{{ __("Add Event") }}' clickeado");
+            // Funcionalidad para agregar un nuevo evento
+            document.querySelector('.add-event').addEventListener('click', function() {
                 Swal.fire({
                     title: '{{ __("Add Event") }}',
                     width: 1200,
-                    html:
-                        '<input id="swal-event-title" class="swal2-input" placeholder="{{ __("Title") }}">' +
-                        '<input id="swal-event-start-date" type="datetime-local" class="swal2-input" placeholder="{{ __("Start Date") }}">' +
-                        '<input id="swal-event-end-date" type="datetime-local" class="swal2-input" placeholder="{{ __("End Date (optional)") }}">' +
-                        '<select id="swal-event-category" class="swal2-input">' +
-                            '<option value="">{{ __("Select a category") }}</option>' +
-                            '<option value="business">{{ __("Business") }}</option>' +
-                            '<option value="personal">{{ __("Personal") }}</option>' +
-                            '<option value="holiday">{{ __("Holiday") }}</option>' +
-                            '<option value="family">{{ __("Family") }}</option>' +
-                            '<option value="meeting">{{ __("Meeting") }}</option>' +
-                            '<option value="etc">{{ __("Others") }}</option>' +
-                        '</select>',
+                    html: generateEventForm(),
+                    didOpen: () => {
+                        $('#swal-event-contact').select2({
+                            dropdownParent: Swal.getPopup()
+                        });
+                    },
                     focusConfirm: false,
                     showCancelButton: true,
                     confirmButtonText: '{{ __("Save") }}',
@@ -209,21 +235,32 @@
                         const title = document.getElementById('swal-event-title').value;
                         const startDate = document.getElementById('swal-event-start-date').value;
                         const endDate = document.getElementById('swal-event-end-date').value;
+                        const videoConferencia = document.getElementById('swal-event-video_conferencia').value;
+                        const contact = document.getElementById('swal-event-contact').value;
                         const category = document.getElementById('swal-event-category').value;
+
                         if (!title || !startDate || !category) {
                             Swal.showValidationMessage('{{ __("Please complete the required fields: Title, Start Date, and Category") }}');
                             return false;
                         }
-                        return { title: title, start_date: startDate, end_date: endDate, category: category };
+                        return {
+                            title: title,
+                            start_date: startDate,
+                            end_date: endDate,
+                            video_conferencia: videoConferencia,
+                            contact_id: contact,
+                            category: category
+                        };
                     }
                 }).then((result) => {
                     if (result.isConfirmed) {
-                        var eventData = result.value;
-                        console.log("Datos del evento:", eventData);
-                        var formData = new FormData();
+                        const eventData = result.value;
+                        const formData = new FormData();
                         formData.append('event-title', eventData.title);
                         formData.append('event-start-date', eventData.start_date);
                         formData.append('event-end-date', eventData.end_date);
+                        formData.append('event-video_conferencia', eventData.video_conferencia);
+                        formData.append('event-contact_id', eventData.contact_id);
                         formData.append('event-category', eventData.category);
 
                         fetch(eventsStoreUrl, {
@@ -235,7 +272,6 @@
                         })
                         .then(response => response.json())
                         .then(data => {
-                            console.log("Respuesta del servidor:", data);
                             if (data.success) {
                                 calendar.refetchEvents();
                                 Swal.fire('{{ __("Success") }}', '{{ __("The event has been added successfully") }}', 'success');
@@ -244,7 +280,6 @@
                             }
                         })
                         .catch(error => {
-                            console.error("Error en la petición fetch:", error);
                             Swal.fire('{{ __("Error") }}', '{{ __("Error in the request") }}', 'error');
                         });
                     }
