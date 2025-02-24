@@ -38,6 +38,7 @@ use App\Http\Controllers\EmailController;
 use App\Http\Controllers\CampaignController;
 use App\Http\Controllers\ServerMonitorController;
 use App\Http\Controllers\HostListController;
+use App\Http\Controllers\LaborCalendarController;
 
 
 
@@ -141,6 +142,14 @@ Route::group(['middleware' => ['auth', 'verified']], function () {
         Route::delete('/campaigns/{id}', [CampaignController::class, 'destroy'])->name('campaigns.destroy');
     });
 
+    //calendario laboral
+    Route::get('/labor-calendar', [LaborCalendarController::class, 'index'])->name('labor-calendar.index');
+    Route::get('/labor-calendar/fetch', [LaborCalendarController::class, 'fetch'])->name('labor-calendar.fetch');
+    Route::post('/labor-calendar/save-non-working', [LaborCalendarController::class, 'saveNonWorking'])->name('labor-calendar.saveNonWorking');
+    Route::post('/labor-calendar/store', [LaborCalendarController::class, 'store'])->name('labor-calendar.store');
+    Route::post('/labor-calendar/update/{id}', [LaborCalendarController::class, 'update'])->name('labor-calendar.update');
+    Route::post('/labor-calendar/destroy/{id}', [LaborCalendarController::class, 'destroy'])->name('labor-calendar.destroy');
+    Route::delete('/labor-calendar/destroy/{id}', [LaborCalendarController::class, 'destroy'])->name('labor-calendar.destroy');
 
     //ShiftDay
     Route::get('shiftdays/kanban', [ShiftDayController::class, 'kanban'])->name('shiftdays.kanban');

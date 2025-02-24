@@ -22,6 +22,7 @@ class RoleSeeder extends Seeder
             'user',
             'employee',
             'manager',
+            'customer',
         ];
 
         // Se crean los roles solo si no existen
@@ -77,6 +78,23 @@ class RoleSeeder extends Seeder
             'user index',
             'timecontrolstatus index',
         ]);
+
+        // Asignación de permisos al rol 'customer'
+        $customerWeb = Role::where(['name' => 'customer', 'guard_name' => 'web'])->firstOrFail();
+        $customerWeb->syncPermissions([
+            'user index',
+            'servermonitor create',
+            'servermonitor update',
+            'servermonitor delete',
+            'servermonitor show',
+            'servermonitor index',
+            'calendarindividual create',
+            'calendarindividual update',
+            'calendarindividual delete',
+            'calendarindividual show',
+            'calendarindividual index',
+        ]);
+
 
         // En este ejemplo, el rol 'user' no se le asignan permisos específicos,
         // pero se podría modificar de manera similar si fuera necesario.
