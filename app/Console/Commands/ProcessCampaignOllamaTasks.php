@@ -74,7 +74,7 @@ class ProcessCampaignOllamaTasks extends Command
                                 $this->info("CampaignDetail ID {$campaignDetail->id} has no OllamaTasker associated. Creating new OllamaTasker.");
                                 Log::info("CampaignDetail ID {$campaignDetail->id} has no OllamaTasker associated. Creating new OllamaTasker.");
 
-                                $prompt_start = "Crea una publicación profesional y atractiva, pero sin escribir nada de cabezal,sin poner algo como Aqui tienes una publicacion etc. siguiendo estas directrices:";
+                                $prompt_start = "Crea una publicación profesional y atractiva, pero sin escribir nada de cabezal,sin poner algo como Aqui tienes una publicacion etc. siguiendo estas directrices y manteniendo la misma idioma que estos indicaciones:";
 
                                 switch ($campaign->model) {
                                     case 'whatsapp':
@@ -87,7 +87,7 @@ class ProcessCampaignOllamaTasks extends Command
                                         $prompt_end = " Mantén un tono profesional y cercano, con un mensaje adecuado para Telegram. No pongas nada más que el texto, no pongas nada de comentarios o explicaciones adicionales.";
                                         break;
                                     case 'email':
-                                        $prompt_end = " Mantén un tono profesional, cercano y humano, con un mensaje adecuado para email.No pongas nada más que el texto, no pongas nada de comentarios o explicaciones adicionales.";
+                                        $prompt_end = " Mantén un tono profesional, cercano y humano, con un mensaje adecuado para email.No pongas nada más que el texto, no pongas nada de comentarios o explicaciones adicionales. Ademas que sea en formato html.";
                                         break;
                                     default:
                                         $prompt_end = " Mantén un tono profesional y humano. No pongas nada más que el texto, no pongas nada de comentarios o explicaciones adicionales.";

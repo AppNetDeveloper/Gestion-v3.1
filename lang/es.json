@@ -412,5 +412,10 @@
     "Ip Address or Hostname of the server": "Dirección IP o nombre de host del servidor",
     "Token for authentication": "Token para la autenticación",
     "Create Server": "Crear Servidor",
-    "Back to List": "Volver a la lista"
+    "Back to List": "Volver a la lista",
+    "notifications.event_start": "Tu evento ':title' comenzará en una hora. Por favor, revisa en :url.",
+    "server_check_start": "Iniciando bucle infinito para verificación de estado de servidores cada 3 minutos...",
+    "no_monitor_records": "Servidor ':name' no tiene registros de monitoreo.",
+    "server_down_alert": "Alerta: El servidor ':name' no ha enviado datos en los últimos 3 minutos. Último registro: :last_record.",
+    "error": "Error: :error"
   }

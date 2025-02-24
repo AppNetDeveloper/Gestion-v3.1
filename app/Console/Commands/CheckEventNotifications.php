@@ -43,9 +43,15 @@ class CheckEventNotifications extends Command
                 // Buscar eventos cuya fecha de inicio esté dentro de la ventana definida
                 $events = Event::whereBetween('start_date', [$startWindow, $endWindow])->get();
 
+                // Ejemplo en el controlador o comando:
                 foreach ($events as $event) {
-                    // Mensaje de notificación (en inglés) ademas tenemos que poner la fecha de inicio del evento y poenemos la app_url del sistema
-                    $message = "Your event '{$event->title}' is starting in one hour. Please check it at {$event->app_url}.";
+                    $eventUrl = rtrim(config('app.url'), '/') . '/events/' . $event->id;
+
+                    // Utiliza el sistema de traducciones para generar el mensaje
+                    $message = __('notifications.event_start', [
+                        'title' => $event->title,
+                        'url'   => $eventUrl,
+                    ]);
 
                     // Verificar si ya existe una notificación para evitar duplicados
                     $exists = Notification::where('user_id', $event->user_id)
@@ -56,13 +62,14 @@ class CheckEventNotifications extends Command
                         Notification::create([
                             'user_id' => $event->user_id,
                             'message' => $message,
-                            'sended'  => 0, // No enviada aún
-                            'seen'    => 0, // No vista en la app
+                            'sended'  => 0,
+                            'seen'    => 0,
                         ]);
 
                         $this->info("Notification created for event ID: {$event->id}");
                     }
                 }
+
 
                 // Espera 60 segundos antes de la siguiente verificación
                 sleep(60);
