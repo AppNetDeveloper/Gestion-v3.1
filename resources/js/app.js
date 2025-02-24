@@ -8,8 +8,6 @@ import "../css/app.scss";
 // 2. Bootstrap o inicialización del proyecto
 import "./bootstrap";
 
-
-
 // 3. Importar librerías
 import jQuery from "jquery";
 window.$ = jQuery;
@@ -18,9 +16,6 @@ window.jQuery = jQuery;
 // Tw-elements
 import "tw-elements";
 
-// Importa Select2 y su CSS
-import 'select2/dist/js/select2.min.js';
-import 'select2/dist/css/select2.min.css';
 
 // SimpleBar
 import SimpleBar from "simplebar";
@@ -44,11 +39,18 @@ import { Calendar } from "@fullcalendar/core";
 import dayGridPlugin from "@fullcalendar/daygrid";
 import timeGridPlugin from "@fullcalendar/timegrid";
 import listPlugin from "@fullcalendar/list";
+import interactionPlugin from '@fullcalendar/interaction';
+window.interactionPlugin = interactionPlugin;
+
 
 window.Calendar = Calendar;
 window.dayGridPlugin = dayGridPlugin;
+Window.dayGridMonth = dayGridPlugin.month;
+window.dayGridWeek  = dayGridPlugin.week;
 window.timeGridPlugin = timeGridPlugin;
 window.listPlugin = listPlugin;
+window.FullCalendar = { Calendar, dayGridPlugin, timeGridPlugin, listPlugin };
+
 
 
 // Cleave
@@ -77,6 +79,13 @@ import Swal from "sweetalert2";
 import "sweetalert2/dist/sweetalert2.min.css";
 window.Swal = Swal;
 
+
+// Importa Select2 y su CSS
+import select2 from "select2"
+import 'select2/dist/js/select2.min.js';
+import 'select2/dist/css/select2.min.css';
+window.select2 = select2;
+
 // Tippy
 import tippy from "tippy.js";
 import "tippy.js/dist/tippy.css";
@@ -93,6 +102,7 @@ window.validate = validate;
 
 // Cleave.js (Duplicado en código original, pero manteniendo la consistencia)
 import cleave from "cleave.js";
+import { WindowScrollController } from "@fullcalendar/core/internal";
 window.cleave = cleave;
 
 // 4. Importar scripts personalizados

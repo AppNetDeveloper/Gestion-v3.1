@@ -66,6 +66,21 @@ class PermissionSeeder extends Seeder
             ['name' => 'servermonitor delete', 'module_name' => 'servermonitor'],
             ['name' => 'servermonitor show',   'module_name' => 'servermonitor'],
             ['name' => 'servermonitor index',  'module_name' => 'servermonitor'],
+
+            //permisos para calendario laboral lab calendar
+            ['name' => 'labcalendar create', 'module_name' => 'labcalendar'],
+            ['name' => 'labcalendar update', 'module_name' => 'labcalendar'],
+            ['name' => 'labcalendar delete', 'module_name' => 'labcalendar'],
+            ['name' => 'labcalendar show',   'module_name' => 'labcalendar'],
+            ['name' => 'labcalendar index',  'module_name' => 'labcalendar'],
+
+            //permisos para calendario individuales calendar individual
+            ['name' => 'calendarindividual create', 'module_name' => 'calendarindividual'],
+            ['name' => 'calendarindividual update', 'module_name' => 'calendarindividual'],
+            ['name' => 'calendarindividual delete', 'module_name' => 'calendarindividual'],
+            ['name' => 'calendarindividual show',   'module_name' => 'calendarindividual'],
+            ['name' => 'calendarindividual index', 'module_name' => 'calendarindividual'],
+
         ];
 
         foreach ($permissions as $permissionData) {

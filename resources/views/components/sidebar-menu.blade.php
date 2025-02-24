@@ -89,7 +89,7 @@
                     </span>
                 </a>
             </li>
-            @canany(['servermonitor show', 'servermonitorbusynes show'])
+            @can('servermonitor show')
                 <li>
                     <a href="{{ route('servermonitor.index') }}"
                     class="navItem {{ (\Request::route()->getName() == 'servermonitor.index') ? 'active' : '' }}">
@@ -99,7 +99,7 @@
                         </span>
                     </a>
                 </li>
-            @endcanany
+            @endcan
             <li>
                 <a href="{{ route('kanban') }}" class="navItem {{ (\Request::route()->getName() == 'kanban') ? 'active' : '' }}">
                     <span class="flex items-center">
@@ -116,6 +116,7 @@
                     </span>
                 </a>
             </li>
+            @can('calendarindividual show')
             <li>
                 <a href="{{ route('calendar.index') }}" class="navItem {{ (\Request::route()->getName() == 'calender') ? 'active' : '' }}">
                     <span class="flex items-center">
@@ -124,6 +125,18 @@
                     </span>
                 </a>
             </li>
+            @endcan
+            @can('labcalendar show')
+            <li>
+                <a href="{{ route('labor-calendar.index') }}" class="navItem {{ (Request::route()->getName() == 'labor-calendar.index') ? 'active' : '' }}">
+                    <span class="flex items-center">
+                        <iconify-icon class="nav-icon" icon="tabler:calendar"></iconify-icon>
+                        <span>{{ __('Labor Calendar') }}</span>
+                    </span>
+                </a>
+            </li>
+            @endcan
+
             <li>
                 <a href="{{ route('todo') }}" class="navItem {{ (\Request::route()->getName() == 'todo') ? 'active' : '' }}">
                     <span class="flex items-center">
