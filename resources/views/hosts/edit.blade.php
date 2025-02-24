@@ -29,7 +29,7 @@
             </div>
             <div class="flex space-x-4">
                 <button type="submit" class="btn btn-primary">Actualizar</button>
-                <a href="{{ route('hosts.index') }}" class="btn btn-secondary">Cancelar</a>
+                <a href="{{ route('servermonitor.index') }}" class="btn btn-secondary">Cancelar</a>
             </div>
         </form>
     </div>

@@ -9,6 +9,7 @@ use App\Models\HostMonitor;
 use App\Models\Notification;
 use App\Models\User;
 use Carbon\Carbon;
+use Spatie\Permission\Models\Role;
 
 class ServerMonitorController extends Controller
 {
@@ -44,13 +45,13 @@ class ServerMonitorController extends Controller
 
         // Crear el registro en host_monitors
         $hostMonitor = HostMonitor::create([
-            'id_host' => $host->id,
-            'total_memory' => $request->total_memory,
-            'memory_free' => $request->memory_free,
-            'memory_used' => $request->memory_used,
+            'id_host'             => $host->id,
+            'total_memory'        => $request->total_memory,
+            'memory_free'         => $request->memory_free,
+            'memory_used'         => $request->memory_used,
             'memory_used_percent' => $request->memory_used_percent,
-            'disk' => $request->disk,
-            'cpu' => $request->cpu,
+            'disk'                => $request->disk,
+            'cpu'                 => $request->cpu,
         ]);
 
         // Verificar si alguna métrica excede el umbral (80%)
@@ -76,7 +77,7 @@ class ServerMonitorController extends Controller
 
                 // Crear el mensaje de alerta
                 $alertMessage = "Server Monitor Alert: Host '{$host->name}' metrics exceeded threshold. "
-                              . "Check at {$monitorUrl}. CPU: {$request->cpu}%, Memory used: {$request->memory_used_percent}%, Disk: {$request->disk}%.";
+                    . "Check at {$monitorUrl}. CPU: {$request->cpu}%, Memory used: {$request->memory_used_percent}%, Disk: {$request->disk}%.";
 
                 // Si el host tiene un user_id asignado, se crea la notificación para ese usuario
                 if ($host->user_id) {
@@ -87,13 +88,29 @@ class ServerMonitorController extends Controller
                         'seen'    => 0, // No vista en la app
                     ]);
                 } else {
-                    // Si user_id es NULL, buscar todos los usuarios que tengan asignado el permiso
-                    $userIds = User::whereHas('permissions', function($query) {
+                    // Si user_id es NULL, buscamos usuarios que tengan el permiso "servermonitorbusynes show"
+
+                    // 1. Obtener los IDs de roles que tienen este permiso (filtrando también por module_name)
+                    $roleIds = Role::whereHas('permissions', function ($query) {
                         $query->where('name', 'servermonitorbusynes show')
                               ->where('module_name', 'servermonitorbusynes');
                     })->pluck('id')->toArray();
 
-                    // Crear una notificación para cada usuario encontrado
+                    // 2. Buscar usuarios que tengan alguno de esos roles
+                    $userIdsFromRoles = User::whereHas('roles', function ($query) use ($roleIds) {
+                        $query->whereIn('id', $roleIds);
+                    })->pluck('id')->toArray();
+
+                    // 3. Buscar usuarios que tengan el permiso asignado directamente
+                    $userIdsDirectPerm = User::whereHas('permissions', function ($query) {
+                        $query->where('name', 'servermonitorbusynes show')
+                              ->where('module_name', 'servermonitorbusynes');
+                    })->pluck('id')->toArray();
+
+                    // 4. Unir ambos conjuntos de usuarios eliminando duplicados
+                    $userIds = array_unique(array_merge($userIdsFromRoles, $userIdsDirectPerm));
+
+                    // Crear notificaciones para cada usuario encontrado
                     foreach ($userIds as $userId) {
                         Notification::create([
                             'user_id' => $userId,
@@ -108,9 +125,10 @@ class ServerMonitorController extends Controller
 
         return response()->json([
             'message' => 'Data stored successfully',
-            'data' => $hostMonitor
+            'data'    => $hostMonitor,
         ], 201);
     }
+
     /**
      * Display the specified resource.
      */
@@ -140,7 +158,8 @@ class ServerMonitorController extends Controller
      */
     private function deleteOldRecords(HostList $host)
     {
-        $host->hostMonitors()->where('created_at', '<', Carbon::now()->subDays(7))->delete();
+        $host->hostMonitors()
+             ->where('created_at', '<', Carbon::now()->subDays(7))
+             ->delete();
     }
 }
-

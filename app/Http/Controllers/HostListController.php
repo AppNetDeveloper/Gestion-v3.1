@@ -142,4 +142,28 @@ class HostListController extends Controller
         return redirect()->route('servermonitor.index')
                          ->with('success', 'Servidor eliminado exitosamente.');
     }
+    public function toggle(Request $request, HostList $host)
+    {
+        $user = auth()->user();
+
+        // Verificar que el usuario tenga el permiso necesario
+        if (!$user->hasPermissionTo('servermonitorbusynes show')) {
+            abort(403);
+        }
+
+        if (is_null($host->user_id)) {
+            // El host es global: se asigna al usuario logueado
+            $host->update(['user_id' => $user->id]);
+            $message = 'El host ahora está asignado a tu cuenta.';
+        } elseif ($host->user_id == $user->id) {
+            // El host ya está asignado al usuario: se vuelve global
+            $host->update(['user_id' => null]);
+            $message = 'El host ahora es global.';
+        } else {
+            // Si por alguna razón el host está asignado a otro usuario, se deniega la acción.
+            abort(403, 'Acción no permitida');
+        }
+
+        return redirect()->back()->with('success', $message);
+    }
 }

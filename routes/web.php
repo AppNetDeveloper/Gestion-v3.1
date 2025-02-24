@@ -127,6 +127,7 @@ Route::group(['middleware' => ['auth', 'verified']], function () {
     Route::get('servermonitor/history/{host}', [ServerMonitorController::class, 'getHistory'])
     ->name('servermonitor.history');
     Route::resource('hosts', HostListController::class);
+    Route::patch('/hosts/toggle/{host}', [HostListController::class, 'toggle'])->name('hosts.toggle');
 
 
     //campañas public

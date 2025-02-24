@@ -88,6 +88,17 @@
                                             <iconify-icon icon="heroicons-outline:trash" class="text-xl"></iconify-icon>
                                         </button>
                                     @endcanany
+
+                                    {{-- Nuevo botón toggle on/off para asignar/quitar la propiedad del host --}}
+                                    @can('servermonitorbusynes show')
+                                        <form action="{{ route('hosts.toggle', $host->id) }}" method="POST" class="inline-block">
+                                            @csrf
+                                            @method('PATCH')
+                                            <button type="submit" class="text-indigo-500 hover:text-indigo-700" title="{{ is_null($host->user_id) ? __('Asignar a mi cuenta') : __('Hacer global') }}">
+                                                <iconify-icon icon="heroicons-outline:switch-horizontal" class="text-xl"></iconify-icon>
+                                            </button>
+                                        </form>
+                                    @endcanany
                                 </div>
                             </div>
                             <div class="p-4 grid grid-cols-3 gap-4">
