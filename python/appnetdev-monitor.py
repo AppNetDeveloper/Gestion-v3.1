@@ -45,7 +45,7 @@ def send_data(payload):
     """
     headers = {"Content-Type": "application/json"}
     try:
-        response = requests.post(API_URL, json=payload, headers=headers)
+        response = requests.post(API_URL, json=payload, headers=headers, verify=False)
         return response
     except Exception as e:
         print("Error al enviar la petición:", e)
