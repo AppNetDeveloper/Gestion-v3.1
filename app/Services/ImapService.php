@@ -186,4 +186,44 @@ class ImapService
         }
     }
 
+    /**
+     * Borra un mensaje por UID de la carpeta indicada.
+     *
+     * @param int    $uid        UID del mensaje a borrar.
+     * @param string $folderName Nombre de la carpeta, por defecto 'INBOX'.
+     * @return bool  True si se borró correctamente, false en caso contrario.
+     */
+    public function deleteMessageByUid(int $uid, string $folderName = 'INBOX'): bool
+    {
+        if (!$this->client) {
+            $this->connect();
+        }
+        if (!$this->client || !$this->client->isConnected()) {
+            return false;
+        }
+
+        try {
+            $messages = $this->client->getFolder($folderName)
+                ->query()
+                ->where('uid', $uid)
+                ->get();
+
+            $mail = $messages->first();
+            if ($mail) {
+                // Borrar el mensaje del servidor IMAP.
+                $mail->delete();
+
+                // Limpia la caché para este mensaje y para la lista.
+                Cache::forget('imap_message_' . Auth::id() . '_' . $folderName . '_' . $uid);
+                Cache::forget('imap_messages_' . Auth::id() . '_' . $folderName);
+                return true;
+            }
+            return false;
+        } catch (\Throwable $e) {
+            Log::error("IMAP: Error borrando mensaje por UID: " . $e->getMessage());
+            return false;
+        }
+    }
+
+
 }

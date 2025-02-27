@@ -73,10 +73,24 @@ class ProcessLinkedinOllamaTasks extends Command
                     $this->info("Processing task ID: {$task->id}");
 
                      // Construir el prompt completo
-                     $prefix = "Crea una publicación profesional y atractiva para LinkedIn utilizando los siguientes datos:";
-                     $textArea = $task->prompt;
-                     $suffix = "Mantén un tono profesional, cercano y humano. Emplea el idioma y lenguaje de los datos proporcionados. Usa un lenguaje claro, inspirador y persuasivo que motive a la acción. Si falta información, omite esa parte. Utiliza únicamente datos concretos y verificables, sin inventar nada ni dejar espacios incompletos. No agregues encabezados, comentarios o explicaciones adicionales.";
-                     $fullPrompt = $prefix . " " . $textArea . " " . $suffix;
+                    $prefix = "Crea una publicación profesional y atractiva para LinkedIn.
+                    No incluyas encabezados ni frases introductorias (por ejemplo, 'Aquí tienes una publicación').
+                    No uses placeholders ni datos de firma genéricos.
+                    No agregues información adicional, comentarios ni formatos extra.
+                    Es MUY IMPORTANTE que no inventes ni modifiques ningún dato de contacto (números de teléfono, correos electrónicos o páginas web) presentes en el contenido original.
+                    Si ya se incluyen datos de contacto, mantenlos tal cual.
+                    Sigue los datos que se proporcionan a continuación y utiliza el mismo idioma:";
+
+                    $textArea = $task->prompt;
+
+                    $suffix = "Mantén un tono profesional, cercano y humano.
+                    Usa un lenguaje claro, inspirador y persuasivo que motive a la acción.
+                    Si falta información, simplemente omítela.
+                    Utiliza únicamente datos concretos y verificables, sin inventar nada ni dejar partes incompletas.
+                    No añadas encabezados, comentarios ni explicaciones adicionales.";
+
+                    $fullPrompt = $prefix . " " . $textArea . " " . $suffix;
+
 
 
 

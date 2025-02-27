@@ -238,4 +238,18 @@ class EmailController extends Controller
 
         return redirect()->back()->with('success', 'Respuesta enviada correctamente.');
     }
+
+    public function delete(Request $request, int $uid): RedirectResponse
+    {
+        $folder = $request->input('folder', 'INBOX');
+
+        $result = $this->imapService->deleteMessageByUid($uid, $folder);
+
+        if ($result) {
+            return redirect()->back()->with('success', 'Correo borrado correctamente.');
+        } else {
+            return redirect()->back()->with('error', 'No se pudo borrar el correo.');
+        }
+    }
+
 }
