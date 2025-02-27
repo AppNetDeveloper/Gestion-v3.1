@@ -171,6 +171,7 @@ Route::group(['middleware' => ['auth', 'verified']], function () {
         Route::get('/emails/compose', [EmailController::class, 'compose'])->name('emails.compose');
         Route::post('/emails/send', [EmailController::class, 'send'])->name('emails.send');
         Route::post('/emails/{uid}/reply', [EmailController::class, 'reply'])->name('emails.reply');
+        Route::post('/emails/{uid}/delete', [EmailController::class, 'delete'])->name('emails.delete');
     });
 
     //rutas para notificaciones
