@@ -2,66 +2,79 @@
 
 namespace App\Services;
 
-use Webklex\PHPIMAP\Client;
 use Webklex\PHPIMAP\Config;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Cache;
 
 class ImapService
 {
-    protected ?Client $client = null;
+    // Nota: el tipo de $client sigue siendo Webklex\PHPIMAP\Client
+    protected ?\Webklex\PHPIMAP\Client $client = null;
     protected ?string $error = null;
 
     /**
-     * Intenta conectar al servidor IMAP usando las credenciales del usuario autenticado.
-     * Si ocurre algún error o falta algún campo, se asigna null a $client y se guarda un mensaje de error.
+     * Obtiene la configuración IMAP para el usuario autenticado.
+     *
+     * @return array
+     * @throws \Exception Si falta algún campo requerido.
      */
-    public function connect(): void
+    protected function getUserImapConfig(): array
     {
         $user = Auth::user();
+
         if (!$user) {
-            Log::warning("IMAP: Usuario no autenticado.");
-            $this->error = "Usuario no autenticado.";
-            return;
+            throw new \Exception("Usuario no autenticado.");
         }
 
-        // Verifica que existan los campos necesarios.
-        $fields = ['imap_host', 'imap_port', 'imap_username', 'imap_password'];
-        foreach ($fields as $field) {
+        // Validamos que existan los campos requeridos.
+        $requiredFields = ['imap_host', 'imap_port', 'imap_username', 'imap_password'];
+        foreach ($requiredFields as $field) {
             if (empty($user->$field)) {
-                Log::error("IMAP: Campo '$field' faltante para el usuario ID {$user->id}");
-                $this->error = "Falta configuración IMAP: $field.";
-                $this->client = null;
-                return;
+                throw new \Exception("Falta configuración IMAP: $field.");
             }
         }
 
-        // Construye la configuración IMAP con los datos del usuario.
-        $configArray = [
-            'host'          => $user->imap_host,
-            'port'          => (int)$user->imap_port,
-            'encryption'    => in_array($user->imap_encryption, ['ssl', 'tls']) ? $user->imap_encryption : null,
-            'validate_cert' => true,
-            'username'      => $user->imap_username,
-            'password'      => $user->imap_password,
-            'protocol'      => 'imap',
-            'delimiter'     => '/',
-            'default_folder'=> 'INBOX',
-            'fetch'         => [
+        // Asignamos 'ssl' por defecto si el valor de encriptación no es 'ssl' ni 'tls'.
+        $encryption = in_array($user->imap_encryption, ['ssl', 'tls']) ? $user->imap_encryption : 'ssl';
+
+        return [
+            'host'           => $user->imap_host,
+            'port'           => (int)$user->imap_port,
+            'encryption'     => $encryption,
+            'validate_cert'  => true,  // Puedes hacerlo dinámico si es necesario.
+            'username'       => $user->imap_username,
+            'password'       => $user->imap_password,
+            'protocol'       => 'imap',  // Puedes extenderlo para que sea configurable.
+            'delimiter'      => '/',
+            'default_folder' => 'INBOX',
+            'fetch'          => [
                 'fetch_body'  => true,
                 'fetch_flags' => true,
             ],
         ];
+    }
+
+    /**
+     * Intenta conectar al servidor IMAP utilizando la configuración extraída del usuario.
+     */
+    public function connect(): void
+    {
+        try {
+            $configArray = $this->getUserImapConfig();
+        } catch (\Exception $e) {
+            Log::error("IMAP: " . $e->getMessage());
+            $this->error = $e->getMessage();
+            return;
+        }
 
         try {
-            $config = new Config($configArray);
-            // Forzamos el fallback: un arreglo vacío (no null)
-            $defaultConfig = [];
-            $this->client = new Client($config, $defaultConfig);
+            // Utilizamos la fachada para crear el cliente, inyectando la configuración del usuario
+            $this->client = \Webklex\IMAP\Facades\Client::make($configArray);
             $this->client->connect();
 
             if (!$this->client->isConnected()) {
-                Log::error("IMAP: Conexión fallida para el usuario ID {$user->id} en host {$user->imap_host}");
+                Log::error("IMAP: Conexión fallida para el usuario ID " . Auth::id() . " en host " . $configArray['host']);
                 $this->error = "Conexión IMAP fallida. Verifica las credenciales.";
                 $this->client = null;
             } else {
@@ -71,14 +84,14 @@ class ImapService
             $this->client = null;
             $this->error = "Error conectando al servidor IMAP: " . $e->getMessage();
             Log::error("IMAP: " . $this->error, [
-                'user_id' => $user->id,
-                'host'    => $user->imap_host,
+                'user_id' => Auth::id(),
+                'host'    => $configArray['host'] ?? 'desconocido',
             ]);
         }
     }
 
     /**
-     * Devuelve el mensaje de error (si existe) al intentar conectar.
+     * Devuelve el mensaje de error, si existe.
      *
      * @return string|null
      */
@@ -88,14 +101,13 @@ class ImapService
     }
 
     /**
-     * Obtiene una colección de mensajes (encabezados) de la carpeta indicada.
+     * Obtiene una colección de mensajes (encabezados) de la carpeta especificada.
      *
      * @param int    $limit      Número máximo de mensajes a obtener.
      * @param string $folderName Nombre de la carpeta, por defecto 'INBOX'.
-     *
      * @return \Illuminate\Support\Collection
      */
-    public function getMessages(int $limit = 50, string $folderName = 'INBOX')
+    public function getMessages(int $limit = 10, string $folderName = 'INBOX')
     {
         if (!$this->client) {
             $this->connect();
@@ -106,7 +118,8 @@ class ImapService
 
         try {
             return $this->client->getFolder($folderName)
-                ->messages()
+                ->query()
+                ->all()
                 ->limit($limit)
                 ->get();
         } catch (\Throwable $e) {
@@ -115,12 +128,12 @@ class ImapService
         }
     }
 
+
     /**
      * Obtiene un mensaje específico por UID de la carpeta indicada.
      *
      * @param int    $uid        UID del mensaje.
      * @param string $folderName Nombre de la carpeta, por defecto 'INBOX'.
-     *
      * @return mixed|null
      */
     public function getMessageByUid(int $uid, string $folderName = 'INBOX')
@@ -133,17 +146,21 @@ class ImapService
         }
 
         try {
-            return $this->client->getFolder($folderName)
-                ->messages()
-                ->find($uid);
+            $messages = $this->client->getFolder($folderName)
+                ->query()
+                ->where('uid', $uid)
+                ->get();
+
+            return $messages->first();
         } catch (\Throwable $e) {
             Log::error("IMAP: Error obteniendo mensaje por UID: " . $e->getMessage());
             return null;
         }
     }
 
+
     /**
-     * Verifica si la conexión IMAP está activa.
+     * Indica si la conexión IMAP está activa.
      *
      * @return bool
      */
@@ -151,4 +168,22 @@ class ImapService
     {
         return $this->client?->isConnected() ?? false;
     }
+
+    public function getFolders()
+    {
+        if (!$this->client) {
+            $this->connect();
+        }
+        if (!$this->client || !$this->client->isConnected()) {
+            return collect();
+        }
+
+        try {
+            return $this->client->getFolders();
+        } catch (\Throwable $e) {
+            Log::error("IMAP: Error obteniendo carpetas: " . $e->getMessage());
+            return collect();
+        }
+    }
+
 }

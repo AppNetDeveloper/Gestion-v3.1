@@ -75,7 +75,7 @@ class ServerMonitorController extends Controller
         // Obtenemos los 40 registros más recientes (orden descendente) y luego los ordenamos ascendentemente
         $history = $host->hostMonitors()
                         ->orderBy('created_at', 'desc')
-                        ->limit(40)
+                        ->limit(160)
                         ->get()
                         ->sortBy('created_at')
                         ->values(); // Reindexar la colección

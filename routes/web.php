@@ -39,7 +39,7 @@ use App\Http\Controllers\CampaignController;
 use App\Http\Controllers\ServerMonitorController;
 use App\Http\Controllers\HostListController;
 use App\Http\Controllers\LaborCalendarController;
-
+use Webklex\IMAP\Facades\Client;
 
 
 require __DIR__ . '/auth.php';
@@ -166,6 +166,11 @@ Route::group(['middleware' => ['auth', 'verified']], function () {
 
         // Ruta para actualizar la configuración IMAP
         Route::post('/emails/settings', [EmailController::class, 'updateSettings'])->name('emails.settings.update');
+        Route::get('/emails/attachment/{messageUid}/{attachmentIndex}', [EmailController::class, 'downloadAttachment'])->name('emails.attachment.download');
+        Route::post('/emails/smtp/update', [EmailController::class, 'updateSmtpSettings'])->name('emails.smtp.update');
+        Route::get('/emails/compose', [EmailController::class, 'compose'])->name('emails.compose');
+        Route::post('/emails/send', [EmailController::class, 'send'])->name('emails.send');
+        Route::post('/emails/{uid}/reply', [EmailController::class, 'reply'])->name('emails.reply');
     });
 
     //rutas para notificaciones
