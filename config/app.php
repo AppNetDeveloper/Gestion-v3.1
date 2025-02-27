@@ -218,6 +218,9 @@ return [
         // App\Providers\BroadcastServiceProvider::class,
         App\Providers\EventServiceProvider::class,
         App\Providers\RouteServiceProvider::class,
+        Webklex\IMAP\Providers\LaravelServiceProvider::class,
+
+
 
     ],
 
@@ -234,6 +237,9 @@ return [
 
     'aliases' => Facade::defaultAliases()->merge([
         // 'ExampleClass' => App\Example\ExampleClass::class,
+        'ClientManager' => Webklex\IMAP\Facades\Client::class,
+
+
     ])->toArray(),
 
 ];

@@ -51,6 +51,11 @@ class User extends Authenticatable implements MustVerifyEmail, HasMedia
         'imap_encryption',
         'imap_username',
         'imap_password',
+        'smtp_host',
+        'smtp_port',
+        'smtp_encryption',
+        'smtp_username',
+        'smtp_password'
     ];
 
     /**

@@ -50,7 +50,7 @@
                 </a>
             </li>
             <li class="">
-                <a href="{{ route('email') }}" class="navItem {{ (\Request::route()->getName() == 'email') ? 'active' : '' }}">
+                <a href="{{ route('emails.index') }}" class="navItem {{ (\Request::route()->getName() == 'emails.index') ? 'active' : '' }}">
                     <span class="flex items-center">
                         <iconify-icon class=" nav-icon" icon="heroicons-outline:mail"></iconify-icon>
                         <span>{{ __('Email') }}</span>

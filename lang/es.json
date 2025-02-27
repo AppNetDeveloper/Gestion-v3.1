@@ -452,5 +452,17 @@
     "october": "Octubre",
     "november": "Noviembre",
     "december": "Diciembre",
-    "Labor Calendar": "Calendario de Trabajo"
+    "Labor Calendar": "Calendario de Trabajo",
+    "Inbox": "Bandeja",
+    "Sent": "Enviados",
+    "Drafts": "Borradores",
+    "No emails found.": "No se encontraron correos.",
+    "Success!": "¡Éxito!",
+    "IMAP Connection Failed:": "Conexión IMAP Fallida:",
+    "Mailbox: ": "Bandeja: ",
+    "Edit IMAP": "Editar IMAP",
+    "Edit SMTP": "Editar SMTP",
+    "Email Campaign": "Campaña de Correo",
+    "Reply (HTML allowed):": "Responder (HTML permitido):",
+    "Send Reply": "Enviar Respuesta"
   }

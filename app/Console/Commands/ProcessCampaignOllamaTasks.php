@@ -1,14 +1,17 @@
 <?php
 
+
 namespace App\Console\Commands;
 
 use Illuminate\Console\Command;
 use App\Models\Campaign;
 use App\Models\CampaignDetail;
 use App\Models\OllamaTasker;
+use App\Services\EmailSenderService;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Log;
 use Exception;
+use App\Models\User;
 
 class ProcessCampaignOllamaTasks extends Command
 {
@@ -26,9 +29,12 @@ class ProcessCampaignOllamaTasks extends Command
      */
     protected $description = 'Process Campaign tasks: create Ollama tasks for campaign details, check for responses, and send campaigns when the start time is reached.';
 
-    public function __construct()
+    protected EmailSenderService $emailSender;
+
+    public function __construct(EmailSenderService $emailSender)
     {
         parent::__construct();
+        $this->emailSender = $emailSender;
     }
 
     public function handle()
@@ -42,7 +48,7 @@ class ProcessCampaignOllamaTasks extends Command
                 $campaignIds = CampaignDetail::distinct()->pluck('campaign_id');
 
                 if ($campaignIds->isEmpty()) {
-                    Log::info("No pending campaign details found. Sleeping for 10 seconds.");
+                    //Log::info("No pending campaign details found. Sleeping for 10 seconds.");
                     $this->info("No pending campaign details found. Sleeping for 10 seconds.");
                     sleep(10);
                     continue;
@@ -52,7 +58,7 @@ class ProcessCampaignOllamaTasks extends Command
                     try {
                         $campaign = Campaign::find($campaignId);
                         if (!$campaign) {
-                            Log::warning("Campaign ID {$campaignId} not found. Skipping.");
+                            $this->info("Campaign ID {$campaignId} not found. Skipping.");
                             continue;
                         }
 
@@ -87,7 +93,7 @@ class ProcessCampaignOllamaTasks extends Command
                                         $prompt_end = " Mantén un tono profesional y cercano, con un mensaje adecuado para Telegram. No pongas nada más que el texto, no pongas nada de comentarios o explicaciones adicionales.";
                                         break;
                                     case 'email':
-                                        $prompt_end = " Mantén un tono profesional, cercano y humano, con un mensaje adecuado para email.No pongas nada más que el texto, no pongas nada de comentarios o explicaciones adicionales. Ademas que sea en formato html.";
+                                        $prompt_end = " Mantén un tono profesional, cercano y humano, con un mensaje adecuado para email.No pongas nada más que el texto, no pongas nada de comentarios o explicaciones adicionales.";
                                         break;
                                     default:
                                         $prompt_end = " Mantén un tono profesional y humano. No pongas nada más que el texto, no pongas nada de comentarios o explicaciones adicionales.";
@@ -107,26 +113,26 @@ class ProcessCampaignOllamaTasks extends Command
                                 $campaignDetail->save();
 
                                 $this->info("Created OllamaTasker with ID {$ollamaTask->id} for CampaignDetail ID {$campaignDetail->id}.");
-                                Log::info("Created OllamaTasker with ID {$ollamaTask->id} for CampaignDetail ID {$campaignDetail->id}.");
+                               // Log::info("Created OllamaTasker with ID {$ollamaTask->id} for CampaignDetail ID {$campaignDetail->id}.");
                                 continue;
                             } else {
                                 $ollamaTask = OllamaTasker::find($campaignDetail->ollama_tasker_id);
                                 if (!$ollamaTask) {
                                     $this->error("OllamaTasker with ID {$campaignDetail->ollama_tasker_id} not found for CampaignDetail ID {$campaignDetail->id}. Resetting field.");
-                                    Log::error("OllamaTasker with ID {$campaignDetail->ollama_tasker_id} not found for CampaignDetail ID {$campaignDetail->id}. Resetting field.");
+                                    //Log::error("OllamaTasker with ID {$campaignDetail->ollama_tasker_id} not found for CampaignDetail ID {$campaignDetail->id}. Resetting field.");
                                     $campaignDetail->ollama_tasker_id = null;
                                     $campaignDetail->save();
                                     continue;
                                 }
                                 if (empty($ollamaTask->response)) {
                                     $this->info("OllamaTasker ID {$ollamaTask->id} still has no response for CampaignDetail ID {$campaignDetail->id}.");
-                                    Log::info("OllamaTasker ID {$ollamaTask->id} still has no response for CampaignDetail ID {$campaignDetail->id}.");
+                                    //Log::info("OllamaTasker ID {$ollamaTask->id} still has no response for CampaignDetail ID {$campaignDetail->id}.");
                                     continue;
                                 } else {
                                     $campaignDetail->text = $ollamaTask->response;
                                     $campaignDetail->save();
                                     $this->info("CampaignDetail ID {$campaignDetail->id} updated with response from OllamaTasker ID {$ollamaTask->id}.");
-                                    Log::info("CampaignDetail ID {$campaignDetail->id} updated with response from OllamaTasker ID {$ollamaTask->id}.");
+                                    //Log::info("CampaignDetail ID {$campaignDetail->id} updated with response from OllamaTasker ID {$ollamaTask->id}.");
                                 }
                             }
                         }
@@ -140,7 +146,7 @@ class ProcessCampaignOllamaTasks extends Command
                                     $canSend = true;
                                 } else {
                                     $this->info("Campaign ID {$campaign->id} start time ({$campaignStartTime}) not reached yet. Not sending CampaignDetail ID {$campaignDetail->id}.");
-                                    Log::info("Campaign ID {$campaign->id} start time ({$campaignStartTime}) not reached yet. Not sending CampaignDetail ID {$campaignDetail->id}.");
+                                    //Log::info("Campaign ID {$campaign->id} start time ({$campaignStartTime}) not reached yet. Not sending CampaignDetail ID {$campaignDetail->id}.");
                                 }
                             } else {
                                 $canSend = true;
@@ -187,7 +193,7 @@ class ProcessCampaignOllamaTasks extends Command
                     break;
             }
         } catch (Exception $ex) {
-            Log::error("Error sending campaign for CampaignDetail ID {$campaignDetail->id}: " . $ex->getMessage());
+            //Log::error("Error sending campaign for CampaignDetail ID {$campaignDetail->id}: " . $ex->getMessage());
             $this->error("Error sending campaign for CampaignDetail ID {$campaignDetail->id}: " . $ex->getMessage());
         }
     }
@@ -195,7 +201,7 @@ class ProcessCampaignOllamaTasks extends Command
     private function sendWhatsapp(Campaign $campaign, CampaignDetail $campaignDetail)
     {
         $this->info("Sending WhatsApp campaign for CampaignDetail ID {$campaignDetail->id}, Contact ID {$campaignDetail->contact_id}. Message: {$campaignDetail->text}");
-        Log::info("Sending WhatsApp campaign for CampaignDetail ID {$campaignDetail->id}, Contact ID {$campaignDetail->contact_id}. Message: {$campaignDetail->text}");
+        //Log::info("Sending WhatsApp campaign for CampaignDetail ID {$campaignDetail->id}, Contact ID {$campaignDetail->contact_id}. Message: {$campaignDetail->text}");
         // Lógica real de envío.
         $campaignDetail->delete();
         $this->checkCampaignCompletion($campaign);
@@ -203,16 +209,48 @@ class ProcessCampaignOllamaTasks extends Command
 
     private function sendEmail(Campaign $campaign, CampaignDetail $campaignDetail)
     {
-        $this->info("Sending Email campaign for CampaignDetail ID {$campaignDetail->id}, Contact ID {$campaignDetail->contact_id}. Message: {$campaignDetail->text}");
-        Log::info("Sending Email campaign for CampaignDetail ID {$campaignDetail->id}, Contact ID {$campaignDetail->contact_id}. Message: {$campaignDetail->text}");
+        $this->info("Sending Email campaign for CampaignDetail ID {$campaignDetail->id}, Contact ID {$campaignDetail->contact_id}.");
+
+        // Supongamos que el CampaignDetail tiene una relación 'contact' que provee el email del destinatario.
+        $recipientEmail = $campaignDetail->contact->email ?? null;
+        if (!$recipientEmail) {
+            $this->info("No recipient email found for CampaignDetail ID {$campaignDetail->id}. Skipping.");
+            return;
+        }
+
+        // Define el asunto; puedes obtenerlo del campaign o asignar uno por defecto.
+        $subject = $campaign->email_subject ?? 'Campaña de correo';
+
+        // El contenido se toma del texto generado para el campaign detail.
+        $content = $campaignDetail->text;
+
+        // Datos adicionales, por ejemplo, si deseas incluir un enlace de acción.
+        $extra = [
+            'action_url' => $campaign->action_url ?? ''
+        ];
+
+        // Dado que no hay usuario autenticado en un comando, se utiliza un remitente "sistema".
+        // Aquí se asume que el usuario con ID 1 es el remitente por defecto.
+        $sender = User::find($campaign->user_id);
+
+        try {
+            // Enviar el correo usando el servicio centralizado.
+            $this->emailSender->send($sender, $recipientEmail, $subject, $content, $extra);
+            $this->info("Email sent to {$recipientEmail} for CampaignDetail ID {$campaignDetail->id}.");
+        } catch (\Exception $ex) {
+            $this->error("Error sending email for CampaignDetail ID {$campaignDetail->id}: " . $ex->getMessage());
+        }
+
+        // Una vez enviado, eliminamos el campaign detail y verificamos si la campaña ha finalizado.
         $campaignDetail->delete();
         $this->checkCampaignCompletion($campaign);
     }
 
+
     private function sendSms(Campaign $campaign, CampaignDetail $campaignDetail)
     {
         $this->info("Sending SMS campaign for CampaignDetail ID {$campaignDetail->id}, Contact ID {$campaignDetail->contact_id}. Message: {$campaignDetail->text}");
-        Log::info("Sending SMS campaign for CampaignDetail ID {$campaignDetail->id}, Contact ID {$campaignDetail->contact_id}. Message: {$campaignDetail->text}");
+       // Log::info("Sending SMS campaign for CampaignDetail ID {$campaignDetail->id}, Contact ID {$campaignDetail->contact_id}. Message: {$campaignDetail->text}");
         $campaignDetail->delete();
         $this->checkCampaignCompletion($campaign);
     }
@@ -220,7 +258,7 @@ class ProcessCampaignOllamaTasks extends Command
     private function sendTelegram(Campaign $campaign, CampaignDetail $campaignDetail)
     {
         $this->info("Sending Telegram campaign for CampaignDetail ID {$campaignDetail->id}, Contact ID {$campaignDetail->contact_id}. Message: {$campaignDetail->text}");
-        Log::info("Sending Telegram campaign for CampaignDetail ID {$campaignDetail->id}, Contact ID {$campaignDetail->contact_id}. Message: {$campaignDetail->text}");
+       // Log::info("Sending Telegram campaign for CampaignDetail ID {$campaignDetail->id}, Contact ID {$campaignDetail->contact_id}. Message: {$campaignDetail->text}");
         $campaignDetail->delete();
         $this->checkCampaignCompletion($campaign);
     }
@@ -232,7 +270,7 @@ class ProcessCampaignOllamaTasks extends Command
             $campaign->status = 'completed';
             $campaign->save();
             $this->info("Campaign ID {$campaign->id} is completed. No more pending campaign details.");
-            Log::info("Campaign ID {$campaign->id} is completed. No more pending campaign details.");
+            //Log::info("Campaign ID {$campaign->id} is completed. No more pending campaign details.");
         }
     }
 }

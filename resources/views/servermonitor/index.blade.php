@@ -89,7 +89,7 @@
                                         </button>
                                     @endcanany
 
-                                    {{-- Nuevo botón toggle on/off para asignar/quitar la propiedad del host --}}
+                                    {{-- Botón toggle para asignar/quitar propiedad del host --}}
                                     @can('servermonitorbusynes show')
                                         <form action="{{ route('hosts.toggle', $host->id) }}" method="POST" class="inline-block">
                                             @csrf
@@ -158,8 +158,17 @@
 
             {{-- Gráfica en vivo --}}
             <div class="p-4 card">
-                <div class="card-header border-b p-4">
+                <div class="card-header border-b p-4 flex justify-between items-center">
                     <h4 class="card-title text-lg font-bold">{{ __('live_monitoring') }}</h4>
+                    <div class="flex space-x-2">
+                        <!-- Botones de toggle para expandir/contraer la gráfica -->
+                        <button id="expandBtn" title="Mostrar todos">
+                            <iconify-icon icon="heroicons-outline:plus" class="text-xl"></iconify-icon>
+                        </button>
+                        <button id="collapseBtn" title="Mostrar menos">
+                            <iconify-icon icon="heroicons-outline:minus" class="text-xl"></iconify-icon>
+                        </button>
+                    </div>
                 </div>
                 <div class="card-body p-4">
                     <!-- Aquí se renderizará la gráfica de ApexCharts -->
@@ -192,11 +201,16 @@
                 let chartInstance = null;
                 let pollInterval = null;
 
-                // Datos de la gráfica
+                // Variables para almacenar los datos de la gráfica
                 let chartCategories = [];
                 let seriesCPU = [];
                 let seriesRAM = [];
                 let seriesDisk = [];
+
+                // Variables para manejar los datos históricos completos y el estado de visualización
+                let fullHistoricalData = [];
+                let isExpanded = false; // false: muestra solo últimos MAX_RECORDS, true: muestra todos
+                const MAX_RECORDS = 40;
 
                 // 1) Creamos la gráfica como LINE CHART
                 function createChart() {
@@ -249,19 +263,26 @@
                     seriesDisk = [];
                 }
 
-                // 3) Obtener el historial (últimos 40 registros) para el host
+                // Función para actualizar la data de la gráfica usando fullHistoricalData
+                function updateChartData() {
+                    const dataToShow = isExpanded ? fullHistoricalData : fullHistoricalData.slice(-MAX_RECORDS);
+                    resetChartData();
+                    dataToShow.forEach(item => {
+                        chartCategories.push(item.timestamp);
+                        seriesCPU.push(item.cpu);
+                        seriesRAM.push(item.memory);
+                        seriesDisk.push(item.disk);
+                    });
+                    updateChart();
+                }
+
+                // 3) Obtener el historial para el host y almacenar en fullHistoricalData
                 async function fetchHistoricalData(hostId) {
                     try {
                         const url = `${appUrl}/servermonitor/history/${hostId}`;
                         const response = await fetch(url);
-                        const dataArray = await response.json();
-                        dataArray.forEach(item => {
-                            chartCategories.push(item.timestamp);
-                            seriesCPU.push(item.cpu);
-                            seriesRAM.push(item.memory);
-                            seriesDisk.push(item.disk);
-                        });
-                        updateChart();
+                        fullHistoricalData = await response.json();
+                        updateChartData();
                     } catch (error) {
                         console.error('Error al obtener datos históricos para el host ' + hostId, error);
                     }
@@ -277,7 +298,7 @@
                         seriesCPU.push(json.cpu);
                         seriesRAM.push(json.memory);
                         seriesDisk.push(json.disk);
-                        if (chartCategories.length > 60) {
+                        if (chartCategories.length > 120) {
                             chartCategories.shift();
                             seriesCPU.shift();
                             seriesRAM.shift();
@@ -300,11 +321,13 @@
                     if (pollInterval) {
                         clearInterval(pollInterval);
                     }
+                    // Reiniciamos el estado de expansión cada vez que se cambia de host
+                    isExpanded = false;
                     await fetchHistoricalData(currentHostId);
                     fetchLatestChartData(currentHostId);
                     pollInterval = setInterval(() => {
                         fetchLatestChartData(currentHostId);
-                    }, 5000);
+                    }, 30000);
                 }
 
                 // 6) Actualizar los datos de las tarjetas (CPU, RAM, Disco) cada 30 segundos
@@ -395,9 +418,9 @@
                         }).then((result) => {
                             if(result.isConfirmed){
                                 if(result.value === 'windows'){
-                                Swal.fire({
-                                    title: '{{ __("install_instructions_windows") }}',
-                                    html: `
+                                    Swal.fire({
+                                        title: '{{ __("install_instructions_windows") }}',
+                                        html: `
 <p><strong>1.</strong> {{ __("install_step_windows_1") }}</p>
 <pre style="text-align: left;">
 import psutil
@@ -472,7 +495,7 @@ schtasks /create /tn "AppNetDeveloper Monitor" /tr "python C:\AppNetDeveloper\ap
                                         confirmButtonText: 'Entendido',
                                         width: (window.innerWidth < 800 ? '90%' : '80%')
                                     });
-                                }else if(result.value === 'linux'){
+                                } else if(result.value === 'linux'){
                                     Swal.fire({
                                         title: '{{ __("install_instructions_linux") }}',
                                         html: `
@@ -559,18 +582,23 @@ WorkingDirectory=/root
 
 [Install]
 WantedBy=multi-user.target
-
 </pre>
-<p><strong>6.</strong> {{ __("install_step_6") }}</p>
-`,
-                                        icon: 'info',
-                                        confirmButtonText: 'Entendido',
-                                        width: (window.innerWidth  < 800 ? '90%' : '80%')
+<p><strong>6.</strong> {{ __("install_step_6") }}</p>`,
                                     });
                                 }
                             }
                         });
                     });
+                });
+
+                // Asignamos los event listeners para los botones de expandir/contraer la gráfica
+                document.getElementById('expandBtn').addEventListener('click', function() {
+                    isExpanded = true;
+                    updateChartData();
+                });
+                document.getElementById('collapseBtn').addEventListener('click', function() {
+                    isExpanded = false;
+                    updateChartData();
                 });
             })();
         </script>
