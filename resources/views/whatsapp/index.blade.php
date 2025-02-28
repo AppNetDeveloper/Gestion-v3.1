@@ -466,9 +466,17 @@
             }
 
             setInterval(function() {
+                // Refrescar los mensajes
                 if (document.getElementById('chat-container')) {
                     $("#chat-container").load(window.location.href + " #chat-container > *", function() {
                         scrollChatToBottom();
+                    });
+                }
+
+                // Refrescar los contactos
+                if (document.getElementById('contacts-panel')) {
+                    $("#contacts-panel").load(window.location.href + " #contacts-panel > *", function() {
+                        // Actualizar los contactos si es necesario
                     });
                 }
             }, 10000);
