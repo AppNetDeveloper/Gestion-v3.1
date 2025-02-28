@@ -78,8 +78,8 @@ Route::group(['middleware' => ['auth', 'verified']], function () {
 
       //shift
       Route::get('shift', [ShiftController::class, 'index'])->name('shift.index');
-      Route::get('shift-show', [ShifController::class, 'show'])->name('shift.show');
-      Route::get('shift-edit', [ShifController::class, 'edit'])->name('shift.edit');
+      //Route::get('shift-show', [ShifController::class, 'show'])->name('shift.show');
+      //Route::get('shift-edit', [ShifController::class, 'edit'])->name('shift.edit');
 
       //add new time control
       Route::post('add-new-time-control', [TimeControlController::class, 'addNewTimeControl'])->name('add-new-time-control.index');
