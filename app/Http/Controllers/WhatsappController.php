@@ -17,7 +17,23 @@ class WhatsappController extends Controller
         $sessionId = $userId; // Usamos el id del usuario como sessionId
         $nodeUrl   = env('WATSHAPP_URL'); // Ej: http://localhost:3005
 
-        // Obtener los chats (contactos) de la API de Node
+        // Verificamos si la sesión está activa
+        $responseSessions = Http::get("$nodeUrl/sessions");
+        $activeSessions = $responseSessions->successful() ? $responseSessions->json()['activeSessions'] : [];
+
+        // Definir $sortedContacts y $autoResponseConfig como variables vacías por defecto
+        $sortedContacts = collect();
+        $autoResponseConfig = null;
+
+        if (!in_array($sessionId, $activeSessions)) {
+            // Si la sesión no está activa, redirigir con un mensaje de error y no obtener los contactos
+            return view('whatsapp.index')
+                ->with('error', 'Sesión no activa. Cargamos datos sin conexión a la API.')
+                ->with('sortedContacts', $sortedContacts)
+                ->with('autoResponseConfig', $autoResponseConfig);
+        }
+
+        // Si la sesión está activa, obtenemos los chats (contactos) de la API de Node
         $response = Http::get("$nodeUrl/get-chats/$sessionId");
         if (!$response->successful()) {
             return redirect()->back()->with('error', 'No se pudieron obtener los contactos.');
@@ -63,6 +79,7 @@ class WhatsappController extends Controller
 
         return view('whatsapp.index', compact('sortedContacts', 'selectedPhone', 'messages', 'autoResponseConfig'));
     }
+
 
     public function conversation($phone)
     {
