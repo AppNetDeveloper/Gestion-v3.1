@@ -28,33 +28,35 @@
         // Función para convertir URLs a links
         if (! function_exists('convertUrlsToLinks')) {
             function convertUrlsToLinks($text) {
-                return preg_replace_callback(
-                    '/((https?:\/\/|www\.)[^\s]+)/i',
-                    function ($matches) {
-                        $url = $matches[0];
-                        $href = (stripos($url, 'http') === 0) ? $url : 'https://' . $url;
-                        return '<a href="' . e($href) . '" target="_blank" class="inline-block px-2 py-1 border border-blue-500 rounded text-blue-500 hover:bg-blue-500 hover:text-white dark:border-blue-300 dark:text-blue-300 dark:hover:bg-blue-300">Link</a>';
-                    },
-                    $text
-                );
+                // Capturamos cualquier URL que empiece con http(s):// o www.
+                $pattern = '/((?:https?:\/\/|www\.)[^\s]+)/i';
+
+                return preg_replace_callback($pattern, function ($matches) {
+                    // 1. Extraemos la URL tal como la capturó la regex
+                    $url = $matches[0];
+
+                    // 2. Removemos puntuación final (.,!?;:) que no suele formar parte de la URL
+                    //    (esto evita que algo como "https://beta.appnet.dev." se convierta en "https://beta.appnet.dev.")
+                    $url = rtrim($url, '.,!?;:');
+
+                    // 3. Aseguramos que el href empiece con http(s)://
+                    if (! preg_match('/^https?:\/\//i', $url) && ! preg_match('/^www\./i', $url)) {
+                        // Si no empieza con http o www, lo dejamos tal cual o lo convertimos
+                        // en "https://...". Depende de tu preferencia.
+                        // Pero normalmente, si no empieza con "http" o "www", no lo tratamos como URL
+                        // (Este if en realidad casi nunca se ejecutaría con la regex anterior).
+                    } elseif (preg_match('/^www\./i', $url)) {
+                        // Si empieza con www., agregamos https:// al principio
+                        $url = 'https://' . $url;
+                    }
+
+                    // 4. Construimos el enlace <a> con el texto "Link"
+                    return '<a href="' . e($url) . '" target="_blank" class="inline-block px-2 py-1 border border-blue-500 rounded text-blue-500 hover:bg-blue-500 hover:text-white dark:border-blue-300 dark:text-blue-300 dark:hover:bg-blue-300">Link</a>';
+                }, $text);
             }
         }
-        // Lógica para obtener contactos
-        $contacts = \App\Models\Contact::where('user_id', auth()->id())->get();
-        $contactsWithMessages = $contacts->filter(function($contact) {
-            return $contact->whatsappMessages()->where('user_id', auth()->id())->exists();
-        });
-        // Filtrar únicamente los contactos con un teléfono válido.
-        // Se considera válido un teléfono que opcionalmente comience con '+' y contenga entre 8 y 15 dígitos.
-        $validContacts = $contactsWithMessages->filter(function($contact) {
-            return preg_match('/^\+?[0-9]{8,15}$/', $contact->phone);
-        });
-        // Ordenar los contactos por la fecha del último mensaje (descendente)
-        $sortedContacts = $validContacts->sortByDesc(function($contact) {
-            return $contact->whatsappMessages()->where('user_id', auth()->id())->max('created_at');
-        });
-        // Cargar la configuración de auto respuesta (si existe) para el usuario actual
-        $autoResponseConfig = \App\Models\AutoProcess::where('user_id', auth()->id())->first();
+
+
     @endphp
 
     {{-- Mensajes flash --}}
@@ -100,14 +102,17 @@
                             <ul class="space-y-2">
                                 @foreach($sortedContacts as $contact)
                                     <li class="flex items-center justify-between">
-                                        <a href="{{ route('whatsapp.conversation', $contact->phone) }}"
+                                        <a href="{{ route('whatsapp.conversation', $contact['phone']) }}"
                                            class="block p-2 rounded bg-blue-500 text-gray-800 dark:bg-blue-700 dark:text-white hover:bg-blue-600 dark:hover:bg-blue-800">
-                                            {{ $contact->name ? $contact->name : $contact->phone }}
+                                            {{ $contact['name'] }}
                                         </a>
-                                        <form action="{{ route('whatsapp.chat.destroy', $contact->phone) }}" method="POST" style="display:inline;">
+                                        <!-- Botón para eliminar chat -->
+                                        <form action="{{ route('whatsapp.chat.destroy', $contact['phone']) }}" method="POST" style="display:inline;">
                                             @csrf
                                             @method('DELETE')
-                                            <button type="submit" class="delete-chat-btn text-red-500 px-2 py-1" title="{{ __('Are you sure you want to delete all messages for this contact?') }}" onclick="return confirm('{{ __('Are you sure you want to delete this message?') }}');">
+                                            <button type="submit" class="delete-chat-btn text-red-500 px-2 py-1"
+                                                title="{{ __('Are you sure you want to delete all messages for this contact?') }}"
+                                                onclick="return confirm('{{ __('Are you sure you want to delete this chat?') }}');">
                                                 <iconify-icon icon="mdi:trash-can-outline"></iconify-icon>
                                             </button>
                                         </form>
@@ -128,62 +133,85 @@
                             <div class="p-0 h-full body-class">
                                 @if(isset($selectedPhone))
                                     @php
-                                        $contactSelected = \App\Models\Contact::where('user_id', auth()->id())
-                                            ->where('phone', $selectedPhone)
-                                            ->first();
+                                        $contactSelected = collect($sortedContacts)->firstWhere('phone', $selectedPhone);
+                                        $selectedJid = $selectedPhone . '@s.whatsapp.net';
                                     @endphp
                                     <div class="border-b p-3">
                                         <h3 class="font-bold">
-                                            {{ __("Conversation with") }} {{ $contactSelected ? $contactSelected->name : $selectedPhone }}
+                                            {{ __("Conversation with") }} {{ $contactSelected ? $contactSelected['name'] : $selectedPhone }}
                                         </h3>
                                     </div>
                                     <div id="chat-container" class="flex flex-col space-y-4 overflow-y-auto h-96 p-4" style="height: 24rem;">
                                         @forelse($messages->sortBy('created_at') as $message)
-                                            @if($message->status === 'send')
-                                                <div class="flex w-full justify-end pr-4">
-                                            @else
-                                                <div class="flex w-full justify-start pl-4">
-                                            @endif
-                                                    <div class="max-w-xs w-auto relative">
-                                                        <div class="shadow-lg rounded-lg overflow-hidden message-bubble
-                                                            {{ $message->status === 'send'
-                                                                ? 'bg-blue-500 text-gray-800 dark:bg-blue-700 dark:text-white'
-                                                                : 'bg-blue-200 text-gray-800 dark:bg-gray-700 dark:text-gray-100' }}">
-                                                            <div class="px-4 py-2 relative">
-                                                                <form action="/whatsapp/message/{{ $message->id }}" method="POST" style="display:inline;">
-                                                                    @csrf
-                                                                    @method('DELETE')
-                                                                    <button type="submit" class="delete-message-btn absolute top-0 right-0 text-red-500 p-1" title="{{ __('Are you sure you want to delete this message?') }}" style="background:none;border:none;" onclick="return confirm('{{ __('Are you sure you want to delete this message?') }}');">
-                                                                        <iconify-icon icon="mdi:trash-can-outline"></iconify-icon>
-                                                                    </button>
-                                                                </form>
-                                                                {!! formatMessageText($message->message) !!}
-                                                                @if($message->image)
-                                                                    @php
-                                                                        $imageSrc = $message->image;
-                                                                        if (strpos($imageSrc, 'data:image') === 0) {
-                                                                            $imageSrc = convertCsvImage($imageSrc);
-                                                                        } else {
-                                                                            $imageSrc = asset($imageSrc);
-                                                                        }
-                                                                    @endphp
-                                                                    <div class="mt-2">
-                                                                        <img src="{{ $imageSrc }}" alt="Image" class="max-w-full h-auto object-contain rounded cursor-pointer" onclick="showImageModal('{{ $imageSrc }}')">
-                                                                    </div>
-                                                                @endif
+                                            @php
+                                                // Determinar si el mensaje es recibido (si remoteJid coincide con el del chat) o enviado
+                                                $remoteJid = $message['key']['remoteJid'] ?? '';
+                                                $isReceived = ($remoteJid === $selectedJid);
+                                            @endphp
+
+                                            <div class="flex w-full {{ $isReceived ? 'justify-start pl-4' : 'justify-end pr-4' }}">
+                                                <div class="relative md:max-w-2xl max-w-lg shadow-lg rounded-lg overflow-hidden message-bubble
+                                                    {{ $isReceived
+                                                        ? 'bg-blue-200 text-gray-800 dark:bg-gray-700 dark:text-gray-100'
+                                                        : 'bg-blue-500 text-gray-800 dark:bg-blue-700 dark:text-white'
+                                                    }}">
+                                                    <div class="px-4 py-2 relative">
+                                                        <!-- Botón para eliminar mensaje -->
+                                                        <form action="/whatsapp/message/{{ $message['key']['id'] }}" method="POST" style="display:inline;">
+                                                            @csrf
+                                                            @method('DELETE')
+                                                            <input type="hidden" name="remoteJid" value="{{ $message['key']['remoteJid'] }}">
+                                                            <input type="hidden" name="fromMe" value="{{ $message['key']['fromMe'] }}">
+                                                            <button type="submit" class="delete-message-btn"
+                                                                title="{{ __('Are you sure you want to delete this message?') }}"
+                                                                onclick="return confirm('{{ __('Are you sure you want to delete this message?') }}');">
+                                                                <iconify-icon icon="mdi:trash-can-outline"></iconify-icon>
+                                                            </button>
+                                                        </form>
+
+
+                                                        {{-- Mostrar contenido del mensaje --}}
+                                                        {!! formatMessageText($message['message'] ?? '') !!}
+
+                                                        {{-- Si existe imagen (mensaje de imagen) --}}
+                                                        @if(isset($message['image']) && $message['image'])
+                                                            @php
+                                                                $imageSrc = $message['image'];
+                                                                if (strpos($imageSrc, 'data:image') === 0) {
+                                                                    $imageSrc = convertCsvImage($imageSrc);
+                                                                } else {
+                                                                    $imageSrc = asset($imageSrc);
+                                                                }
+                                                            @endphp
+                                                            <div class="mt-2">
+                                                                <img src="{{ $imageSrc }}" alt="Image" class="max-w-full h-auto object-contain rounded cursor-pointer"
+                                                                     onclick="showZoomModal('{{ $imageSrc }}')">
                                                             </div>
-                                                            <div class="px-4 py-1 text-right text-xs text-gray-700 dark:text-gray-300">
-                                                                <small>{{ $message->created_at->format('d/m/Y H:i') }}</small>
+                                                        @endif
+
+                                                        {{-- Si es un mensaje de video --}}
+                                                        @if(isset($message['videoMessage']['url']))
+                                                            @php
+                                                                $videoUrl = $message['videoMessage']['url'];
+                                                            @endphp
+                                                            <div class="mt-2">
+                                                                <button class="btn btn-sm btn-primary" onclick="showVideoModal('{{ $videoUrl }}')">
+                                                                    {{ __('Video') }}
+                                                                </button>
                                                             </div>
-                                                        </div>
+                                                        @endif
+                                                    </div>
+                                                    <div class="px-4 py-1 text-right text-xs text-gray-700 dark:text-gray-300">
+                                                        <small>{{ isset($message['created_at']) ? \Carbon\Carbon::parse($message['created_at'])->format('d/m/Y H:i') : '' }}</small>
                                                     </div>
                                                 </div>
+                                            </div>
                                         @empty
                                             <p class="text-center text-gray-500 dark:text-gray-400">{{ __("No messages found for this contact.") }}</p>
                                         @endforelse
                                     </div>
 
-                                    <!-- Formulario para enviar mensaje vía AJAX usando TinyMCE -->
+                                    <!-- Formulario para enviar mensaje vía AJAX con TinyMCE -->
                                     <div id="send-message-container" class="mt-4 p-4 border-t">
                                         <textarea id="tiny-editor" placeholder="{{ __('Type your message...') }}" class="border rounded p-2 w-full" style="height: 150px;"></textarea>
                                         <button id="sendMessageButton" class="btn btn-primary mt-2">{{ __('Send') }}</button>
@@ -196,7 +224,7 @@
                             </div>
                         </div>
                     </div>
-                    <!-- Se elimina el panel derecho de información -->
+                    <!-- No se muestra panel derecho -->
                 </div>
             </div>
         </div>
@@ -220,7 +248,7 @@
                 border-radius: 10px;
                 max-width: 80%;
                 word-break: break-word;
-                overflow-x: auto;
+                overflow-wrap: break-word;
             }
             .message-bubble p {
                 white-space: normal;
@@ -236,9 +264,9 @@
         </style>
     @endpush
 
-    {{-- Scripts: se cargan al final para asegurar que todas las librerías estén disponibles --}}
+    {{-- Scripts: se cargan al final --}}
     @push('scripts')
-        <!-- Cargar jQuery -->
+        <!-- jQuery -->
         <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
         <!-- Configuración de AJAX para CSRF -->
         <script>
@@ -249,7 +277,7 @@
             });
         </script>
 
-        <!-- Cargar TinyMCE -->
+        <!-- TinyMCE -->
         <script src="https://cdn.tiny.cloud/1/v6bk2mkmbxcn1oybhyu2892lyn9zykthl51xgkrh7ye0f7xv/tinymce/7/tinymce.min.js" referrerpolicy="origin"></script>
         <script>
             tinymce.init({
@@ -267,10 +295,8 @@
         <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 
         <script>
-            // Se expone la configuración actual (si existe) a JavaScript
             var autoResponseConfig = {!! json_encode($autoResponseConfig) !!};
 
-            // Función para ajustar el scroll al último mensaje
             function scrollChatToBottom() {
                 var chatContainer = document.getElementById('chat-container');
                 if (chatContainer) {
@@ -278,7 +304,6 @@
                 }
             }
 
-            // Actualiza el estado de conexión y muestra los botones (con iconos, tooltips y en línea)
             function updateConnectionStatus() {
                 fetch('{{ secure_url("/api/whatsapp/check?user_id=" . auth()->id()) }}', { method: 'GET' })
                     .then(response => response.json())
@@ -343,11 +368,9 @@
                                     startWhatsAppSession();
                                 });
                             }
-                            // Listener para el botón de Auto Response (independientemente del estado)
                             document.getElementById('btnAutoResponse').addEventListener('click', function() {
                                 var selectedValue = autoResponseConfig ? autoResponseConfig.whatsapp : 0;
                                 var promptValue = autoResponseConfig ? autoResponseConfig.whatsapp_prompt : '';
-
                                 Swal.fire({
                                     title: '{{ __("Auto Response Settings") }}',
                                     html:
@@ -410,7 +433,6 @@
                     });
             }
 
-            // Inicia la sesión y obtiene el QR (vía AJAX)
             function startWhatsAppSession() {
                 fetch('{{ secure_url("/api/whatsapp/start-session") }}', {
                     method: 'POST',
@@ -443,7 +465,6 @@
                     });
             }
 
-            // Auto-refresh del contenedor de chat cada 10 segundos (solo el chat)
             setInterval(function() {
                 if (document.getElementById('chat-container')) {
                     $("#chat-container").load(window.location.href + " #chat-container > *", function() {
@@ -452,69 +473,66 @@
                 }
             }, 10000);
 
-            // Envío de mensajes con TinyMCE vía AJAX
             $(document).off('click', '#sendMessageButton').on('click', '#sendMessageButton', function(event) {
-    event.preventDefault();
-    event.stopImmediatePropagation(); // Evita que se ejecuten otros listeners en cascada
+                event.preventDefault();
+                event.stopImmediatePropagation();
 
-    var messageText = tinymce.get('tiny-editor').getContent({ format: 'text' });
-    var sessionId = "{{ auth()->id() }}";
-    var jid = "{{ $selectedPhone ?? '' }}";
-    var token = "{{ env('WHATSAPP_API_TOKEN') }}";
+                var messageText = tinymce.get('tiny-editor').getContent({ format: 'text' });
+                var sessionId = "{{ auth()->id() }}";
+                var jid = "{{ $selectedPhone ?? '' }}";
+                var token = "{{ env('WHATSAPP_API_TOKEN') }}";
 
-    if (!jid) {
-        Swal.fire('{{ __("An error occurred") }}', '{{ __("No contact selected.") }}', 'error');
-        return;
-    }
-    if (!messageText || messageText.trim() === '') {
-        Swal.fire('{{ __("An error occurred") }}', '{{ __("Please enter a message.") }}', 'error');
-        return;
-    }
+                if (!jid) {
+                    Swal.fire('{{ __("An error occurred") }}', '{{ __("No contact selected.") }}', 'error');
+                    return;
+                }
+                if (!messageText || messageText.trim() === '') {
+                    Swal.fire('{{ __("An error occurred") }}', '{{ __("Please enter a message.") }}', 'error');
+                    return;
+                }
 
-    fetch('{{ secure_url("/api/whatsapp/send-message-now") }}', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
-        },
-        body: JSON.stringify({
-            token: token,
-            sessionId: sessionId,
-            jid: jid,
-            message: messageText
-        })
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) {
-            Swal.fire({
-                icon: 'success',
-                title: '{{ __("Saved!") }}',
-                text: data.message,
-                timer: 3000,
-                showConfirmButton: false
-            }).then(() => {
-                $("#chat-container").load(window.location.href + " #chat-container > *", function() {
-                    scrollChatToBottom();
+                fetch('{{ secure_url("/api/whatsapp/send-message-now") }}', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
+                    },
+                    body: JSON.stringify({
+                        token: token,
+                        sessionId: sessionId,
+                        jid: jid,
+                        message: messageText
+                    })
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        Swal.fire({
+                            icon: 'success',
+                            title: '{{ __("Saved!") }}',
+                            text: data.message,
+                            timer: 3000,
+                            showConfirmButton: false
+                        }).then(() => {
+                            $("#chat-container").load(window.location.href + " #chat-container > *", function() {
+                                scrollChatToBottom();
+                            });
+                        });
+                        tinymce.get('tiny-editor').setContent('');
+                    } else {
+                        Swal.fire('{{ __("An error occurred") }}', data.message, 'error');
+                    }
+                })
+                .catch(error => {
+                    console.error('Error sending message:', error);
+                    Swal.fire('{{ __("An error occurred") }}', '{{ __("An error occurred while sending the message.") }}', 'error');
                 });
             });
-            tinymce.get('tiny-editor').setContent('');
-        } else {
-            Swal.fire('{{ __("An error occurred") }}', data.message, 'error');
-        }
-    })
-    .catch(error => {
-        console.error('Error sending message:', error);
-        Swal.fire('{{ __("An error occurred") }}', '{{ __("An error occurred while sending the message.") }}', 'error');
-    });
-});
 
-            // Escucha del evento DOMContentLoaded para inicializar funciones y búsqueda de contactos
             document.addEventListener('DOMContentLoaded', function() {
                 updateConnectionStatus();
                 scrollChatToBottom();
 
-                // Búsqueda en tiempo real de contactos
                 const searchInput = document.getElementById('contactSearch');
                 if (searchInput) {
                     searchInput.addEventListener('input', function() {
@@ -531,12 +549,25 @@
                 }
             });
 
-            // Mostrar imagen en modal al hacer clic
-            function showImageModal(url) {
+            // Función para mostrar la imagen en modal (zoom) con SweetAlert2
+            function showZoomModal(url) {
                 Swal.fire({
                     imageUrl: url,
-                    imageAlt: '{{ __("Task Details") }}',
+                    imageAlt: 'Zoomed Image',
+                    width: '80%',
                     showConfirmButton: false,
+                    customClass: { popup: 'swal2-no-border' },
+                    background: 'transparent'
+                });
+            }
+
+            // Función para mostrar video en modal (HTML5 video)
+            function showVideoModal(url) {
+                Swal.fire({
+                    html: '<video controls style="width:100%; max-height:80vh;"><source src="' + url + '" type="video/mp4">Your browser does not support the video tag.</video>',
+                    width: '80%',
+                    showConfirmButton: false,
+                    customClass: { popup: 'swal2-no-border' },
                     background: 'transparent'
                 });
             }
