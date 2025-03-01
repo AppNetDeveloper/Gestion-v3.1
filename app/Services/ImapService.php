@@ -107,26 +107,88 @@ class ImapService
      * @param string $folderName Nombre de la carpeta, por defecto 'INBOX'.
      * @return \Illuminate\Support\Collection
      */
-    public function getMessages(int $limit = 10, string $folderName = 'INBOX')
+    public function getMessages(int $limit = 20, string $folderName = 'INBOX')
     {
         if (!$this->client) {
             $this->connect();
         }
+
         if (!$this->client || !$this->client->isConnected()) {
             return collect();
         }
 
         try {
-            return $this->client->getFolder($folderName)
+            // Obtener los mensajes del servidor
+            $messages = $this->client->getFolder($folderName)
                 ->query()
                 ->all()
                 ->limit($limit)
                 ->get();
+
+            // Guardar los mensajes en un archivo si los necesitas
+           // $this->saveMessagesToFile($messages, $folderName);
+
+            return $messages;
         } catch (\Throwable $e) {
             Log::error("IMAP: Error obteniendo mensajes: " . $e->getMessage());
             return collect();
         }
     }
+
+    public function getOnlyMessages(string $folderName = 'INBOX')
+    {
+        if (!$this->client) {
+            $this->connect();
+        }
+
+        if (!$this->client || !$this->client->isConnected()) {
+            return collect();
+        }
+
+        try {
+            // Obtener todos los mensajes del servidor (sin límite)
+            $messages = $this->client->getFolder($folderName)
+                ->query()
+                ->all()  // Obtener todos los mensajes
+                ->get();
+
+            // Puedes guardar los mensajes en un archivo si lo deseas
+            // $this->saveMessagesToFile($messages, $folderName);
+
+            return $messages;
+        } catch (\Throwable $e) {
+            Log::error("IMAP: Error obteniendo mensajes: " . $e->getMessage());
+            return collect();
+        }
+    }
+
+    /**
+     * Guarda los mensajes en un archivo en el disco local.
+     *
+     * @param \Webklex\PHPIMAP\Support\MessageCollection $messages
+     * @param string $folderName
+     */
+    protected function saveMessagesToFile($messages, $folderName)
+    {
+        try {
+            // Ruta del archivo en el directorio de almacenamiento
+            $filePath = storage_path("app/imap/imap_messages_" . Auth::id() . "_{$folderName}.json");
+
+            // Verificar si la carpeta existe, si no, crearla
+            $folderPath = storage_path('app/imap');
+            if (!is_dir($folderPath)) {
+                mkdir($folderPath, 0777, true);
+            }
+
+            // Guardar los mensajes en el archivo como JSON
+            file_put_contents($filePath, json_encode($messages));
+
+            Log::info("IMAP: Mensajes guardados en el archivo {$filePath}");
+        } catch (\Throwable $e) {
+            Log::error("IMAP: Error al guardar los mensajes en archivo: " . $e->getMessage());
+        }
+    }
+
 
 
     /**
