@@ -32,7 +32,6 @@
             <div class="flex justify-between items-center mb-4">
                 <div class="flex items-center space-x-2">
                     <h2 class="text-xl font-bold">{{ __("Bandeja:") }}</h2>
-                    <span class="text-xl font-bold text-blue-500">{{ $folder }}</span>
                 </div>
                 <div class="flex space-x-2">
                     <!-- Botón editar IMAP -->
@@ -56,7 +55,8 @@
             <div class="mb-4 flex flex-wrap gap-2">
                 @foreach($folders as $f)
                     @php $folderName = $f->name; @endphp
-                    <a href="{{ route('emails.index', ['folder' => $folderName]) }}"
+                    <a href="javascript:void(0);"
+                       onclick="loadEmailList('{{ $folderName }}')"
                        class="btn btn-dark rounded-full px-3 py-1 text-sm
                               {{ $folder === $folderName ? 'bg-blue-500 text-white hover:bg-blue-600' : 'bg-gray-200 text-gray-700 hover:bg-gray-300 dark:bg-gray-700 dark:text-gray-200 dark:hover:bg-gray-600' }}"
                        title="{{ $folderName }}">
@@ -65,205 +65,22 @@
                 @endforeach
             </div>
 
-            <!-- Lista de correos -->
+            <!-- Lista de correos (Cargada mediante AJAX) -->
             <div id="email-list-container" class="bg-white dark:bg-gray-900 border rounded p-2">
-                <ul class="divide-y dark:divide-gray-700">
-                    @forelse($messages as $mail)
-                        @php
-                            $isRead = $mail->getFlags()->contains('\Seen');
-                        @endphp
-                        <li class="py-2 flex justify-between items-center">
-                            <a href="{{ route('emails.show', $mail->getUid()) }}?folder={{ $folder }}"
-                               class="block hover:bg-gray-100 dark:hover:bg-gray-800 p-2 rounded flex-1">
-                                <p class="{{ $isRead ? 'font-normal' : 'font-bold' }}">
-                                    {{ decodeMimeHeader($mail->getSubject()) }}
-                                </p>
-                                <p class="text-sm text-gray-600 dark:text-gray-300">
-                                    {{ isset($mail->getFrom()[0]) ? $mail->getFrom()[0]->mail : 'N/D' }}
-                                </p>
-                                <p class="text-xs text-gray-500">
-                                    {{ \Carbon\Carbon::parse((string)$mail->getDate())->format('d/m/Y H:i') }}
-                                </p>
-                            </a>
-                            <!-- Botón para borrar el correo -->
-                            <form action="{{ route('emails.delete', $mail->getUid()) }}" method="POST"
-                                  onsubmit="return confirm('{{ __('¿Está seguro de borrar este correo?') }}');"
-                                  class="ml-2">
-                                @csrf
-                                <input type="hidden" name="folder" value="{{ $folder }}">
-                                <button type="submit"
-                                        class="p-2 rounded-full text-red-500 hover:text-red-700"
-                                        title="{{ __('Borrar') }}">
-                                    <iconify-icon icon="heroicons-outline:trash" class="text-xl"></iconify-icon>
-                                </button>
-                            </form>
-                        </li>
-                    @empty
-                        <li class="py-2 text-gray-500">{{ __("No se encontraron correos.") }}</li>
-                    @endforelse
-                </ul>
-
-                <!-- Paginación -->
-                <div class="mt-4">
-                    {{ $messages->appends(request()->query())->links() }}
-                </div>
+                <!-- Esta lista se actualizará mediante AJAX -->
             </div>
         </div>
 
         <!-- Columna Derecha: Detalle del correo -->
-        <div class="card bg-white dark:bg-gray-900 shadow p-4">
-            @if(isset($message))
-                <h2 class="text-2xl font-bold mb-4">{{ decodeMimeHeader($message->getSubject()) }}</h2>
-                <p class="text-sm text-gray-600 mb-2">
-                    <strong>{{ __("De:") }}</strong> {{ isset($message->getFrom()[0]) ? $message->getFrom()[0]->mail : 'N/D' }}
-                </p>
-                <p class="text-xs text-gray-500 mb-4">
-                    {{ \Carbon\Carbon::parse((string)$message->getDate())->format('d/m/Y H:i') }}
-                </p>
-                <div class="prose max-w-none mb-4 dark:prose-dark">
-                    {!! $message->getHTMLBody() ?: $message->getTextBody() !!}
-                </div>
-
-                <!-- Adjuntos (si existen) -->
-                @if(count($message->getAttachments()) > 0)
-                    <div class="mb-4">
-                        <h3 class="font-semibold">{{ __("Archivos adjuntos:") }}</h3>
-                        <ul class="list-disc list-inside">
-                            @foreach($message->getAttachments() as $index => $attachment)
-                                <li>
-                                    <a href="{{ route('emails.attachment.download', ['messageUid' => $message->getUid(), 'attachmentIndex' => $index]) }}"
-                                       class="text-blue-500 hover:underline" target="_blank"
-                                       title="{{ __('Descargar adjunto') }}">
-                                        <iconify-icon icon="heroicons-outline:paper-clip" class="text-lg mr-1"></iconify-icon>
-                                        {{ $attachment->getName() }}
-                                    </a>
-                                </li>
-                            @endforeach
-                        </ul>
-                    </div>
-                @endif
-
-                <!-- Área para responder -->
-                <div class="mt-6">
-                    <form action="{{ route('emails.reply', $message->getUid()) }}" method="POST">
-                        @csrf
-                        <input type="hidden" name="to" value="{{ isset($message->getFrom()[0]) ? $message->getFrom()[0]->mail : '' }}">
-                        <input type="hidden" name="subject" value="Re: {{ decodeMimeHeader($message->getSubject()) }}">
-                        <label for="reply" class="font-semibold mb-2 block">{{ __("Responder (HTML permitido):") }}</label>
-                        <textarea id="reply" name="content" class="w-full border rounded p-2" rows="6" placeholder="{{ __('Escribe tu respuesta...') }}"></textarea>
-                        <button type="submit"
-                                class="mt-2 bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded flex items-center"
-                                title="{{ __('Enviar respuesta') }}">
-                            <iconify-icon icon="heroicons-outline:paper-airplane" class="text-xl mr-2"></iconify-icon>
-                            {{ __("Enviar Respuesta") }}
-                        </button>
-                    </form>
-                </div>
-            @else
-                <p class="text-gray-500">{{ __("Selecciona un correo para ver su contenido.") }}</p>
-            @endif
+        <div id="email-detail-container" class="card bg-white dark:bg-gray-900 shadow p-4">
+            <p class="text-gray-500">{{ __("Selecciona un correo para ver su contenido.") }}</p>
         </div>
     </div>
 
     <!-- Modal para editar configuración IMAP -->
-    <div id="modal-imap-settings" class="fixed inset-0 flex items-center justify-center bg-gray-800 bg-opacity-50 hidden">
-        <div class="bg-white dark:bg-gray-800 rounded p-6 w-11/12 md:w-1/2">
-            <h3 class="text-xl font-bold mb-4">{{ __("Editar configuración IMAP") }}</h3>
-            <form action="{{ route('emails.settings.update') }}" method="POST">
-                @csrf
-                <div class="mb-4">
-                    <label for="imap_host" class="block font-medium">{{ __("Host") }}</label>
-                    <input type="text" name="imap_host" id="imap_host" class="w-full border rounded p-2"
-                           value="{{ auth()->user()->imap_host }}" required>
-                </div>
-                <div class="mb-4">
-                    <label for="imap_port" class="block font-medium">{{ __("Port") }}</label>
-                    <input type="number" name="imap_port" id="imap_port" class="w-full border rounded p-2"
-                           value="{{ auth()->user()->imap_port }}" required>
-                </div>
-                <div class="mb-4">
-                    <label for="imap_encryption" class="block font-medium">{{ __("Encryption") }}</label>
-                    <input type="text" name="imap_encryption" id="imap_encryption" class="w-full border rounded p-2"
-                           value="{{ auth()->user()->imap_encryption }}">
-                </div>
-                <div class="mb-4">
-                    <label for="imap_username" class="block font-medium">{{ __("Username") }}</label>
-                    <input type="text" name="imap_username" id="imap_username" class="w-full border rounded p-2"
-                           value="{{ auth()->user()->imap_username }}" required>
-                </div>
-                <div class="mb-4">
-                    <label for="imap_password" class="block font-medium">{{ __("Password") }}</label>
-                    <input type="password" name="imap_password" id="imap_password" class="w-full border rounded p-2"
-                           value="{{ auth()->user()->imap_password }}" required>
-                </div>
-                <div class="flex justify-end">
-                    <button type="button"
-                            class="mr-2 bg-gray-300 hover:bg-gray-400 text-gray-800 px-4 py-2 rounded flex items-center"
-                            onclick="document.getElementById('modal-imap-settings').classList.add('hidden')"
-                            title="{{ __('Cancelar') }}">
-                        <iconify-icon icon="heroicons-outline:x" class="text-xl mr-1"></iconify-icon>
-                        {{ __("Cancelar") }}
-                    </button>
-                    <button type="submit"
-                            class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded flex items-center"
-                            title="{{ __('Guardar') }}">
-                        <iconify-icon icon="heroicons-outline:check" class="text-xl mr-1"></iconify-icon>
-                        {{ __("Guardar") }}
-                    </button>
-                </div>
-            </form>
-        </div>
-    </div>
-
+    @include('email.partials.imap-settings')
     <!-- Modal para editar configuración SMTP -->
-    <div id="modal-smtp-settings" class="fixed inset-0 flex items-center justify-center bg-gray-800 bg-opacity-50 hidden">
-        <div class="bg-white dark:bg-gray-800 rounded p-6 w-11/12 md:w-1/2">
-            <h3 class="text-xl font-bold mb-4">{{ __("Editar configuración SMTP") }}</h3>
-            <form action="{{ route('emails.smtp.update') }}" method="POST">
-                @csrf
-                <div class="mb-4">
-                    <label for="smtp_host" class="block font-medium">{{ __("SMTP Host") }}</label>
-                    <input type="text" name="smtp_host" id="smtp_host" class="w-full border rounded p-2"
-                           value="{{ auth()->user()->smtp_host }}" required>
-                </div>
-                <div class="mb-4">
-                    <label for="smtp_port" class="block font-medium">{{ __("SMTP Port") }}</label>
-                    <input type="number" name="smtp_port" id="smtp_port" class="w-full border rounded p-2"
-                           value="{{ auth()->user()->smtp_port }}" required>
-                </div>
-                <div class="mb-4">
-                    <label for="smtp_encryption" class="block font-medium">{{ __("SMTP Encryption") }}</label>
-                    <input type="text" name="smtp_encryption" id="smtp_encryption" class="w-full border rounded p-2"
-                           value="{{ auth()->user()->smtp_encryption }}">
-                </div>
-                <div class="mb-4">
-                    <label for="smtp_username" class="block font-medium">{{ __("SMTP Username") }}</label>
-                    <input type="text" name="smtp_username" id="smtp_username" class="w-full border rounded p-2"
-                           value="{{ auth()->user()->smtp_username }}" required>
-                </div>
-                <div class="mb-4">
-                    <label for="smtp_password" class="block font-medium">{{ __("SMTP Password") }}</label>
-                    <input type="password" name="smtp_password" id="smtp_password" class="w-full border rounded p-2"
-                           value="{{ auth()->user()->smtp_password }}" required>
-                </div>
-                <div class="flex justify-end">
-                    <button type="button"
-                            class="mr-2 bg-gray-300 hover:bg-gray-400 text-gray-800 px-4 py-2 rounded flex items-center"
-                            onclick="document.getElementById('modal-smtp-settings').classList.add('hidden')"
-                            title="{{ __('Cancelar') }}">
-                        <iconify-icon icon="heroicons-outline:x" class="text-xl mr-1"></iconify-icon>
-                        {{ __("Cancelar") }}
-                    </button>
-                    <button type="submit"
-                            class="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded flex items-center"
-                            title="{{ __('Guardar') }}">
-                        <iconify-icon icon="heroicons-outline:check" class="text-xl mr-1"></iconify-icon>
-                        {{ __("Guardar") }}
-                    </button>
-                </div>
-            </form>
-        </div>
-    </div>
+    @include('email.partials.smtp-settings')
 
     @push('styles')
         <style>
@@ -294,33 +111,46 @@
         <!-- Iconify para los iconos -->
         <script src="https://code.iconify.design/2/2.2.1/iconify.min.js"></script>
         <script>
-            function updateEmailList() {
-                const appUrl = "{{ rtrim(config('app.url'), '/') }}";
-                let url = `${appUrl}/emails?folder={{ $folder }}`;
+            // Función para cargar la lista de correos al cambiar de carpeta
+            function loadEmailList(folder) {
+                const url = "{{ route('emails.index', '') }}/?folder=" + folder;
 
                 fetch(url, {
+                    method: 'GET',
                     headers: {
-                        'X-Requested-With': 'XMLHttpRequest'
+                        'X-Requested-With': 'XMLHttpRequest',
+                        'Content-Type': 'application/json',
+                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
                     }
                 })
-                .then(response => {
-                    if (!response.ok) {
-                        throw new Error('Network response was not ok');
-                    }
-                    return response.text();
+                .then(response => response.text())
+                .then(data => {
+                    document.getElementById('email-list-container').innerHTML = data;
                 })
-                .then(html => {
-                    const container = document.getElementById('email-list-container');
-                    if (container) {
-                        container.innerHTML = html;
-                    } else {
-                        console.error('Contenedor no encontrado');
-                    }
-                })
-                .catch(error => console.error('Error al actualizar los emails:', error));
+                .catch(error => console.error('Error al cargar los correos:', error));
             }
-            // Actualiza la lista de correos cada 3 minutos
-            setInterval(updateEmailList, 180000);
+
+            // Cargar la lista de correos al iniciar
+            loadEmailList('{{ $folder }}');
+
+            // Función para cargar los detalles de un correo cuando se selecciona
+            function loadMessageDetail(uid, folder) {
+                const url = "{{ route('emails.show', '') }}/" + uid + "?folder=" + folder;
+
+                fetch(url, {
+                    method: 'GET',
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest',
+                        'Content-Type': 'application/json',
+                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
+                    }
+                })
+                .then(response => response.json())
+                .then(data => {
+                    document.getElementById('email-detail-container').innerHTML = data.html;
+                })
+                .catch(error => console.error('Error al cargar el correo:', error));
+            }
         </script>
     @endpush
 </x-app-layout>

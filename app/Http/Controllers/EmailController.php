@@ -33,24 +33,65 @@ class EmailController extends Controller
      *
      * @return View
      */
-    public function index(Request $request): View
+
+     public function index(Request $request): View
+     {
+         $folder = $request->input('folder', 'INBOX');
+         $perPage = 20; // Este es el número de mensajes por página
+         $page = $request->input('page', 1);
+
+         // Obtener todos los mensajes (sin límite)
+         $allMessages = $this->imapService->getOnlyMessages($folder);
+
+         // Ordenar los mensajes por fecha (del más reciente al más antiguo)
+         $allMessages = collect($allMessages)->sortByDesc(function($mail) {
+             return strtotime($mail->getDate()); // Ordena por fecha de recepción
+         });
+
+         // Aplicar la paginación
+         $currentPageItems = $allMessages->forPage($page, $perPage);
+
+         // Crear el paginador
+         $messages = new LengthAwarePaginator(
+             $currentPageItems,
+             $allMessages->count(),
+             $perPage,
+             $page,
+             [
+                 'path' => $request->url(),
+                 'query' => $request->query(),
+             ]
+         );
+
+         // Obtener carpetas y errores
+         $folders = $this->imapService->getFolders();
+         $error   = $this->imapService->getError();
+
+         // Si es una solicitud AJAX, solo devolver la lista de correos
+         if ($request->ajax()) {
+             return view('email.partials.email-list', compact('messages', 'folder'));
+         }
+
+         // Para el caso no AJAX, devolver la vista completa
+         return view('email.index', compact('messages', 'error', 'folder', 'folders'));
+     }
+
+
+
+    public function indexAll(Request $request): View
     {
         $folder = $request->input('folder', 'INBOX');
         $perPage = 20;
         $page = $request->input('page', 1);
 
-        // Obtén un conjunto amplio de mensajes (por ejemplo, 1000) de la carpeta seleccionada.
-        $allMessages = $this->imapService->getMessages(1000, $folder);
-
-        // Ordena los mensajes por fecha descendente (el correo más reciente primero)
+        // Obtén un conjunto de mensajes, pero solo los encabezados (limita la carga)
+        $allMessages = $this->imapService->getMessages(1000, $folder); // Obtener hasta 1000 mensajes (solo encabezados)
         $allMessages = $allMessages->sortByDesc(function($mail) {
             return strtotime((string)$mail->getDate());
         });
 
-        // Extrae los elementos de la página actual.
         $currentPageItems = $allMessages->forPage($page, $perPage);
 
-        // Crea el paginador.
         $messages = new LengthAwarePaginator(
             $currentPageItems,
             $allMessages->count(),
@@ -65,12 +106,15 @@ class EmailController extends Controller
         $folders = $this->imapService->getFolders();
         $error   = $this->imapService->getError();
 
+        // Si la solicitud es AJAX, solo devolver la lista de correos (sin cuerpo completo)
         if ($request->ajax()) {
             return view('email.partials.email-list', compact('messages', 'folder'));
         }
 
+        // Para el caso no AJAX, devolver la vista completa
         return view('email.index', compact('messages', 'error', 'folder', 'folders'));
     }
+
 
     /**
      * Muestra el detalle de un correo específico.
@@ -78,9 +122,9 @@ class EmailController extends Controller
      * @param int $uid UID del mensaje
      * @return View
      */
-    public function show(Request $request, int $uid): View
+    public function show(Request $request, int $uid)
     {
-        $folder  = $request->input('folder', 'INBOX'); // Carpeta por defecto: INBOX
+        $folder  = $request->input('folder', 'INBOX');
         $message = $this->imapService->getMessageByUid($uid, $folder);
 
         // Marcar el mensaje como leído
@@ -92,31 +136,21 @@ class EmailController extends Controller
             }
         }
 
-        // Obtenemos un conjunto amplio de mensajes para paginar
-        $allMessages = $this->imapService->getMessages(1000, $folder);
-        $allMessages = $allMessages->sortByDesc(function($mail) {
-            return strtotime((string)$mail->getDate());
-        });
+        // Comprobar si la solicitud es AJAX
+        if ($request->ajax()) {
+            // Cargar solo el detalle del mensaje (asunto, remitente, cuerpo)
+            $html = view('email.partials.message-detail', compact('message'))->render();
+            return response()->json(['html' => $html]);
+        }
 
-        $perPage = 20;
-        $page = $request->input('page', 1);
-        $currentPageItems = $allMessages->forPage($page, $perPage)->values();
-        $messages = new LengthAwarePaginator(
-            $currentPageItems,
-            $allMessages->count(),
-            $perPage,
-            $page,
-            [
-                'path' => $request->url(),
-                'query' => $request->query(),
-            ]
-        );
-
+        // Para el caso no AJAX (si se accede directamente al detalle)
         $folders = $this->imapService->getFolders();
         $error   = $this->imapService->getError();
 
-        return view('email.index', compact('messages', 'message', 'error', 'folder', 'folders'));
+        // Retornar la vista completa, pero no recargar todos los correos.
+        return view('email.index', compact('message', 'folders', 'error', 'folder'));
     }
+
 
     /**
      * Actualiza la configuración IMAP del usuario autenticado.
