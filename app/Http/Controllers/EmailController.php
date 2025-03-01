@@ -37,7 +37,7 @@ class EmailController extends Controller
      public function index(Request $request): View
      {
          $folder = $request->input('folder', 'INBOX');
-         $perPage = 20; // Este es el número de mensajes por página
+         $perPage = 30; // Este es el número de mensajes por página
          $page = $request->input('page', 1);
 
          // Obtener todos los mensajes (sin límite)
