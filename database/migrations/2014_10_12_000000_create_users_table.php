@@ -43,6 +43,7 @@ return new class extends Migration
             $table->string('imap_encryption')->nullable(); // Ejemplo: 'ssl' o 'tls'
             $table->string('imap_username')->nullable();
             $table->string('imap_password')->nullable();
+            $table->unsignedTinyInteger('imap_type')->default(0)->comment('0: Nada, 1: Guardar contactos, 2: Guardar correos, 3: Guardar y auto responder, 4: Guardar y usar IA');
 
             // Campos para las credenciales SMTP
             $table->string('smtp_host')->nullable();

@@ -70,8 +70,8 @@ class CheckServerStatus extends Command
             // Si han pasado 3 o más minutos desde el último registro, se asume que el servidor está caído
             // Además, si han pasado más de 10 minutos desde el último registro, evitamos enviar notificaciones múltiples
             if ($lastUpdated->diffInMinutes(Carbon::now()) >= 3) {
-                // Verificamos si ya ha pasado más de 10 minutos
-                $existingNotification = Notification::where('host_id', $host->id)
+                // Verificamos si ya ha pasado más de 10 minutos OJO ESTO ES UN PROBLEMA POSIBLEMENTE SE TIENE QUE MODIFICAR.
+                $existingNotification = Notification::where('message', 'like', '%' . $host->name . '%')
                                                     ->where('created_at', '>=', Carbon::now()->subMinutes(10))
                                                     ->first();
 

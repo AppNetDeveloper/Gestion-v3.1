@@ -51,6 +51,7 @@ class User extends Authenticatable implements MustVerifyEmail, HasMedia
         'imap_encryption',
         'imap_username',
         'imap_password',
+        'imap_type',
         'smtp_host',
         'smtp_port',
         'smtp_encryption',
@@ -77,6 +78,7 @@ class User extends Authenticatable implements MustVerifyEmail, HasMedia
      */
     protected $casts = [
         'email_verified_at' => 'datetime',
+        'imap_type' => 'integer',
     ];
 
     public function typeOfContract()

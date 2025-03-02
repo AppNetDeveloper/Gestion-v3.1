@@ -14,7 +14,7 @@ class ContactsImport implements ToModel, WithHeadingRow, SkipsEmptyRows, WithVal
     public function model(array $row)
     {
         // Normalizar el teléfono (reemplaza + o 00 con el prefijo correcto)
-        $phone = $this->normalizePhone($row['phone']);
+        $phone = $this->normalizePhone($row['phone'] ?? null);
 
         return Contact::updateOrCreate(
             ['phone' => $phone],
@@ -30,33 +30,40 @@ class ContactsImport implements ToModel, WithHeadingRow, SkipsEmptyRows, WithVal
     }
 
     /**
-     * Normaliza el formato del teléfono
+     * Normaliza el formato del teléfono.
      */
     private function normalizePhone($phone)
     {
         if (!$phone) {
             return null;
         }
-    
-        // Eliminar todos los caracteres no numéricos
+
+        // Eliminar todos los caracteres no numéricos.
         $phone = preg_replace('/[^0-9]/', '', $phone);
-    
-        // Si el número tiene un prefijo internacional con "00", lo convertimos
+
+        // Si el número tiene un prefijo internacional con "00", lo convertimos.
         if (strpos($phone, '00') === 0) {
             $phone = substr($phone, 2);
         }
-    
+
         return $phone;
     }
-    
 
     /**
      * Validaciones para cada fila.
+     *
+     * Se valida que al menos uno de los campos: phone, address, email, web, telegram o name, tenga algún valor.
+     * Para lograrlo, se hace que "name" sea requerido si todos los demás están vacíos.
      */
     public function rules(): array
     {
         return [
-            '*.phone' => ['required', 'regex:/^\d+$/'], // Solo números sin espacios ni letras
+            '*.phone'    => ['nullable', 'regex:/^\d+$/'], // Solo números sin espacios ni letras, si se ingresa.
+            '*.name'     => ['nullable', 'required_without_all:phone,address,email,web,telegram'],
+            '*.address'  => ['nullable'],
+            '*.email'    => ['nullable', 'email'],
+            '*.web'      => ['nullable', 'url'],
+            '*.telegram' => ['nullable'],
         ];
     }
 }

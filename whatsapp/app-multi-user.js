@@ -17,6 +17,15 @@ const QRCode = require('qrcode');
 const axios = require('axios'); // Para realizar la llamada HTTP externa
 const https = require('https'); // Para configurar el agente HTTPS
 
+const multer = require('multer');
+const upload = multer({ dest: 'uploads/' });
+
+
+const cron = require('node-cron');
+
+// Objeto para almacenar las reglas de autoresponder por sesión:
+const autoresponderRules = {};
+
 // Swagger
 const swaggerUi = require('swagger-ui-express');
 const swaggerJsdoc = require('swagger-jsdoc');
@@ -179,6 +188,14 @@ async function startSession(sessionId) {
 
   store.bind(sock.ev);
 
+  // Forzamos la sincronización de contactos antes de guardar la sesión
+  try {
+    await sock.fetchContacts();
+    console.log(`✅ Contactos sincronizados para ${sessionId}`);
+  } catch (error) {
+    console.error(`❌ Error sincronizando contactos para ${sessionId}:`, error);
+  }
+
   sessions[sessionId] = {
     sock,
     state,
@@ -203,30 +220,51 @@ async function startSession(sessionId) {
             const remoteJid = msg.key.remoteJid;
             const messageTimestamp = msg.messageTimestamp || Date.now();  // Aseguramos que el timestamp es válido
 
-            // Si no existe ese chat en la sesión, lo inicializamos
+            // Inicializamos chatsMap si no existe
             if (!sessions[sessionId].chatsMap) {
                 sessions[sessionId].chatsMap = {};
+            }
+
+            // Determinar el nombre del contacto usando ambos métodos:
+            let contactName = remoteJid; // Valor por defecto
+
+            // Versión 2: Intentamos obtener el nombre del contacto desde el store de contactos
+            if (
+                sessions[sessionId].store &&
+                sessions[sessionId].store.contacts &&
+                sessions[sessionId].store.contacts[remoteJid]
+            ) {
+                const contact = sessions[sessionId].store.contacts[remoteJid];
+                if (contact && contact.notify && contact.notify.trim() !== '') {
+                    contactName = contact.notify;
+                }
+            }
+
+            // Versión 1: Si el mensaje tiene pushName, lo usamos (siempre que tenga valor)
+            if (msg.pushName && msg.pushName.trim() !== '') {
+                contactName = msg.pushName;
             }
 
             // Si no existe el chat en el mapa, lo inicializamos
             if (!sessions[sessionId].chatsMap[remoteJid]) {
                 sessions[sessionId].chatsMap[remoteJid] = {
                     id: remoteJid,
-                    name: remoteJid,  // Asignar un nombre o dejar el remoteJid por defecto
+                    name: contactName,  // Usamos el nombre obtenido
                     lastMessage: msg.message,
-                    messageTimestamp,  // Establecer el timestamp aquí
+                    messageTimestamp,  // Establecemos el timestamp
                 };
             } else {
-                // Si el mensaje es más reciente, actualizamos el `lastMessage` y `messageTimestamp`
+                // Si el mensaje es más reciente, actualizamos el lastMessage, timestamp y nombre
                 if (messageTimestamp > sessions[sessionId].chatsMap[remoteJid].messageTimestamp) {
                     sessions[sessionId].chatsMap[remoteJid].lastMessage = msg.message;
                     sessions[sessionId].chatsMap[remoteJid].messageTimestamp = messageTimestamp;
+                    sessions[sessionId].chatsMap[remoteJid].name = contactName;
                 }
             }
 
-            // Si el mensaje es enviado por nosotros, debemos actualizar también el lastMessage
+            // Si el mensaje fue enviado por nosotros, actualizamos también el lastMessage
             if (msg.key.fromMe) {
-                sessions[sessionId].chatsMap[remoteJid].lastMessage = msg.message; // Actualiza el lastMessage con el mensaje enviado
+                sessions[sessionId].chatsMap[remoteJid].lastMessage = msg.message;
             }
         });
 
@@ -287,7 +325,23 @@ async function startSession(sessionId) {
             }
         }
     }
+    //si falla lo de capturar mesajes es por culpa de este
+    //logica de autoresponder
+    m.messages.forEach(async (msg) => {
+        const text = (msg.message?.conversation || msg.message?.extendedTextMessage?.text || "").toLowerCase();
+        // Si hay reglas configuradas para la sesión, se revisan:
+        if (autoresponderRules[sessionId]) {
+          autoresponderRules[sessionId].forEach(async rule => {
+            if (text.includes(rule.keyword)) {
+              // Envía respuesta automática
+              await sessions[sessionId].sock.sendMessage(msg.key.remoteJid, { text: rule.response });
+              console.log(`Respuesta automática enviada para palabra clave: ${rule.keyword}`);
+            }
+          });
+        }
+      });
 });
+
 
 
 
@@ -345,6 +399,1068 @@ async function startSession(sessionId) {
 
   return sock;
 }
+/**
+ * @openapi
+ * /create-group/{sessionId}:
+ *   post:
+ *     summary: Crea un nuevo grupo en WhatsApp
+ *     parameters:
+ *       - in: path
+ *         name: sessionId
+ *         required: true
+ *         description: ID de la sesión de WhatsApp
+ *         schema:
+ *           type: string
+ *     requestBody:
+ *       description: Datos del grupo a crear
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               subject:
+ *                 type: string
+ *               participants:
+ *                 type: array
+ *                 items:
+ *                   type: string
+ *             example:
+ *               subject: "Nuevo Grupo"
+ *               participants: ["123456789@s.whatsapp.net", "987654321@s.whatsapp.net"]
+ *     responses:
+ *       200:
+ *         description: Grupo creado correctamente
+ *       404:
+ *         description: Sesión no encontrada
+ *       500:
+ *         description: Error al crear el grupo
+ */
+app.post('/create-group/:sessionId', async (req, res) => {
+    const { sessionId } = req.params;
+    const session = sessions[sessionId];
+    if (!session) return res.status(404).json({ error: 'Sesión no encontrada' });
+
+    const { subject, participants } = req.body;
+    if (!subject || !Array.isArray(participants) || participants.length === 0) {
+      return res.status(400).json({ error: 'Se requieren un subject y al menos un participante' });
+    }
+    try {
+      const result = await session.sock.groupCreate(subject, participants);
+      res.json({ message: 'Grupo creado correctamente', group: result });
+    } catch (error) {
+      console.error(`❌ Error al crear el grupo para ${sessionId}:`, error);
+      res.status(500).json({ error: 'Error al crear el grupo' });
+    }
+  });
+/**
+ * @openapi
+ * /forward-message/{sessionId}:
+ *   post:
+ *     summary: Reenvía un mensaje a otro destinatario
+ *     parameters:
+ *       - in: path
+ *         name: sessionId
+ *         required: true
+ *         description: ID de la sesión de WhatsApp
+ *         schema:
+ *           type: string
+ *     requestBody:
+ *       description: Datos del mensaje a reenviar
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               messageId:
+ *                 type: string
+ *               forwardJid:
+ *                 type: string
+ *             example:
+ *               messageId: "ABCD1234"
+ *               forwardJid: "123456789@s.whatsapp.net"
+ *     responses:
+ *       200:
+ *         description: Mensaje reenviado correctamente
+ *       404:
+ *         description: Sesión o mensaje no encontrado
+ *       500:
+ *         description: Error al reenviar el mensaje
+ */
+app.post('/forward-message/:sessionId', async (req, res) => {
+    const { sessionId } = req.params;
+    const session = sessions[sessionId];
+    if (!session) return res.status(404).json({ error: 'Sesión no encontrada' });
+
+    const { messageId, forwardJid } = req.body;
+    if (!messageId || !forwardJid) {
+      return res.status(400).json({ error: 'Se requieren messageId y forwardJid' });
+    }
+    try {
+      // Buscar el mensaje en el historial de la sesión
+      const message = session.messageHistory.find(msg => msg.key.id === messageId);
+      if (!message) return res.status(404).json({ error: 'Mensaje no encontrado' });
+
+      const result = await session.sock.sendMessage(forwardJid, { forward: message });
+      res.json({ message: 'Mensaje reenviado correctamente', result });
+    } catch (error) {
+      console.error(`❌ Error al reenviar el mensaje para ${sessionId}:`, error);
+      res.status(500).json({ error: 'Error al reenviar el mensaje' });
+    }
+  });
+
+/**
+ * @openapi
+ * /edit-contact/{sessionId}:
+ *   post:
+ *     summary: Edita la información de un contacto en el store local
+ *     parameters:
+ *       - in: path
+ *         name: sessionId
+ *         required: true
+ *         description: ID de la sesión de WhatsApp
+ *         schema:
+ *           type: string
+ *     requestBody:
+ *       description: Datos del contacto a editar
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               jid:
+ *                 type: string
+ *               name:
+ *                 type: string
+ *             example:
+ *               jid: "34690937275@s.whatsapp.net"
+ *               name: "Nuevo Nombre"
+ *     responses:
+ *       200:
+ *         description: Contacto actualizado correctamente
+ *       404:
+ *         description: Sesión o contacto no encontrado
+ *       500:
+ *         description: Error al actualizar el contacto
+ */
+app.post('/edit-contact/:sessionId', async (req, res) => {
+    const { sessionId } = req.params;
+    const { jid, name } = req.body;
+    const session = sessions[sessionId];
+    if (!session || !session.store || !session.store.contacts) {
+      return res.status(404).json({ error: 'Sesión o contactos no encontrados' });
+    }
+    if (!jid || !name) {
+      return res.status(400).json({ error: 'Se requieren "jid" y "name".' });
+    }
+    try {
+      // Actualizamos la información en el store local
+      if (session.store.contacts[jid]) {
+        session.store.contacts[jid].notify = name;
+      } else {
+        return res.status(404).json({ error: 'Contacto no encontrado en el store.' });
+      }
+      // Persistimos los cambios en el archivo store.json
+      const authDir = path.join(STORE_FILE_PATH, sessionId);
+      session.store.writeToFile(path.join(authDir, 'store.json'));
+      res.json({ message: 'Contacto actualizado correctamente' });
+    } catch (error) {
+      console.error(`❌ Error al actualizar el contacto para ${sessionId}:`, error);
+      res.status(500).json({ error: 'Error al actualizar el contacto' });
+    }
+  });
+
+  /**
+   * @openapi
+   * /create-contact/{sessionId}:
+   *   post:
+   *     summary: Agrega un contacto al store local (simulación, no se crea en WhatsApp)
+   *     parameters:
+   *       - in: path
+   *         name: sessionId
+   *         required: true
+   *         description: ID de la sesión de WhatsApp
+   *         schema:
+   *           type: string
+   *     requestBody:
+   *       description: Datos del contacto a crear
+   *       required: true
+   *       content:
+   *         application/json:
+   *           schema:
+   *             type: object
+   *             properties:
+   *               jid:
+   *                 type: string
+   *               name:
+   *                 type: string
+   *             example:
+   *               jid: "34600000000@s.whatsapp.net"
+   *               name: "Contacto Nuevo"
+   *     responses:
+   *       200:
+   *         description: Contacto creado correctamente (en store local)
+   *       404:
+   *         description: Sesión no encontrada
+   *       500:
+   *         description: Error al crear el contacto
+   */
+  app.post('/create-contact/:sessionId', async (req, res) => {
+    const { sessionId } = req.params;
+    const { jid, name } = req.body;
+    const session = sessions[sessionId];
+    if (!session || !session.store) {
+      return res.status(404).json({ error: 'Sesión no encontrada' });
+    }
+    if (!jid || !name) {
+      return res.status(400).json({ error: 'Se requieren "jid" y "name".' });
+    }
+    try {
+      // Agrega el contacto al store local
+      session.store.contacts[jid] = {
+        id: jid,
+        notify: name,
+        // Puedes agregar otros campos según sea necesario
+      };
+      // Persistimos en el archivo store.json
+      const authDir = path.join(STORE_FILE_PATH, sessionId);
+      session.store.writeToFile(path.join(authDir, 'store.json'));
+      res.json({ message: 'Contacto creado correctamente (en store local)' });
+    } catch (error) {
+      console.error(`❌ Error al crear el contacto para ${sessionId}:`, error);
+      res.status(500).json({ error: 'Error al crear el contacto' });
+    }
+  });
+
+  /**
+   * @openapi
+   * /search-contacts/{sessionId}:
+   *   get:
+   *     summary: Busca contactos en el store local por nombre o jid
+   *     parameters:
+   *       - in: path
+   *         name: sessionId
+   *         required: true
+   *         description: ID de la sesión de WhatsApp
+   *         schema:
+   *           type: string
+   *       - in: query
+   *         name: query
+   *         required: true
+   *         description: Texto a buscar en el nombre o jid
+   *         schema:
+   *           type: string
+   *     responses:
+   *       200:
+   *         description: Lista de contactos que coinciden con la búsqueda
+   *       404:
+   *         description: Sesión o contactos no encontrados
+   *       500:
+   *         description: Error al buscar contactos
+   */
+  app.get('/search-contacts/:sessionId', async (req, res) => {
+    const { sessionId } = req.params;
+    const { query } = req.query;
+    const session = sessions[sessionId];
+    if (!session || !session.store || !session.store.contacts) {
+      return res.status(404).json({ error: 'Sesión o contactos no encontrados' });
+    }
+    if (!query) {
+      return res.status(400).json({ error: 'Se requiere el parámetro "query" en la búsqueda.' });
+    }
+    try {
+      const lowerQuery = query.toLowerCase();
+      const contacts = Object.keys(session.store.contacts).map(jid => {
+        const contact = session.store.contacts[jid];
+        return {
+          jid,
+          name: (contact.notify && contact.notify.trim() !== '') ? contact.notify : jid,
+          ...contact,
+        };
+      });
+      const filtered = contacts.filter(contact =>
+        contact.name.toLowerCase().includes(lowerQuery) || contact.jid.toLowerCase().includes(lowerQuery)
+      );
+      res.json({ contacts: filtered });
+    } catch (error) {
+      console.error(`❌ Error al buscar contactos para ${sessionId}:`, error);
+      res.status(500).json({ error: 'Error al buscar contactos' });
+    }
+  });
+
+  /**
+   * @openapi
+   * /statistics/{sessionId}:
+   *   get:
+   *     summary: Obtiene estadísticas de la sesión (contactos, chats, mensajes)
+   *     parameters:
+   *       - in: path
+   *         name: sessionId
+   *         required: true
+   *         description: ID de la sesión de WhatsApp
+   *         schema:
+   *           type: string
+   *     responses:
+   *       200:
+   *         description: Estadísticas de la sesión
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 totalContacts:
+   *                   type: integer
+   *                 totalChats:
+   *                   type: integer
+   *                 totalMessages:
+   *                   type: integer
+   *       404:
+   *         description: Sesión no encontrada
+   *       500:
+   *         description: Error al obtener estadísticas
+   */
+  app.get('/statistics/:sessionId', async (req, res) => {
+    const { sessionId } = req.params;
+    const session = sessions[sessionId];
+    if (!session) {
+      return res.status(404).json({ error: 'Sesión no encontrada' });
+    }
+    try {
+      const totalContacts = session.store && session.store.contacts ? Object.keys(session.store.contacts).length : 0;
+      const totalChats = session.chats ? session.chats.length : 0;
+      const totalMessages = session.messageHistory ? session.messageHistory.length : 0;
+
+      res.json({
+        totalContacts,
+        totalChats,
+        totalMessages
+      });
+    } catch (error) {
+      console.error(`❌ Error al obtener estadísticas para ${sessionId}:`, error);
+      res.status(500).json({ error: 'Error al obtener estadísticas' });
+    }
+  });
+
+  // ============================================
+// 1. Obtener Detalles de un Contacto
+// ============================================
+/**
+ * @openapi
+ * /contact-details/{sessionId}/{jid}:
+ *   get:
+ *     summary: Obtiene detalles de un contacto específico del store local
+ *     parameters:
+ *       - in: path
+ *         name: sessionId
+ *         required: true
+ *         description: ID de la sesión de WhatsApp
+ *         schema:
+ *           type: string
+ *       - in: path
+ *         name: jid
+ *         required: true
+ *         description: JID del contacto
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Detalles del contacto
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 contact:
+ *                   type: object
+ *       404:
+ *         description: Sesión o contacto no encontrado
+ *       500:
+ *         description: Error al obtener detalles
+ */
+app.get('/contact-details/:sessionId/:jid', async (req, res) => {
+    const { sessionId, jid } = req.params;
+    const session = sessions[sessionId];
+    if (!session || !session.store || !session.store.contacts) {
+      return res.status(404).json({ error: 'Sesión o contactos no encontrados' });
+    }
+    const contact = session.store.contacts[jid];
+    if (!contact) {
+      return res.status(404).json({ error: 'Contacto no encontrado' });
+    }
+    res.json({ contact });
+  });
+
+  // ============================================
+  // 2. Exportación de Contactos
+  // ============================================
+  /**
+   * @openapi
+   * /export-contacts/{sessionId}:
+   *   get:
+   *     summary: Exporta los contactos del store local en formato CSV
+   *     parameters:
+   *       - in: path
+   *         name: sessionId
+   *         required: true
+   *         description: ID de la sesión de WhatsApp
+   *         schema:
+   *           type: string
+   *     responses:
+   *       200:
+   *         description: Archivo CSV con contactos
+   *         content:
+   *           text/csv:
+   *             schema:
+   *               type: string
+   *       404:
+   *         description: Sesión o contactos no encontrados
+   *       500:
+   *         description: Error al exportar contactos
+   */
+  app.get('/export-contacts/:sessionId', async (req, res) => {
+    const { sessionId } = req.params;
+    const session = sessions[sessionId];
+    if (!session || !session.store || !session.store.contacts) {
+      return res.status(404).json({ error: 'Sesión o contactos no encontrados' });
+    }
+    try {
+      const contacts = Object.keys(session.store.contacts).map(jid => {
+        const contact = session.store.contacts[jid];
+        return {
+          jid,
+          name: (contact.notify && contact.notify.trim() !== '') ? contact.notify : jid,
+        };
+      });
+      // Convertir a CSV (ejemplo simple)
+      let csv = "jid,name\n";
+      contacts.forEach(c => {
+        csv += `"${c.jid}","${c.name}"\n`;
+      });
+      res.header('Content-Type', 'text/csv');
+      res.attachment('contacts.csv');
+      res.send(csv);
+    } catch (error) {
+      console.error(`Error al exportar contactos para ${sessionId}:`, error);
+      res.status(500).json({ error: 'Error al exportar contactos' });
+    }
+  });
+
+  // ============================================
+  // 3. Importación de Contactos (JSON)
+  // ============================================
+  /**
+   * @openapi
+   * /import-contacts/{sessionId}:
+   *   post:
+   *     summary: Importa contactos al store local desde un JSON (array de contactos)
+   *     parameters:
+   *       - in: path
+   *         name: sessionId
+   *         required: true
+   *         description: ID de la sesión de WhatsApp
+   *         schema:
+   *           type: string
+   *     requestBody:
+   *       description: Array de contactos a importar. Cada contacto debe tener "jid" y "name".
+   *       required: true
+   *       content:
+   *         application/json:
+   *           schema:
+   *             type: array
+   *             items:
+   *               type: object
+   *               properties:
+   *                 jid:
+   *                   type: string
+   *                 name:
+   *                   type: string
+   *             example:
+   *               - jid: "34600000000@s.whatsapp.net"
+   *                 name: "Contacto Importado 1"
+   *               - jid: "34600000001@s.whatsapp.net"
+   *                 name: "Contacto Importado 2"
+   *     responses:
+   *       200:
+   *         description: Contactos importados correctamente
+   *       404:
+   *         description: Sesión no encontrada
+   *       500:
+   *         description: Error al importar contactos
+   */
+  app.post('/import-contacts/:sessionId', async (req, res) => {
+    const { sessionId } = req.params;
+    const contactsToImport = req.body;
+    const session = sessions[sessionId];
+    if (!session || !session.store) {
+      return res.status(404).json({ error: 'Sesión no encontrada' });
+    }
+    if (!Array.isArray(contactsToImport)) {
+      return res.status(400).json({ error: 'Se requiere un array de contactos' });
+    }
+    try {
+      contactsToImport.forEach(contact => {
+        if (contact.jid && contact.name) {
+          session.store.contacts[contact.jid] = {
+            id: contact.jid,
+            notify: contact.name
+          };
+          // Registrar en el log de auditoría
+          if (!session.auditLog) session.auditLog = [];
+          session.auditLog.push({
+            type: 'import-contact',
+            jid: contact.jid,
+            name: contact.name,
+            timestamp: new Date().toISOString()
+          });
+        }
+      });
+      // Persistir en store.json
+      const authDir = path.join(STORE_FILE_PATH, sessionId);
+      session.store.writeToFile(path.join(authDir, 'store.json'));
+      res.json({ message: 'Contactos importados correctamente' });
+    } catch (error) {
+      console.error(`Error al importar contactos para ${sessionId}:`, error);
+      res.status(500).json({ error: 'Error al importar contactos' });
+    }
+  });
+
+  // ============================================
+  // 4. Enviar Mensajes Multimedia
+  // ============================================
+  /**
+   * @openapi
+   * /send-multimedia/{sessionId}:
+   *   post:
+   *     summary: Envía un mensaje multimedia (imagen, video o documento) a un destinatario
+   *     parameters:
+   *       - in: path
+   *         name: sessionId
+   *         required: true
+   *         description: ID de la sesión de WhatsApp
+   *         schema:
+   *           type: string
+   *     requestBody:
+   *       description: Datos del mensaje multimedia
+   *       required: true
+   *       content:
+   *         application/json:
+   *           schema:
+   *             type: object
+   *             properties:
+   *               jid:
+   *                 type: string
+   *               mediaType:
+   *                 type: string
+   *                 enum: [image, video, document]
+   *               base64Data:
+   *                 type: string
+   *               caption:
+   *                 type: string
+   *             example:
+   *               jid: "34690937275@s.whatsapp.net"
+   *               mediaType: "image"
+   *               base64Data: "iVBORw0KGgoAAAANSUhEUgAA..."
+   *               caption: "Una imagen de prueba"
+   *     responses:
+   *       200:
+   *         description: Mensaje multimedia enviado correctamente
+   *       404:
+   *         description: Sesión no encontrada
+   *       500:
+   *         description: Error al enviar el mensaje multimedia
+   */
+  app.post('/send-multimedia/:sessionId', async (req, res) => {
+    const { sessionId } = req.params;
+    const { jid, mediaType, base64Data, caption } = req.body;
+    const session = sessions[sessionId];
+    if (!session) {
+      return res.status(404).json({ error: 'Sesión no encontrada' });
+    }
+    if (!jid || !mediaType || !base64Data) {
+      return res.status(400).json({ error: 'Se requieren jid, mediaType y base64Data' });
+    }
+    try {
+      let messagePayload = {};
+      // Configuramos el payload según el tipo de medio
+      if (mediaType === 'image') {
+        messagePayload = {
+          image: { url: `data:image/png;base64,${base64Data}` },
+          caption: caption || ''
+        };
+      } else if (mediaType === 'video') {
+        messagePayload = {
+          video: { url: `data:video/mp4;base64,${base64Data}` },
+          caption: caption || ''
+        };
+      } else if (mediaType === 'document') {
+        messagePayload = {
+          document: { url: `data:application/octet-stream;base64,${base64Data}` },
+          caption: caption || ''
+        };
+      } else {
+        return res.status(400).json({ error: 'Tipo de medio no soportado' });
+      }
+      const result = await session.sock.sendMessage(jid, messagePayload);
+      res.json({ message: 'Mensaje multimedia enviado correctamente', result });
+    } catch (error) {
+      console.error(`Error al enviar mensaje multimedia para ${sessionId}:`, error);
+      res.status(500).json({ error: 'Error al enviar mensaje multimedia' });
+    }
+  });
+
+  // ============================================
+  // 5. Historial de Ediciones y Auditoría
+  // ============================================
+
+  /**
+   * @openapi
+   * /audit-log/{sessionId}:
+   *   get:
+   *     summary: Obtiene el historial de auditoría de la sesión
+   *     parameters:
+   *       - in: path
+   *         name: sessionId
+   *         required: true
+   *         description: ID de la sesión de WhatsApp
+   *         schema:
+   *           type: string
+   *     responses:
+   *       200:
+   *         description: Historial de auditoría obtenido
+   *       404:
+   *         description: Sesión no encontrada
+   *       500:
+   *         description: Error al obtener el historial de auditoría
+   */
+  app.get('/audit-log/:sessionId', async (req, res) => {
+    const { sessionId } = req.params;
+    const session = sessions[sessionId];
+    if (!session) return res.status(404).json({ error: 'Sesión no encontrada' });
+    res.json({ auditLog: session.auditLog || [] });
+  });
+
+  // (Modifica las rutas de edición y creación de contactos para registrar auditoría)
+  // En /edit-contact
+  app.post('/edit-contact/:sessionId', async (req, res) => {
+    const { sessionId } = req.params;
+    const { jid, name } = req.body;
+    const session = sessions[sessionId];
+    if (!session || !session.store || !session.store.contacts) {
+      return res.status(404).json({ error: 'Sesión o contactos no encontrados' });
+    }
+    if (!jid || !name) {
+      return res.status(400).json({ error: 'Se requieren "jid" y "name".' });
+    }
+    try {
+      if (session.store.contacts[jid]) {
+        session.store.contacts[jid].notify = name;
+        if (!session.auditLog) session.auditLog = [];
+        session.auditLog.push({
+          type: 'edit-contact',
+          jid,
+          newName: name,
+          timestamp: new Date().toISOString()
+        });
+      } else {
+        return res.status(404).json({ error: 'Contacto no encontrado en el store.' });
+      }
+      const authDir = path.join(STORE_FILE_PATH, sessionId);
+      session.store.writeToFile(path.join(authDir, 'store.json'));
+      res.json({ message: 'Contacto actualizado correctamente' });
+    } catch (error) {
+      console.error(`Error al actualizar el contacto para ${sessionId}:`, error);
+      res.status(500).json({ error: 'Error al actualizar el contacto' });
+    }
+  });
+
+  // En /create-contact
+  app.post('/create-contact/:sessionId', async (req, res) => {
+    const { sessionId } = req.params;
+    const { jid, name } = req.body;
+    const session = sessions[sessionId];
+    if (!session || !session.store) {
+      return res.status(404).json({ error: 'Sesión no encontrada' });
+    }
+    if (!jid || !name) {
+      return res.status(400).json({ error: 'Se requieren "jid" y "name".' });
+    }
+    try {
+      session.store.contacts[jid] = {
+        id: jid,
+        notify: name,
+      };
+      if (!session.auditLog) session.auditLog = [];
+      session.auditLog.push({
+        type: 'create-contact',
+        jid,
+        name,
+        timestamp: new Date().toISOString()
+      });
+      const authDir = path.join(STORE_FILE_PATH, sessionId);
+      session.store.writeToFile(path.join(authDir, 'store.json'));
+      res.json({ message: 'Contacto creado correctamente (en store local)' });
+    } catch (error) {
+      console.error(`Error al crear el contacto para ${sessionId}:`, error);
+      res.status(500).json({ error: 'Error al crear el contacto' });
+    }
+  });
+
+  // ============================================
+  // 6. Búsqueda Avanzada en Mensajes
+  // ============================================
+  /**
+   * @openapi
+   * /search-messages/{sessionId}:
+   *   get:
+   *     summary: Busca mensajes en el historial de la sesión según criterios
+   *     parameters:
+   *       - in: path
+   *         name: sessionId
+   *         required: true
+   *         description: ID de la sesión de WhatsApp
+   *         schema:
+   *           type: string
+   *       - in: query
+   *         name: query
+   *         required: false
+   *         description: Texto a buscar en los mensajes
+   *         schema:
+   *           type: string
+   *       - in: query
+   *         name: fromDate
+   *         required: false
+   *         description: Fecha de inicio en formato ISO (por ejemplo, 2025-03-01T00:00:00Z)
+   *         schema:
+   *           type: string
+   *       - in: query
+   *         name: toDate
+   *         required: false
+   *         description: Fecha de fin en formato ISO
+   *         schema:
+   *           type: string
+   *     responses:
+   *       200:
+   *         description: Lista de mensajes que cumplen los criterios
+   *       404:
+   *         description: Sesión no encontrada
+   *       500:
+   *         description: Error al buscar mensajes
+   */
+  app.get('/search-messages/:sessionId', async (req, res) => {
+    const { sessionId } = req.params;
+    const { query, fromDate, toDate } = req.query;
+    const session = sessions[sessionId];
+    if (!session) {
+      return res.status(404).json({ error: 'Sesión no encontrada' });
+    }
+    try {
+      let messages = session.messageHistory || [];
+      if (query) {
+        const lowerQuery = query.toLowerCase();
+        messages = messages.filter(msg => {
+          let text = '';
+          if (msg.message && msg.message.conversation) {
+            text = msg.message.conversation;
+          } else if (msg.message && msg.message.extendedTextMessage && msg.message.extendedTextMessage.text) {
+            text = msg.message.extendedTextMessage.text;
+          }
+          return text.toLowerCase().includes(lowerQuery);
+        });
+      }
+      if (fromDate) {
+        const fromTimestamp = new Date(fromDate).getTime();
+        messages = messages.filter(msg => (msg.messageTimestamp * 1000) >= fromTimestamp);
+      }
+      if (toDate) {
+        const toTimestamp = new Date(toDate).getTime();
+        messages = messages.filter(msg => (msg.messageTimestamp * 1000) <= toTimestamp);
+      }
+      res.json({ messages });
+    } catch (error) {
+      console.error(`Error al buscar mensajes para ${sessionId}:`, error);
+      res.status(500).json({ error: 'Error al buscar mensajes' });
+    }
+  });
+
+/**
+ * @openapi
+ * /get-contacts/{sessionId}:
+ *   get:
+ *     summary: Obtiene la lista de contactos sincronizados para la sesión
+ *     parameters:
+ *       - in: path
+ *         name: sessionId
+ *         required: true
+ *         description: ID de la sesión de WhatsApp
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Lista de contactos sincronizados
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 contacts:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                     properties:
+ *                       jid:
+ *                         type: string
+ *                       name:
+ *                         type: string
+ *       404:
+ *         description: Sesión o contactos no encontrados
+ *       500:
+ *         description: Error al obtener los contactos
+ */
+app.get('/get-contacts/:sessionId', async (req, res) => {
+    const { sessionId } = req.params;
+    const session = sessions[sessionId];
+
+    // Verificamos que exista la sesión y el store de contactos
+    if (!session || !session.store || !session.store.contacts) {
+      return res.status(404).json({ error: 'Sesión o contactos no encontrados' });
+    }
+
+    try {
+      // Extraemos los contactos: el store es un objeto donde cada llave es el jid del contacto
+      const contacts = Object.keys(session.store.contacts).map(jid => {
+        const contact = session.store.contacts[jid];
+        return {
+          jid,
+          // Se usa la propiedad 'notify' para el nombre, o el jid si no hay valor
+          name: (contact.notify && contact.notify.trim() !== '') ? contact.notify : jid,
+          // Puedes incluir otros campos adicionales si lo requieres
+          ...contact,
+        };
+      });
+      res.json({ contacts });
+    } catch (error) {
+      console.error(`❌ Error al obtener los contactos para ${sessionId}:`, error);
+      res.status(500).json({ error: 'Error al obtener los contactos' });
+    }
+  });
+
+
+
+/**
+ * @openapi
+ * /upload-media/{sessionId}:
+ *   post:
+ *     summary: Sube un archivo multimedia y lo asocia a la sesión
+ *     parameters:
+ *       - in: path
+ *         name: sessionId
+ *         required: true
+ *         description: ID de la sesión de WhatsApp
+ *         schema:
+ *           type: string
+ *     requestBody:
+ *       description: Archivo multimedia a subir (form-data)
+ *       required: true
+ *       content:
+ *         multipart/form-data:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               media:
+ *                 type: string
+ *                 format: binary
+ *     responses:
+ *       200:
+ *         description: Archivo subido correctamente
+ *       400:
+ *         description: Error en la subida del archivo
+ */
+app.post('/upload-media/:sessionId', upload.single('media'), (req, res) => {
+  const { sessionId } = req.params;
+  if (!req.file) {
+    return res.status(400).json({ error: 'No se ha subido ningún archivo' });
+  }
+  // Aquí podrías guardar la ruta o información del archivo en una base de datos o en memoria asociada a la sesión.
+  res.json({ message: 'Archivo subido correctamente', file: req.file });
+});
+
+/**
+ * @openapi
+ * /list-media/{sessionId}:
+ *   get:
+ *     summary: Lista los archivos multimedia subidos para la sesión
+ *     parameters:
+ *       - in: path
+ *         name: sessionId
+ *         required: true
+ *         description: ID de la sesión de WhatsApp
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Lista de archivos multimedia
+ */
+app.get('/list-media/:sessionId', (req, res) => {
+  const { sessionId } = req.params;
+  // Aquí se debe implementar la lógica para listar los archivos asociados a la sesión.
+  // Por ejemplo, leyendo de una base de datos o directorio específico.
+  res.json({ media: [/* lista de archivos */] });
+});
+
+
+
+// Ruta para configurar o actualizar una regla de autoresponder:
+/**
+ * @openapi
+ * /set-autoresponder/{sessionId}:
+ *   post:
+ *     summary: Configura o actualiza una regla de autoresponder para la sesión de WhatsApp
+ *     parameters:
+ *       - in: path
+ *         name: sessionId
+ *         required: true
+ *         description: ID de la sesión de WhatsApp
+ *         schema:
+ *           type: string
+ *     requestBody:
+ *       description: Objeto que contiene la palabra clave y la respuesta para configurar la regla de autoresponder
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               keyword:
+ *                 type: string
+ *               response:
+ *                 type: string
+ *             example:
+ *               keyword: "hola"
+ *               response: "Hola, gracias por tu mensaje."
+ *     responses:
+ *       200:
+ *         description: Regla de autoresponder configurada exitosamente
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                 rules:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                     properties:
+ *                       keyword:
+ *                         type: string
+ *                       response:
+ *                         type: string
+ *       400:
+ *         description: Se requieren "keyword" y "response"
+ *       500:
+ *         description: Error interno al configurar la regla
+ */
+app.post('/set-autoresponder/:sessionId', (req, res) => {
+    const { sessionId } = req.params;
+    const { keyword, response } = req.body;
+    if (!keyword || !response) {
+      return res.status(400).json({ error: 'Se requieren "keyword" y "response".' });
+    }
+    if (!autoresponderRules[sessionId]) {
+      autoresponderRules[sessionId] = [];
+    }
+    autoresponderRules[sessionId].push({ keyword: keyword.toLowerCase(), response });
+    res.json({ message: 'Regla de autoresponder configurada', rules: autoresponderRules[sessionId] });
+  });
+
+/**
+ * @swagger
+ * /schedule-message/{sessionId}:
+ *   post:
+ *     summary: Programa un mensaje para enviarlo en una fecha y hora futuras
+ *     parameters:
+ *       - in: path
+ *         name: sessionId
+ *         required: true
+ *         description: ID de la sesión de WhatsApp
+ *         schema:
+ *           type: string
+ *     requestBody:
+ *       description: Datos del mensaje a programar
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               jid:
+ *                 type: string
+ *               message:
+ *                 type: string
+ *               scheduledTime:
+ *                 type: string
+ *                 description: Fecha y hora en formato ISO (ejemplo: 2025-03-03T15:00:00Z)
+ *             example:
+ *               jid: "34690937275@s.whatsapp.net"
+ *               message: "Mensaje programado de prueba"
+ *               scheduledTime: "2025-03-03T15:00:00Z"
+ *     responses:
+ *       200:
+ *         description: Mensaje programado correctamente
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *               example:
+ *                 message: "Mensaje programado correctamente"
+ *       400:
+ *         description: Error de validación
+ *       404:
+ *         description: Sesión no encontrada
+ *       500:
+ *         description: Error al programar el mensaje
+ */
+
+
+app.post('/schedule-message/:sessionId', async (req, res) => {
+    const { sessionId } = req.params;
+    const { jid, message, scheduledTime } = req.body;
+    const session = sessions[sessionId];
+    if (!session) {
+      return res.status(404).json({ error: 'Sesión no encontrada' });
+    }
+    if (!jid || !message || !scheduledTime) {
+      return res.status(400).json({ error: 'Se requieren "jid", "message" y "scheduledTime".' });
+    }
+
+    try {
+      const scheduleDate = new Date(scheduledTime);
+      const now = new Date();
+      const delay = scheduleDate.getTime() - now.getTime();
+      if (delay <= 0) {
+        return res.status(400).json({ error: 'La fecha programada debe ser futura' });
+      }
+      // Programar el mensaje usando setTimeout (para un ejemplo simple)
+      setTimeout(async () => {
+        try {
+          await session.sock.sendMessage(jid, { text: message });
+          console.log(`Mensaje programado enviado a ${jid}`);
+        } catch (err) {
+          console.error('Error al enviar mensaje programado:', err);
+        }
+      }, delay);
+      res.json({ message: 'Mensaje programado correctamente' });
+    } catch (error) {
+      console.error(`Error al programar mensaje para ${sessionId}:`, error);
+      res.status(500).json({ error: 'Error al programar el mensaje' });
+    }
+  });
 
 // ------------------------------------------------------
 // --------------- RUTAS DE LA API ----------------------
@@ -494,15 +1610,15 @@ app.get('/get-chats/:sessionId', async (req, res) => {
     }
 
     try {
-      // Obtener los chats desde el store de Baileys
+      // Intentamos obtener los chats desde el store de Baileys
       let chats = session.store.chats && session.store.chats.all && session.store.chats.all();
 
-      // Si no existen chats sincronizados en el store, cargamos los chats desde el archivo
+      // Si no existen chats en el store, cargamos desde el archivo
       if (!chats || chats.length === 0) {
         chats = session.chats || loadChats(sessionId);
       }
 
-      // Si no existen chats aún, intentamos construir la lista a partir de los mensajes históricos
+      // Si aun no hay chats, construimos la lista a partir del historial de mensajes
       if (!chats || chats.length === 0) {
         const chatMap = {};
         (session.messageHistory || []).forEach((msg) => {
@@ -514,7 +1630,7 @@ app.get('/get-chats/:sessionId', async (req, res) => {
                 name: remoteJid,
                 lastMessage: msg.message,
                 unreadCount: 0,
-                messageTimestamp: msg.messageTimestamp || 0, // Timestamp del último mensaje
+                messageTimestamp: msg.messageTimestamp || 0,
               };
             } else {
               if (msg.messageTimestamp > (chatMap[remoteJid].messageTimestamp || 0)) {
@@ -527,13 +1643,37 @@ app.get('/get-chats/:sessionId', async (req, res) => {
         chats = Object.values(chatMap);
       }
 
-      // Usamos la función getMessages para asegurarnos de que los mensajes y timestamps se actualicen correctamente
+      // Actualizamos el nombre de cada chat consultando el store de contactos
+      const updatedChats = chats.map((chat) => {
+        let updatedName = chat.name; // Valor por defecto
+        if (
+          session.store &&
+          session.store.contacts &&
+          session.store.contacts[chat.id]
+        ) {
+          const contact = session.store.contacts[chat.id];
+          // Prioridad: notify > pushname > name > jid
+          updatedName =
+            (contact.notify && contact.notify.trim() !== ""
+              ? contact.notify
+              : (contact.pushname && contact.pushname.trim() !== ""
+                ? contact.pushname
+                : (contact.name && contact.name.trim() !== ""
+                  ? contact.name
+                  : chat.id)));
+        }
+        chat.name = updatedName;
+        return chat;
+      });
+
+      // Función auxiliar para obtener los mensajes de un chat
       async function getMessages(sessionId, jid) {
         const session = sessions[sessionId];
         if (!session) return [];
         try {
-          // Filtramos los mensajes del chat por remoteJid
-          const messages = (session.messageHistory || []).filter((msg) => msg.key.remoteJid === jid);
+          const messages = (session.messageHistory || []).filter(
+            (msg) => msg.key.remoteJid === jid
+          );
           return messages;
         } catch (error) {
           console.error(`❌ Error al obtener los mensajes del chat ${jid}:`, error);
@@ -541,33 +1681,44 @@ app.get('/get-chats/:sessionId', async (req, res) => {
         }
       }
 
-      // Organiza los chats por el último mensaje (usando messageTimestamp para ordenar)
-      const sortedChats = chats.sort((a, b) => {
-        return b.messageTimestamp - a.messageTimestamp; // Ordena de más reciente a más antiguo
-      });
+      // Ordenamos los chats de más reciente a más antiguo
+      const sortedChats = updatedChats.sort(
+        (a, b) => b.messageTimestamp - a.messageTimestamp
+      );
 
-      // Mapeo de chats para incluir el último mensaje y timestamp
-      const mappedChats = await Promise.all(sortedChats.map(async (chat) => {
-        // Obtiene los mensajes del chat usando getMessages
-        const messages = await getMessages(sessionId, chat.id);
-        const lastMessage = messages.length > 0 ? messages[messages.length - 1] : null;
-        const messageTimestamp = lastMessage ? lastMessage.messageTimestamp : 0;
+      // Mapeamos cada chat para incluir el último mensaje y su timestamp
+      const mappedChats = await Promise.all(
+        sortedChats.map(async (chat) => {
+          const messages = await getMessages(sessionId, chat.id);
+          const lastMessage = messages.length > 0 ? messages[messages.length - 1] : null;
+          const messageTimestamp = lastMessage ? lastMessage.messageTimestamp : 0;
 
-        // Filtramos los chats que no tienen un mensaje o timestamp válido
-        if (messageTimestamp > 0 && lastMessage) {
-          return {
-            jid: chat.id,
-            name: chat.name || chat.id,
-            lastMessage: lastMessage.message ? lastMessage.message.conversation || "No Message" : "No Message",
-            unreadCount: chat.unreadCount || 0,
-            messageTimestamp: messageTimestamp, // Incluir el timestamp aquí
-          };
-        }
-        return null;
-      }));
+          if (messageTimestamp > 0 && lastMessage) {
+            let lastMsgText = "No Message";
+            if (lastMessage.message) {
+              if (lastMessage.message.conversation) {
+                lastMsgText = lastMessage.message.conversation;
+              } else if (
+                lastMessage.message.extendedTextMessage &&
+                lastMessage.message.extendedTextMessage.text
+              ) {
+                lastMsgText = lastMessage.message.extendedTextMessage.text;
+              }
+            }
+            return {
+              jid: chat.id,
+              name: chat.name || chat.id,
+              lastMessage: lastMsgText,
+              unreadCount: chat.unreadCount || 0,
+              messageTimestamp: messageTimestamp,
+            };
+          }
+          return null;
+        })
+      );
 
-      // Filtramos los chats nulos (aquellos sin mensaje o timestamp válido)
-      const filteredChats = mappedChats.filter(chat => chat !== null);
+      // Filtramos los chats nulos (aquellos sin mensaje válido)
+      const filteredChats = mappedChats.filter((chat) => chat !== null);
 
       console.log(`Chats de ${sessionId}:`, filteredChats);
       res.json({ chats: filteredChats });
@@ -576,6 +1727,7 @@ app.get('/get-chats/:sessionId', async (req, res) => {
       res.status(500).json({ error: 'Error al obtener los chats' });
     }
   });
+
 
 
 
