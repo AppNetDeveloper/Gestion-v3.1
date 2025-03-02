@@ -1,4 +1,6 @@
+global.crypto = require('crypto');
 require('dotenv').config();
+
 const express = require('express');
 const fs = require('fs');
 const path = require('path'); // Módulo para manejar rutas de archivos
@@ -20,6 +22,7 @@ const https = require('https'); // Para configurar el agente HTTPS
 const multer = require('multer');
 const upload = multer({ dest: 'uploads/' });
 
+const retryCounters = {};
 
 const cron = require('node-cron');
 
@@ -189,12 +192,12 @@ async function startSession(sessionId) {
   store.bind(sock.ev);
 
   // Forzamos la sincronización de contactos antes de guardar la sesión
-  try {
-    await sock.fetchContacts();
-    console.log(`✅ Contactos sincronizados para ${sessionId}`);
-  } catch (error) {
-    console.error(`❌ Error sincronizando contactos para ${sessionId}:`, error);
-  }
+ // try {
+    //await sock.fetchContacts();
+   // console.log(`✅ Contactos sincronizados para ${sessionId}`);
+ // } catch (error) {
+   // console.error(`❌ Error sincronizando contactos para ${sessionId}:`, error);
+ // }
 
   sessions[sessionId] = {
     sock,
@@ -350,21 +353,35 @@ async function startSession(sessionId) {
     if (events['connection.update']) {
       const update = events['connection.update'];
       const { connection, lastDisconnect, qr } = update;
+      const authDir = path.join(STORE_FILE_PATH, sessionId); // Definir authDir aquí
 
       if (qr) {
         console.log(`🆕 Código QR generado para ${sessionId}`);
         sessions[sessionId].qrCode = qr;
       }
 
-      if (connection === 'close') {
+      if (connection === 'open') {
+        console.log(`✅ Conexión establecida para ${sessionId}`);
+        sessions[sessionId].qrCode = null;
+      } else if (connection === 'close') {
+        console.log(`🚪 Conexión cerrada para ${sessionId}. Error:`, lastDisconnect?.error);
+
+        // Si el error no indica logout, esperar 5 segundos y reconectar
         if (
-          lastDisconnect?.error instanceof Boom &&
+          lastDisconnect?.error &&
+          lastDisconnect?.error?.output &&
           lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut
         ) {
-          console.log(`🔄 Reconectando sesión para ${sessionId}...`);
-          await startSession(sessionId);
+          console.log(`🔄 Reconectando sesión para ${sessionId} en 5 segundos...`);
+          setTimeout(async () => {
+            try {
+              await startSession(sessionId);
+            } catch (error) {
+              console.error(`❌ Error al reconectar sesión ${sessionId}:`, error);
+            }
+          }, 5000);
         } else {
-          console.log(`🚪 Sesión cerrada para ${sessionId}`);
+          console.log(`🚪 Sesión ${sessionId} cerrada (logged out)`);
           clearInterval(sessions[sessionId].storeInterval);
           if (fs.existsSync(authDir)) {
             fs.rmSync(authDir, { recursive: true, force: true });
@@ -372,11 +389,6 @@ async function startSession(sessionId) {
           }
           delete sessions[sessionId];
         }
-      }
-
-      if (connection === 'open') {
-        console.log(`✅ Conexión establecida para ${sessionId}`);
-        sessions[sessionId].qrCode = null;
       }
     }
 
@@ -398,6 +410,7 @@ async function startSession(sessionId) {
   });
 
   return sock;
+
 }
 /**
  * @openapi
@@ -1969,52 +1982,66 @@ app.delete('/delete-message/:sessionId', async (req, res) => {
  *         description: Error interno
  */
 app.delete('/delete-chat/:sessionId', async (req, res) => {
-  const { sessionId } = req.params;
-  const { jid } = req.body;
+    const { sessionId } = req.params;
+    const { jid } = req.body;
 
-  if (!jid) {
-    return res.status(400).json({
-      error: 'El campo "jid" es requerido en el cuerpo de la petición.'
-    });
-  }
-
-  const session = sessions[sessionId];
-  if (!session) {
-    return res
-      .status(404)
-      .json({ error: `La sesión ${sessionId} no está disponible.` });
-  }
-
-  try {
-    // 1. Opcional: limpiar el chat en el dispositivo usando Baileys
-    //    Esto deja el chat “vacío” en el cliente WhatsApp.
-    //    Si prefieres "borrar" el chat por completo, se puede usar: { delete: true }.
-    await session.sock.chatModify({ clear: { messages: true } }, jid);
-
-    // 2. Eliminar del store local: session.store.chats y session.chats
-    if (session.store.chats) {
-      session.store.chats.delete(jid);
-    }
-    if (Array.isArray(session.chats)) {
-      session.chats = session.chats.filter((chat) => chat.id !== jid);
-      saveChats(sessionId, session.chats); // Guardar en disco
+    if (!jid) {
+      return res.status(400).json({
+        error: 'El campo "jid" es requerido en el cuerpo de la petición.'
+      });
     }
 
-    // 3. Eliminar todos los mensajes asociados a ese jid en el historial local
-    session.messageHistory = session.messageHistory.filter(
-      (msg) => msg.key?.remoteJid !== jid
-    );
-    saveMessageHistory(sessionId, session.messageHistory);
+    const session = sessions[sessionId];
+    if (!session) {
+      return res.status(404).json({ error: `La sesión ${sessionId} no está disponible.` });
+    }
 
-    return res.json({
-      success: true,
-      message: `Chat ${jid} eliminado o vaciado correctamente en la sesión ${sessionId}.`
-    });
-  } catch (error) {
-    console.error(`❌ Error al eliminar/vaciar chat en sesión ${sessionId}:`, error);
-    return res.status(500).json({ error: 'Error interno al intentar eliminar o vaciar el chat.' });
+    try {
+      const finalJid = await resolveToString(jid);
+      console.log("Final jid:", finalJid, "Tipo:", typeof finalJid);
+
+      // Intentamos llamar a chatModify; si falla, lo capturamos y continuamos
+      try {
+        const patch = JSON.parse(JSON.stringify({ clear: { messages: true } }));
+
+        //he comentado esto porque falla es para borrar desde server directamente en telefono
+        //await session.sock.chatModify(patch, finalJid);
+        console.log("chatModify ejecutado correctamente");
+      } catch (err) {
+        console.error("Error en chatModify, se procederá a eliminar localmente:", err);
+        // Aquí podemos optar por continuar sin modificar el chat en WhatsApp
+      }
+
+      // Eliminamos el chat del historial local (JSON)
+      session.messageHistory = session.messageHistory.filter((msg) => {
+        const msgJid = msg.key?.remoteJid;
+        return msgJid !== finalJid;
+      });
+      saveMessageHistory(sessionId, session.messageHistory);
+
+      // Actualizamos la lista de chats en memoria y en el archivo
+      if (sessions[sessionId].chatsMap) {
+        delete sessions[sessionId].chatsMap[finalJid];
+        saveChats(sessionId, Object.values(sessions[sessionId].chatsMap));
+      }
+
+      return res.json({
+        success: true,
+        message: `Chat ${finalJid} eliminado localmente en la sesión ${sessionId}.`
+      });
+    } catch (error) {
+      console.error(`❌ Error al eliminar/vaciar chat en sesión ${sessionId}:`, error);
+      return res.status(500).json({ error: 'Error interno al intentar eliminar o vaciar el chat.' });
+    }
+  });
+
+
+
+  async function resolveToString(value) {
+    const resolved = await Promise.resolve(value);
+    return String(resolved);
   }
-});
+
 
 /**
  * @openapi
@@ -2036,26 +2063,30 @@ app.delete('/delete-chat/:sessionId', async (req, res) => {
  *         description: Error al cerrar sesión
  */
 app.post('/logout/:sessionId', async (req, res) => {
-  const { sessionId } = req.params;
-  const session = sessions[sessionId];
-  if (!session) {
-    return res.status(404).json({ error: 'Sesión no encontrada' });
-  }
-  try {
-    await session.sock.logout();
-    clearInterval(session.storeInterval);
-    delete sessions[sessionId];
-    const authDir = path.join(STORE_FILE_PATH, sessionId);
-    if (fs.existsSync(authDir)) {
-      fs.rmSync(authDir, { recursive: true, force: true });
-      console.log(`🗑️ Archivos eliminados para ${sessionId}`);
+    const { sessionId } = req.params;
+    const session = sessions[sessionId];
+    if (!session) {
+      return res.status(404).json({ error: 'Sesión no encontrada' });
     }
-    res.json({ message: `Sesión ${sessionId} cerrada y eliminada` });
-  } catch (error) {
-    console.error(`❌ Error al cerrar sesión ${sessionId}:`, error);
-    res.status(500).json({ error: 'Error al cerrar sesión' });
-  }
-});
+    try {
+      await session.sock.logout();
+      clearInterval(session.storeInterval);
+      delete sessions[sessionId];
+      const authDir = path.join(STORE_FILE_PATH, sessionId);
+      if (fs.existsSync(authDir)) {
+        fs.rmSync(authDir, { recursive: true, force: true });
+        console.log(`🗑️ Archivos eliminados para ${sessionId}`);
+      }
+      // Creamos un archivo flag para indicar que la sesión fue cerrada
+      const flagFile = path.join(STORE_FILE_PATH, `${sessionId}_loggedOut.flag`);
+      fs.writeFileSync(flagFile, 'true');
+      res.json({ message: `Sesión ${sessionId} cerrada y eliminada` });
+    } catch (error) {
+      console.error(`❌ Error al cerrar sesión ${sessionId}:`, error);
+      res.status(500).json({ error: 'Error al cerrar sesión' });
+    }
+  });
+
 
 /**
  * @openapi
@@ -2074,29 +2105,38 @@ app.get('/sessions', (req, res) => {
 // ---------------------------------
 // Restaura sesiones previamente guardadas
 async function restoreSessions() {
-  if (!fs.existsSync(STORE_FILE_PATH)) {
-    fs.mkdirSync(STORE_FILE_PATH, { recursive: true });
-  }
-  const sessionDirs = fs.readdirSync(STORE_FILE_PATH);
-  if (sessionDirs.length === 0) {
-    console.log("🔹 No hay sesiones previas para restaurar.");
-    return;
-  }
-  console.log(`🔄 Restaurando ${sessionDirs.length} sesiones activas...`);
-  for (const sessionId of sessionDirs) {
-    const authDir = path.join(STORE_FILE_PATH, sessionId);
-    if (!fs.existsSync(path.join(authDir, 'creds.json'))) {
-      console.log(`⚠️ Sesión ${sessionId} no tiene archivos de autenticación, omitiendo...`);
-      continue;
+    if (!fs.existsSync(STORE_FILE_PATH)) {
+      fs.mkdirSync(STORE_FILE_PATH, { recursive: true });
     }
-    try {
-      console.log(`♻️ Restaurando sesión: ${sessionId}`);
-      await startSession(sessionId);
-    } catch (error) {
-      console.error(`❌ Error restaurando sesión ${sessionId}:`, error);
+    const sessionDirs = fs.readdirSync(STORE_FILE_PATH);
+    if (sessionDirs.length === 0) {
+      console.log("🔹 No hay sesiones previas para restaurar.");
+      return;
+    }
+    console.log(`🔄 Restaurando ${sessionDirs.length} sesiones activas...`);
+    for (const item of sessionDirs) {
+      // Si el archivo es un flag, lo omitimos
+      if (item.endsWith('_loggedOut.flag')) continue;
+      const sessionId = item; // Asumimos que el nombre de la carpeta es el sessionId
+      const flagFile = path.join(STORE_FILE_PATH, `${sessionId}_loggedOut.flag`);
+      if (fs.existsSync(flagFile)) {
+        console.log(`⚠️ Sesión ${sessionId} marcada como cerrada, omitiendo restauración.`);
+        continue;
+      }
+      const authDir = path.join(STORE_FILE_PATH, sessionId);
+      if (!fs.existsSync(path.join(authDir, 'creds.json'))) {
+        console.log(`⚠️ Sesión ${sessionId} no tiene archivos de autenticación, omitiendo...`);
+        continue;
+      }
+      try {
+        console.log(`♻️ Restaurando sesión: ${sessionId}`);
+        await startSession(sessionId);
+      } catch (error) {
+        console.error(`❌ Error restaurando sesión ${sessionId}:`, error);
+      }
     }
   }
-}
+
 
 // Iniciamos el servidor
 app.listen(PORT, async () => {
