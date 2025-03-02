@@ -11,8 +11,8 @@ class CreateContactsTable extends Migration
         Schema::create('contacts', function (Blueprint $table) {
             $table->id();
             $table->unsignedBigInteger('user_id'); // Nuevo campo para separar los contactos por usuario
-            $table->string('name');      // Nombre del contacto
-            $table->string('phone');     // Teléfono
+            $table->string('name')->nullable();     // Nombre del contacto
+            $table->string('phone')->nullable();    // Teléfono
             $table->string('address')->nullable(); // Dirección (opcional)
             $table->string('email')->nullable();   // Email (opcional)
             $table->string('web')->nullable();     // Sitio web (opcional)

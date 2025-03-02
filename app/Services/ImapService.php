@@ -6,6 +6,7 @@ use Webklex\PHPIMAP\Config;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Cache;
+use App\Models\Contact;
 
 class ImapService
 {
@@ -90,6 +91,7 @@ class ImapService
         }
     }
 
+
     /**
      * Devuelve el mensaje de error, si existe.
      *
@@ -134,11 +136,80 @@ class ImapService
             return collect();
         }
     }
+    protected function getUserImapConfig2(): array
+    {
+        $user = Auth::user();
 
+        if (!$user) {
+            throw new \Exception("Usuario no autenticado.");
+        }
+
+        // Validamos que existan los campos requeridos.
+        $requiredFields = ['imap_host', 'imap_port', 'imap_username', 'imap_password'];
+        foreach ($requiredFields as $field) {
+            if (empty($user->$field)) {
+                throw new \Exception("Falta configuración IMAP: $field.");
+            }
+        }
+
+        // Asignamos 'ssl' por defecto si el valor de encriptación no es 'ssl' ni 'tls'.
+        $encryption = in_array($user->imap_encryption, ['ssl', 'tls']) ? $user->imap_encryption : 'ssl';
+
+        return [
+            'host'           => $user->imap_host,
+            'port'           => (int)$user->imap_port,
+            'encryption'     => $encryption,
+            'validate_cert'  => true,  // Puedes hacerlo dinámico si es necesario.
+            'username'       => $user->imap_username,
+            'password'       => $user->imap_password,
+            'protocol'       => 'imap',  // Puedes extenderlo para que sea configurable.
+            'delimiter'      => '/',
+            'default_folder' => 'INBOX',
+            'fetch'          => [
+                'fetch_body'  => false,
+                'fetch_flags' => true,
+            ],
+        ];
+    }
+
+    /**
+     * Intenta conectar al servidor IMAP utilizando la configuración extraída del usuario.
+     */
+    public function connect2(): void
+    {
+        try {
+            $configArray = $this->getUserImapConfig2();
+        } catch (\Exception $e) {
+            Log::error("IMAP: " . $e->getMessage());
+            $this->error = $e->getMessage();
+            return;
+        }
+
+        try {
+            // Utilizamos la fachada para crear el cliente, inyectando la configuración del usuario
+            $this->client = \Webklex\IMAP\Facades\Client::make($configArray);
+            $this->client->connect();
+
+            if (!$this->client->isConnected()) {
+                Log::error("IMAP: Conexión fallida para el usuario ID " . Auth::id() . " en host " . $configArray['host']);
+                $this->error = "Conexión IMAP fallida. Verifica las credenciales.";
+                $this->client = null;
+            } else {
+                $this->error = null;
+            }
+        } catch (\Throwable $e) {
+            $this->client = null;
+            $this->error = "Error conectando al servidor IMAP: " . $e->getMessage();
+            Log::error("IMAP: " . $this->error, [
+                'user_id' => Auth::id(),
+                'host'    => $configArray['host'] ?? 'desconocido',
+            ]);
+        }
+    }
     public function getOnlyMessages(string $folderName = 'INBOX')
     {
         if (!$this->client) {
-            $this->connect();
+            $this->connect2();
         }
 
         if (!$this->client || !$this->client->isConnected()) {
@@ -287,5 +358,66 @@ class ImapService
         }
     }
 
+
+    /**
+     * Sincroniza los contactos para el usuario actual (imap_type = 1).
+     * Recorre todas las carpetas, obtiene los nuevos correos y extrae el remitente.
+     * Si el remitente no existe en la tabla de contactos, crea un nuevo registro.
+     *
+     * @param string $folderName Opcional: si se desea limitar a una carpeta.
+     * @return void
+     */
+    public function syncContactsForUser(string $folderName = null): void
+    {
+        // Nos aseguramos de conectar usando la configuración que no descarga el cuerpo
+        if (!$this->client) {
+            $this->connect2();
+        }
+
+        if (!$this->client || !$this->client->isConnected()) {
+            Log::error("IMAP: No se pudo conectar para sincronizar contactos.");
+            return;
+        }
+
+        // Si se especifica una carpeta, la usaremos; de lo contrario, recorremos todas las carpetas
+        $folders = $folderName
+            ? collect([(object)['name' => $folderName]])
+            : $this->getFolders();
+
+        foreach ($folders as $folder) {
+            try {
+                // Obtenemos todos los mensajes de la carpeta (solo encabezados gracias a 'fetch_body' => false)
+                $messages = $this->client->getFolder($folder->name)
+                    ->query()
+                    ->unseen()
+                    ->get();
+
+                foreach ($messages as $email) {
+                    $from = $email->getFrom();
+                    if (!empty($from) && isset($from[0])) {
+                        $senderEmail = $from[0]->mail;
+                        // Verificamos si el contacto ya existe para el usuario actual
+                        $userId = Auth::id();
+                        $contact = Contact::where('user_id', $userId)
+                            ->where('email', $senderEmail)
+                            ->first();
+
+                        if (!$contact) {
+                            // Crear nuevo contacto
+                            Contact::create([
+                                'user_id' => $userId,
+                                'email'   => $senderEmail,
+                                // Aquí puedes agregar otros campos si es necesario
+                            ]);
+                            Log::info("IMAP: Nuevo contacto agregado para el usuario {$userId}: {$senderEmail}");
+                        }
+                    }
+                }
+            } catch (\Throwable $e) {
+                Log::error("IMAP: Error sincronizando contactos en la carpeta {$folder->name}: " . $e->getMessage());
+                continue; // Continuamos con la siguiente carpeta
+            }
+        }
+    }
 
 }
