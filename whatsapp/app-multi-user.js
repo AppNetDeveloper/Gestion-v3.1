@@ -210,140 +210,188 @@ async function startSession(sessionId) {
   };
 
   // Evento para capturar mensajes (recibidos y enviados)
-  sock.ev.on('messages.upsert', async (m) => {
-    console.log('Nuevo mensaje/upsert recibido:', m);
+    sock.ev.on('messages.upsert', async (m) => {
+        console.log('Nuevo mensaje/upsert recibido:', m);
 
-    if (m.type === 'notify' || m.type === 'append') {
-        // Añadir los mensajes al historial de la sesión
-        sessions[sessionId].messageHistory.push(...m.messages);
-        saveMessageHistory(sessionId, sessions[sessionId].messageHistory);
+        if (m.type === 'notify' || m.type === 'append') {
+            // Añadir los mensajes al historial de la sesión
+            sessions[sessionId].messageHistory.push(...m.messages);
+            saveMessageHistory(sessionId, sessions[sessionId].messageHistory);
 
-        // Actualizamos la información de los chats con el nuevo mensaje
-        m.messages.forEach((msg) => {
-            const remoteJid = msg.key.remoteJid;
-            const messageTimestamp = msg.messageTimestamp || Date.now();  // Aseguramos que el timestamp es válido
+            // Actualizamos la información de los chats con el nuevo mensaje
+            m.messages.forEach((msg) => {
+                const remoteJid = msg.key.remoteJid;
+                const messageTimestamp = msg.messageTimestamp || Date.now();  // Aseguramos que el timestamp es válido
 
-            // Inicializamos chatsMap si no existe
-            if (!sessions[sessionId].chatsMap) {
-                sessions[sessionId].chatsMap = {};
-            }
-
-            // Determinar el nombre del contacto usando ambos métodos:
-            let contactName = remoteJid; // Valor por defecto
-
-            // Versión 2: Intentamos obtener el nombre del contacto desde el store de contactos
-            if (
-                sessions[sessionId].store &&
-                sessions[sessionId].store.contacts &&
-                sessions[sessionId].store.contacts[remoteJid]
-            ) {
-                const contact = sessions[sessionId].store.contacts[remoteJid];
-                if (contact && contact.notify && contact.notify.trim() !== '') {
-                    contactName = contact.notify;
+                // Inicializamos chatsMap si no existe
+                if (!sessions[sessionId].chatsMap) {
+                    sessions[sessionId].chatsMap = {};
                 }
-            }
 
-            // Versión 1: Si el mensaje tiene pushName, lo usamos (siempre que tenga valor)
-            if (msg.pushName && msg.pushName.trim() !== '') {
-                contactName = msg.pushName;
-            }
+                // Determinar el nombre del contacto usando ambos métodos:
+                let contactName = remoteJid; // Valor por defecto
 
-            // Si no existe el chat en el mapa, lo inicializamos
-            if (!sessions[sessionId].chatsMap[remoteJid]) {
-                sessions[sessionId].chatsMap[remoteJid] = {
-                    id: remoteJid,
-                    name: contactName,  // Usamos el nombre obtenido
-                    lastMessage: msg.message,
-                    messageTimestamp,  // Establecemos el timestamp
-                };
-            } else {
-                // Si el mensaje es más reciente, actualizamos el lastMessage, timestamp y nombre
-                if (messageTimestamp > sessions[sessionId].chatsMap[remoteJid].messageTimestamp) {
+                // Versión 2: Intentamos obtener el nombre del contacto desde el store de contactos
+                if (
+                    sessions[sessionId].store &&
+                    sessions[sessionId].store.contacts &&
+                    sessions[sessionId].store.contacts[remoteJid]
+                ) {
+                    const contact = sessions[sessionId].store.contacts[remoteJid];
+                    if (contact && contact.notify && contact.notify.trim() !== '') {
+                        contactName = contact.notify;
+                    }
+                }
+
+                // Versión 1: Si el mensaje tiene pushName, lo usamos (siempre que tenga valor)
+                if (msg.pushName && msg.pushName.trim() !== '') {
+                    contactName = msg.pushName;
+                }
+
+                // Si no existe el chat en el mapa, lo inicializamos
+                if (!sessions[sessionId].chatsMap[remoteJid]) {
+                    sessions[sessionId].chatsMap[remoteJid] = {
+                        id: remoteJid,
+                        name: contactName,  // Usamos el nombre obtenido
+                        lastMessage: msg.message,
+                        messageTimestamp,  // Establecemos el timestamp
+                    };
+                } else {
+                    // Si el mensaje es más reciente, actualizamos el lastMessage, timestamp y nombre
+                    if (messageTimestamp > sessions[sessionId].chatsMap[remoteJid].messageTimestamp) {
+                        sessions[sessionId].chatsMap[remoteJid].lastMessage = msg.message;
+                        sessions[sessionId].chatsMap[remoteJid].messageTimestamp = messageTimestamp;
+                        sessions[sessionId].chatsMap[remoteJid].name = contactName;
+                    }
+                }
+
+                // Si el mensaje fue enviado por nosotros, actualizamos también el lastMessage
+                if (msg.key.fromMe) {
                     sessions[sessionId].chatsMap[remoteJid].lastMessage = msg.message;
-                    sessions[sessionId].chatsMap[remoteJid].messageTimestamp = messageTimestamp;
-                    sessions[sessionId].chatsMap[remoteJid].name = contactName;
+                }
+            });
+
+            // Guardamos los chats con la nueva información
+            saveChats(sessionId, Object.values(sessions[sessionId].chatsMap));
+
+            // Procesamos los medios de los mensajes:
+            for (const msg of m.messages) {
+                // Procesar Video
+                if (msg.message && msg.message.videoMessage) {
+                const { directPath, mediaKey } = msg.message.videoMessage;
+                const publicUrl = await processMediaMessage(sessionId, msg.key.remoteJid, directPath, mediaKey, 'video');
+                if (publicUrl) {
+                    msg.message.videoMessage.url_decrypted = publicUrl;
+                    console.log(`Video desencriptado y guardado en: ${publicUrl}`);
+                } else {
+                    console.error(`Error procesando video para ${msg.key.remoteJid}`);
+                }
+                }
+                // Procesar Imagen
+                else if (msg.message && msg.message.imageMessage) {
+                // Para imágenes, a veces se usa "url" en lugar de "directPath"
+                const { url, mediaKey } = msg.message.imageMessage;
+                const publicUrl = await processMediaMessage(sessionId, msg.key.remoteJid, url, mediaKey, 'image');
+                if (publicUrl) {
+                    msg.message.imageMessage.url_decrypted = publicUrl;
+                    console.log(`Imagen desencriptada y guardada en: ${publicUrl}`);
+                } else {
+                    console.error(`Error procesando imagen para ${msg.key.remoteJid}`);
+                }
+                }
+                // Procesar Audio
+                else if (msg.message && msg.message.audioMessage) {
+                const { url, mediaKey } = msg.message.audioMessage;
+                const publicUrl = await processMediaMessage(sessionId, msg.key.remoteJid, url, mediaKey, 'audio');
+                if (publicUrl) {
+                    msg.message.audioMessage.url_decrypted = publicUrl;
+                    console.log(`Audio desencriptado y guardado en: ${publicUrl}`);
+                } else {
+                    console.error(`Error procesando audio para ${msg.key.remoteJid}`);
+                }
+                }
+                // Procesar Documento
+                else if (msg.message && msg.message.documentMessage) {
+                const { url, mediaKey } = msg.message.documentMessage;
+                const publicUrl = await processMediaMessage(sessionId, msg.key.remoteJid, url, mediaKey, 'document');
+                if (publicUrl) {
+                    msg.message.documentMessage.url_decrypted = publicUrl;
+                    console.log(`Documento desencriptado y guardado en: ${publicUrl}`);
+                } else {
+                    console.error(`Error procesando documento para ${msg.key.remoteJid}`);
+                }
                 }
             }
+            // Llamada a la API externa si está habilitada
+            if (process.env.EXTERNAL_API_ENABLED === 'true' && process.env.EXTERNAL_API_URL) {
+                for (const msg of m.messages) {
+                    try {
+                        let mensajeTexto = "";
+                        let imageData = null;
 
-            // Si el mensaje fue enviado por nosotros, actualizamos también el lastMessage
-            if (msg.key.fromMe) {
-                sessions[sessionId].chatsMap[remoteJid].lastMessage = msg.message;
+                        if (msg.message && msg.message.conversation) {
+                            mensajeTexto = msg.message.conversation;
+                        } else if (msg.message && msg.message.extendedTextMessage && msg.message.extendedTextMessage.text) {
+                            mensajeTexto = msg.message.extendedTextMessage.text;
+                        } else if (msg.message && msg.message.imageMessage) {
+                            // Si es imagen, usamos el caption o "Only Image" si no hay caption.
+                            if (
+                                msg.message.imageMessage.caption &&
+                                typeof msg.message.imageMessage.caption === "string" &&
+                                msg.message.imageMessage.caption.trim() !== ""
+                            ) {
+                                mensajeTexto = msg.message.imageMessage.caption;
+                            } else {
+                                mensajeTexto = "Only Image";
+                            }
+                            if (msg.message.imageMessage.jpegThumbnail) {
+                                imageData = msg.message.imageMessage.jpegThumbnail;
+                                if (typeof imageData !== "string") {
+                                    imageData = imageData.toString("base64");
+                                }
+                                imageData = "data:image/png;base64," + imageData;
+                            }
+                        } else {
+                            mensajeTexto = JSON.stringify(msg.message);
+                        }
+
+                        const phone = msg.key.remoteJid.split('@')[0];
+                        const status = msg.key.fromMe ? 'send' : 'received';
+
+                        // Construimos el objeto a enviar con la estructura requerida.
+                        const payload = {
+                            token: process.env.EXTERNAL_API_TOKEN,
+                            user_id: sessionId,
+                            phone: phone,
+                            message: mensajeTexto,
+                            status: status,
+                            image: imageData || null,
+                        };
+
+                        await axios.post(process.env.EXTERNAL_API_URL, payload, { httpsAgent });
+                        console.log(`✅ Mensaje (${status}) enviado a API externa para ${msg.key.remoteJid}`);
+                    } catch (err) {
+                        console.error(`❌ Error al enviar mensaje a API externa:`, err);
+                    }
+                }
+            }
+        }
+        //si falla lo de capturar mesajes es por culpa de este
+        //logica de autoresponder
+        m.messages.forEach(async (msg) => {
+            const text = (msg.message?.conversation || msg.message?.extendedTextMessage?.text || "").toLowerCase();
+            // Si hay reglas configuradas para la sesión, se revisan:
+            if (autoresponderRules[sessionId]) {
+            autoresponderRules[sessionId].forEach(async rule => {
+                if (text.includes(rule.keyword)) {
+                // Envía respuesta automática
+                await sessions[sessionId].sock.sendMessage(msg.key.remoteJid, { text: rule.response });
+                console.log(`Respuesta automática enviada para palabra clave: ${rule.keyword}`);
+                }
+            });
             }
         });
-
-        // Guardamos los chats con la nueva información
-        saveChats(sessionId, Object.values(sessions[sessionId].chatsMap));
-
-        // Llamada a la API externa si está habilitada
-        if (process.env.EXTERNAL_API_ENABLED === 'true' && process.env.EXTERNAL_API_URL) {
-            for (const msg of m.messages) {
-                try {
-                    let mensajeTexto = "";
-                    let imageData = null;
-
-                    if (msg.message && msg.message.conversation) {
-                        mensajeTexto = msg.message.conversation;
-                    } else if (msg.message && msg.message.extendedTextMessage && msg.message.extendedTextMessage.text) {
-                        mensajeTexto = msg.message.extendedTextMessage.text;
-                    } else if (msg.message && msg.message.imageMessage) {
-                        // Si es imagen, usamos el caption o "Only Image" si no hay caption.
-                        if (
-                            msg.message.imageMessage.caption &&
-                            typeof msg.message.imageMessage.caption === "string" &&
-                            msg.message.imageMessage.caption.trim() !== ""
-                        ) {
-                            mensajeTexto = msg.message.imageMessage.caption;
-                        } else {
-                            mensajeTexto = "Only Image";
-                        }
-                        if (msg.message.imageMessage.jpegThumbnail) {
-                            imageData = msg.message.imageMessage.jpegThumbnail;
-                            if (typeof imageData !== "string") {
-                                imageData = imageData.toString("base64");
-                            }
-                            imageData = "data:image/png;base64," + imageData;
-                        }
-                    } else {
-                        mensajeTexto = JSON.stringify(msg.message);
-                    }
-
-                    const phone = msg.key.remoteJid.split('@')[0];
-                    const status = msg.key.fromMe ? 'send' : 'received';
-
-                    // Construimos el objeto a enviar con la estructura requerida.
-                    const payload = {
-                        token: process.env.EXTERNAL_API_TOKEN,
-                        user_id: sessionId,
-                        phone: phone,
-                        message: mensajeTexto,
-                        status: status,
-                        image: imageData || null,
-                    };
-
-                    await axios.post(process.env.EXTERNAL_API_URL, payload, { httpsAgent });
-                    console.log(`✅ Mensaje (${status}) enviado a API externa para ${msg.key.remoteJid}`);
-                } catch (err) {
-                    console.error(`❌ Error al enviar mensaje a API externa:`, err);
-                }
-            }
-        }
-    }
-    //si falla lo de capturar mesajes es por culpa de este
-    //logica de autoresponder
-    m.messages.forEach(async (msg) => {
-        const text = (msg.message?.conversation || msg.message?.extendedTextMessage?.text || "").toLowerCase();
-        // Si hay reglas configuradas para la sesión, se revisan:
-        if (autoresponderRules[sessionId]) {
-          autoresponderRules[sessionId].forEach(async rule => {
-            if (text.includes(rule.keyword)) {
-              // Envía respuesta automática
-              await sessions[sessionId].sock.sendMessage(msg.key.remoteJid, { text: rule.response });
-              console.log(`Respuesta automática enviada para palabra clave: ${rule.keyword}`);
-            }
-          });
-        }
-      });
-});
+    });
 
 
 
@@ -366,13 +414,13 @@ async function startSession(sessionId) {
       } else if (connection === 'close') {
         console.log(`🚪 Conexión cerrada para ${sessionId}. Error:`, lastDisconnect?.error);
 
-        // Si el error no indica logout, esperar 5 segundos y reconectar
+        // Si el error no indica logout, esperamos 5 segundos y reconectamos
         if (
           lastDisconnect?.error &&
           lastDisconnect?.error?.output &&
           lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut
         ) {
-          console.log(`🔄 Reconectando sesión para ${sessionId} en 5 segundos...`);
+          console.log(`🔄 Esperando 5 segundos para reconectar sesión ${sessionId}...`);
           setTimeout(async () => {
             try {
               await startSession(sessionId);
@@ -1415,7 +1463,7 @@ app.post('/set-autoresponder/:sessionId', (req, res) => {
  *                 type: string
  *               scheduledTime:
  *                 type: string
- *                 description: Fecha y hora en formato ISO (ejemplo: 2025-03-03T15:00:00Z)
+ *                 description: "Fecha y hora en formato ISO (ejemplo: 2025-03-03T15:00:00Z)"
  *             example:
  *               jid: "34690937275@s.whatsapp.net"
  *               message: "Mensaje programado de prueba"
@@ -2102,6 +2150,242 @@ app.get('/sessions', (req, res) => {
   res.json({ activeSessions });
 });
 
+/**
+ * @openapi
+ * /media/{sessionId}/{fileName}:
+ *   get:
+ *     summary: Obtiene un archivo multimedia
+ *     description: Devuelve el archivo multimedia almacenado en la ruta de la sesión especificada.
+ *     tags:
+ *       - Media
+ *     parameters:
+ *       - in: path
+ *         name: sessionId
+ *         required: true
+ *         description: ID de la sesión
+ *         schema:
+ *           type: string
+ *       - in: path
+ *         name: fileName
+ *         required: true
+ *         description: Nombre del archivo multimedia
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Archivo encontrado y enviado
+ *         content:
+ *           application/octet-stream:
+ *             schema:
+ *               type: string
+ *               format: binary
+ *       404:
+ *         description: Archivo no encontrado
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 error:
+ *                   type: string
+ *                   example: Archivo no encontrado
+ */
+app.get('/media/:sessionId/:fileName', (req, res) => {
+    const { sessionId, fileName } = req.params;
+    const filePath = path.join(STORE_FILE_PATH, sessionId, 'media', fileName);
+    if (fs.existsSync(filePath)) {
+      res.sendFile(path.resolve(filePath));
+    } else {
+      res.status(404).json({ error: 'Archivo no encontrado' });
+    }
+  });
+
+/**
+ * Guarda el archivo desencriptado en la carpeta de medios de la sesión.
+ * Se organiza en: STORE_FILE_PATH/<sessionId>/media/
+ * Genera un nombre único usando el chatId (opcional) y la fecha actual.
+ * Retorna la ruta completa del archivo guardado.
+ */
+async function saveDecryptedMedia(sessionId, chatId, mediaType, encryptedUrl, mediaKey) {
+    try {
+      // Primero, descarga y desencripta el archivo
+      console.log(`Descargando y desencriptando archivo desde ${encryptedUrl}...`);
+      const decryptedFilePath = await decryptMedia(encryptedUrl, mediaKey);
+      console.log(`Archivo desencriptado guardado en: ${decryptedFilePath}`);
+
+      // Define la carpeta para guardar el archivo multimedia en el directorio raíz
+      const mediaDir = path.join(__dirname, 'media'); // Cambié la ruta aquí para que se guarde en la carpeta 'media' en el root de la app
+      const absoluteMediaDir = path.resolve(mediaDir); // Resuelve la ruta absoluta para la carpeta
+      console.log(`Verificando si la carpeta media existe en: ${absoluteMediaDir}`);
+
+      // Si la carpeta no existe, la crea
+      if (!fs.existsSync(absoluteMediaDir)) {
+        console.log(`Carpeta media no encontrada. Creando la carpeta en: ${absoluteMediaDir}`);
+        fs.mkdirSync(absoluteMediaDir, { recursive: true });
+      } else {
+        console.log(`La carpeta media ya existe en: ${absoluteMediaDir}`);
+      }
+
+      // Genera el nombre del archivo
+      const fileName = `${chatId || 'general'}-${Date.now()}.${mediaType}`; // Usamos la extensión del tipo de medio
+      const destPath = path.join(absoluteMediaDir, fileName); // Usa la ruta absoluta para el destino
+      console.log(`Archivo destino generado: ${destPath}`);
+
+      // Mueve el archivo desencriptado a la carpeta de medios
+      console.log(`Moviendo archivo de ${decryptedFilePath} a ${destPath}...`);
+      fs.renameSync(decryptedFilePath, destPath);
+      console.log(`Archivo guardado exitosamente en: ${destPath}`);
+
+      return destPath;
+    } catch (err) {
+      console.error("Error al guardar el medio desencriptado: ", err);
+      throw err;
+    }
+  }
+
+
+  /**
+   * Procesa el mensaje multimedia: llama a decryptMedia para desencriptar el archivo,
+   * lo guarda usando saveDecryptedMedia y retorna la URL pública (endpoint /media/...)
+   */
+  async function processMediaMessage(sessionId, chatId, encryptedUrl, mediaKey, mediaType) {
+    try {
+      // Llama a tu función decryptMedia que desencripta y convierte el archivo
+      const decryptedPath = await decryptMedia(encryptedUrl, mediaKey); // Usar await aquí
+      if (!decryptedPath) {
+        console.error('Error desencriptando el medio');
+        return null;
+      }
+
+      // Guarda el archivo desencriptado en la carpeta de medios en el directorio raíz
+      const savedPath = await saveDecryptedMedia(sessionId, chatId, mediaType, decryptedPath); // Usar await aquí
+
+      // Construye una URL para acceder al archivo mediante tu API (debes definir PUBLIC_BASE_URL en tu .env)
+      const publicUrl = `${process.env.PUBLIC_BASE_URL}/media/${path.basename(savedPath)}`;
+      return publicUrl;
+    } catch (err) {
+      console.error('Error al procesar el mensaje de medios:', err);
+      return null;
+    }
+  }
+
+
+
+  async function decryptMedia(encryptedUrl, mediaKey) {
+    return new Promise((resolve, reject) => {
+        const baseUrl = 'https://mmg.whatsapp.net'; // La URL base de los archivos en WhatsApp
+        const completeUrl = `${baseUrl}${encryptedUrl}`; // Construir la URL completa
+
+        const fileName = `decrypted_${Date.now()}.enc`; // Archivo temporal de la descarga
+        const mediaDir = path.join(__dirname, 'media'); // Carpeta 'media'
+        if (!fs.existsSync(mediaDir)) {
+            fs.mkdirSync(mediaDir, { recursive: true }); // Crear la carpeta si no existe
+        }
+        const decryptedFilePath = path.join(mediaDir, fileName); // Guardar el archivo en 'media'
+
+        const fileStream = fs.createWriteStream(decryptedFilePath);
+
+        // Descargar el archivo encriptado
+        https.get(completeUrl, (response) => {
+            response.pipe(fileStream);
+            fileStream.on('finish', () => {
+                console.log('Archivo descargado exitosamente');
+
+                // Aquí intentamos obtener un IV dinámico (esto es solo un ejemplo)
+                const iv = extractIVFromFile(decryptedFilePath); // Necesitarás implementar esta función
+
+                // Llamar a la función para desencriptar
+                const outputFile = path.join(mediaDir, `decrypted_${Date.now()}.mp4`); // Ruta para guardar el archivo desencriptado
+                console.log('MediaKey: ', mediaKey);
+                decryptFile(decryptedFilePath, mediaKey, iv, outputFile)
+
+                    .then((result) => {
+                        console.log('Archivo desencriptado y guardado en:', result);
+                        resolve(result); // Devuelve la ruta del archivo desencriptado
+                    })
+                    .catch((err) => {
+                        console.error('Error en la desencriptación:', err);
+                        reject(err); // Manejar errores durante la desencriptación
+                    });
+            });
+        }).on('error', (err) => {
+            console.error('Error de descarga:', err);
+            reject(err); // Si ocurre un error en la descarga
+        });
+    });
+}
+
+function extractIVFromFile(filePath) {
+    // Lee los primeros 16 bytes del archivo para obtener el IV (si AES con IV de 16 bytes)
+    const ivBuffer = Buffer.alloc(16);
+    const file = fs.openSync(filePath, 'r');
+    fs.readSync(file, ivBuffer, 0, 16, 0);
+    fs.closeSync(file);
+    return ivBuffer;
+  }
+
+
+function decryptFile(encryptedFilePath, mediaKey, iv, outputFile) {
+    return new Promise((resolve, reject) => {
+        try {
+            console.log("IV usado:", iv); // Verifica el IV usado
+
+            const decipher = crypto.createDecipheriv('aes-256-cbc', mediaKey, iv);
+
+            const inputStream = fs.createReadStream(encryptedFilePath);
+            const outputStream = fs.createWriteStream(outputFile);
+
+            inputStream.pipe(decipher).pipe(outputStream);
+
+            outputStream.on('finish', () => {
+                console.log('Archivo desencriptado exitosamente:', outputFile);
+                resolve(outputFile);
+            });
+
+            outputStream.on('error', (err) => {
+                console.error('Error al escribir el archivo:', err);
+                reject(err);
+            });
+
+            decipher.on('error', (err) => {
+                console.error('Error de desencriptación:', err);
+                reject(new Error('Error de desencriptación: ' + err.message));
+            });
+
+        } catch (error) {
+            console.error('Error al inicializar el descifrado:', error);
+            reject(new Error('Error al inicializar el descifrado: ' + error.message));
+        }
+    });
+}
+
+
+
+
+
+// Configurar la tarea programada para eliminar archivos a medianoche
+cron.schedule('0 0 * * *', () => {
+    const mediaDir = path.join(__dirname, 'media');
+
+    // Verificamos si la carpeta existe
+    if (fs.existsSync(mediaDir)) {
+      fs.readdirSync(mediaDir).forEach((file) => {
+        const filePath = path.join(mediaDir, file);
+        try {
+          if (fs.lstatSync(filePath).isFile()) {
+            fs.unlinkSync(filePath); // Eliminar archivo
+            console.log(`Archivo eliminado: ${filePath}`);
+          }
+        } catch (err) {
+          console.error(`Error al eliminar el archivo ${filePath}:`, err);
+        }
+      });
+      console.log('🗑️ Todos los archivos de la carpeta media han sido eliminados.');
+    } else {
+      console.log('❌ La carpeta media no existe.');
+    }
+  });
+
 // ---------------------------------
 // Restaura sesiones previamente guardadas
 async function restoreSessions() {
@@ -2115,27 +2399,25 @@ async function restoreSessions() {
     }
     console.log(`🔄 Restaurando ${sessionDirs.length} sesiones activas...`);
     for (const item of sessionDirs) {
-      // Si el archivo es un flag, lo omitimos
-      if (item.endsWith('_loggedOut.flag')) continue;
-      const sessionId = item; // Asumimos que el nombre de la carpeta es el sessionId
-      const flagFile = path.join(STORE_FILE_PATH, `${sessionId}_loggedOut.flag`);
-      if (fs.existsSync(flagFile)) {
-        console.log(`⚠️ Sesión ${sessionId} marcada como cerrada, omitiendo restauración.`);
+      // Si el item es un flag y además NO existe el archivo creds.json, lo omitimos
+      const authDir = path.join(STORE_FILE_PATH, item);
+      if (item.endsWith('_loggedOut.flag') && !fs.existsSync(path.join(authDir, 'creds.json'))) {
+        console.log(`⚠️ Sesión ${item} marcada como cerrada, omitiendo restauración.`);
         continue;
       }
-      const authDir = path.join(STORE_FILE_PATH, sessionId);
       if (!fs.existsSync(path.join(authDir, 'creds.json'))) {
-        console.log(`⚠️ Sesión ${sessionId} no tiene archivos de autenticación, omitiendo...`);
+        console.log(`⚠️ Sesión ${item} no tiene archivos de autenticación, omitiendo...`);
         continue;
       }
       try {
-        console.log(`♻️ Restaurando sesión: ${sessionId}`);
-        await startSession(sessionId);
+        console.log(`♻️ Restaurando sesión: ${item}`);
+        await startSession(item);
       } catch (error) {
-        console.error(`❌ Error restaurando sesión ${sessionId}:`, error);
+        console.error(`❌ Error restaurando sesión ${item}:`, error);
       }
     }
   }
+
 
 
 // Iniciamos el servidor
