@@ -60,7 +60,8 @@
         },
         "files": [
             "app/Helpers/helpers.php",
-            "app/Helpers/EmailDecodeHeader.php"
+            "app/Helpers/EmailDecodeHeader.php",
+            "app/Helpers/decryptMedia.php"
         ]
     },
     "autoload-dev": {

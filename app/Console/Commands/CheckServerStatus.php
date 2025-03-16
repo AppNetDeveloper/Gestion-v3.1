@@ -71,9 +71,15 @@ class CheckServerStatus extends Command
             // Además, si han pasado más de 10 minutos desde el último registro, evitamos enviar notificaciones múltiples
             if ($lastUpdated->diffInMinutes(Carbon::now()) >= 3) {
                 // Verificamos si ya ha pasado más de 10 minutos OJO ESTO ES UN PROBLEMA POSIBLEMENTE SE TIENE QUE MODIFICAR.
-                $existingNotification = Notification::where('message', 'like', '%' . $host->name . '%')
-                                                    ->where('created_at', '>=', Carbon::now()->subMinutes(10))
-                                                    ->first();
+                 // Buscar la última notificación enviada para este host (se identifica por el nombre del host en el mensaje)
+            $existingNotification = Notification::where('message', 'like', '%' . $host->name . '%')
+                        ->latest('created_at')
+                        ->first();
+
+            // Si existe una notificación y su fecha es posterior a la última recepción de datos, se omite el envío
+            if ($existingNotification && Carbon::parse($existingNotification->created_at)->greaterThan($lastUpdated)) {
+            continue;
+            }
 
                 // Si no existe una notificación reciente (más de 10 minutos) para este servidor, enviamos la notificación
                 if (!$existingNotification) {

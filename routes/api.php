@@ -64,7 +64,7 @@ Route::post('whatsapp/start-session', [WhatsappSessionController::class, 'startS
 
 //Api para insertas los mesajes de whatsapp
 Route::post('/whatsapp-messages', [WhatsappMessageController::class, 'store']);
-//whatsapp api sesion 
+//whatsapp api sesion
 Route::get('whatsapp/check', [WhatsappSessionController::class, 'checkSession']);
 //send whatsapp
 Route::post('/whatsapp/send-message-now', [WhatsappMessageController::class, 'sendMessageNow'])->name('api.whatsapp.send.message.now');

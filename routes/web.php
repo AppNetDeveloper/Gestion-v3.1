@@ -40,6 +40,10 @@ use App\Http\Controllers\ServerMonitorController;
 use App\Http\Controllers\HostListController;
 use App\Http\Controllers\LaborCalendarController;
 use Webklex\IMAP\Facades\Client;
+use App\Http\Controllers\MediaController;
+
+
+
 
 
 require __DIR__ . '/auth.php';
@@ -214,7 +218,11 @@ Route::middleware(['auth'])->group(function () {
 
     // Ruta para ver la conversación de un teléfono en específico
     Route::get('/whatsapp/{phone}', [WhatsappController::class, 'conversation'])->name('whatsapp.conversation');
+
 });
+    //para tranformar los videos en mp4 de whatsapp
+Route::get('/decrypt-media', [MediaController::class, 'decrypt'])->name('decryptMedia');
+
 // Rutas para eliminar mensajes (accionadas por AJAX)
 Route::delete('/whatsapp/message/{id}', [WhatsappController::class, 'destroyMessage'])->name('whatsapp.message.destroy');
 Route::delete('/whatsapp/chat/{phone}', [WhatsappController::class, 'destroyChat'])->name('whatsapp.chat.destroy');

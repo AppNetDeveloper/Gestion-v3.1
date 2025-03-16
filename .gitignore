@@ -50,3 +50,5 @@ whatsapp/node_modules/*
 /.whatsapp/whatsapp_sessions/*
 whatsapp/baileys_auth_info/
 whatsapp/node_modules/
+whatsapp/media/
+whatsapp/file/
