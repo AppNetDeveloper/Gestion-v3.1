@@ -2044,7 +2044,7 @@ async function handleIncomingMessage(userId, event) {
       isOut = true;
     }
 
-    // 6) Evitar duplicados
+    // 6) Evitar duplicados y obtener el messageId
     let msgId = null;
     if (event.id) {
       msgId = event.id.toString();
@@ -2082,44 +2082,50 @@ async function handleIncomingMessage(userId, event) {
 
     let imageBase64 = null;
     let hasMedia = false;
-    let mediaType = null;  // "image" | "video" | "audio" | "document" | etc.
+    let mediaType = null; // "image" | "video" | "audio" | "document" | etc.
 
     if (theMedia) {
-        // Primero, verificar si la media corresponde a una ubicación o lugar
-        if (theMedia.className === "MessageMediaGeo" || theMedia.className === "MessageMediaVenue") {
-          mediaType = "location";
-          hasMedia = false; // No hay archivo descargable en una ubicación
-        } else {
-          // Intentar descargar el contenido binario de la media
-          try {
-            const mediaBuffer = await client.downloadMedia(theMedia, { workers: 1 });
-            if (mediaBuffer) {
-              imageBase64 = mediaBuffer.toString("base64");
-              hasMedia = true;
-            }
-          } catch (err) {
-            console.error("Error descargando media:", err);
+      // Primero, verificar si la media corresponde a una ubicación o lugar
+      if (
+        theMedia.className === "MessageMediaGeo" ||
+        theMedia.className === "MessageMediaVenue"
+      ) {
+        mediaType = "location";
+        hasMedia = false; // No hay archivo descargable en una ubicación
+      } else {
+        // Intentar descargar el contenido binario de la media
+        try {
+          const mediaBuffer = await client.downloadMedia(theMedia, { workers: 1 });
+          if (mediaBuffer) {
+            imageBase64 = mediaBuffer.toString("base64");
+            hasMedia = true;
           }
+        } catch (err) {
+          console.error("Error descargando media:", err);
+        }
 
-          // Determinar el tipo de media según la clase y mimeType
-          if (theMedia.className === "MessageMediaPhoto") {
+        // Determinar el tipo de media según la clase y mimeType
+        if (theMedia.className === "MessageMediaPhoto") {
+          mediaType = "image";
+        } else if (
+          theMedia.className === "MessageMediaDocument" &&
+          theMedia.document
+        ) {
+          const mime = theMedia.document.mimeType || "";
+          if (mime.startsWith("image/")) {
             mediaType = "image";
-          } else if (theMedia.className === "MessageMediaDocument" && theMedia.document) {
-            const mime = theMedia.document.mimeType || "";
-            if (mime.startsWith("image/")) {
-              mediaType = "image";
-            } else if (mime.startsWith("video/")) {
-              mediaType = "video";
-            } else if (mime.startsWith("audio/")) {
-              mediaType = "audio";
-            } else {
-              mediaType = "document";
-            }
+          } else if (mime.startsWith("video/")) {
+            mediaType = "video";
+          } else if (mime.startsWith("audio/")) {
+            mediaType = "audio";
           } else {
-            mediaType = "document"; // fallback para otros tipos
+            mediaType = "document";
           }
+        } else {
+          mediaType = "document"; // fallback para otros tipos
         }
       }
+    }
 
     // Si no hay texto y sí hay media => "Only image" (o "Only media")
     if (!messageText.trim() && hasMedia) {
@@ -2170,15 +2176,16 @@ async function handleIncomingMessage(userId, event) {
     // 11) status
     const status = isOut ? "sent" : "received";
 
-    // 12) Construir objeto final
+    // 12) Construir objeto final, incluyendo el messageId
     const messageData = {
+      messageId: msgId,
       user_id: String(userId),
       sender,
       chatPeer,
       message: messageText,
       date: msgTimestamp,
       status,
-      image: imageBase64,
+      base64: imageBase64,
       hasMedia,
       mediaType // "image" | "video" | "audio" | "document" | etc.
     };
