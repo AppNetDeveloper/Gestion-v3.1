@@ -1996,39 +1996,62 @@ app.get("/active-sessions", async (req, res) => {
  * Además, revisa las reglas de autorespuesta configuradas para enviar respuestas automáticas.
  */
 async function handleIncomingMessage(userId, event) {
+    // 1) Verificar que exista el mensaje
     if (!event.message) return;
 
     console.log("Evento recibido:", event);
 
-    let imageBase64 = null;
-    let hasMedia = false;
-    let mediaType = null;
-
-    // Intentar descargar media, si existe
-    if (event.media) {
-      try {
-        const mediaBuffer = await sessions[userId].downloadMedia(event.media, { workers: 1 });
-        if (mediaBuffer) {
-          imageBase64 = mediaBuffer.toString("base64");
-          hasMedia = true;
-          if (event.media.document && event.media.document.mimeType) {
-            mediaType = event.media.document.mimeType;
-          }
-        } else {
-          console.warn("downloadMedia devolvió undefined");
-        }
-      } catch (err) {
-        console.error("Error descargando media:", err);
-      }
+    // 2) Obtener referencia al cliente
+    const client = sessions[userId];
+    if (!client) {
+      console.error(`No existe sesión para userId: ${userId}`);
+      return;
     }
 
-    // Evitar duplicados usando el ID del mensaje
+    // 3) Obtener mi propio ID (para identificar si soy el sender en mensajes out = true)
+    let myId = null;
+    try {
+      const me = await client.getMe();
+      myId = me.id.toString();
+    } catch (err) {
+      console.error("Error haciendo getMe():", err);
+    }
+
+    // 4) Determinar el ID real del remitente (realFromId)
+    let realFromId = null;
+    if (event.message && event.message.fromId) {
+      // Si fromId es un objeto (por ejemplo, PeerUser) y tiene la propiedad userId
+      if (typeof event.message.fromId === 'object' && event.message.fromId.userId) {
+        realFromId = event.message.fromId.userId.toString();
+      } else {
+        realFromId = event.message.fromId.toString();
+      }
+    } else if (event.fromId) {
+      realFromId = event.fromId.toString();
+    } else if (event.senderId) {
+      realFromId = event.senderId.toString();
+    } else if (event.userId) {
+      realFromId = event.userId.toString();
+    }
+
+    // 5) Determinar si es saliente (out) o entrante (in)
+    let isOut = false;
+    if (event.message && typeof event.message.out === "boolean") {
+      isOut = event.message.out;
+    } else if (typeof event.out === "boolean") {
+      isOut = event.out;
+    } else if (realFromId && realFromId === myId) {
+      isOut = true;
+    }
+
+    // 6) Evitar duplicados
     let msgId = null;
     if (event.id) {
       msgId = event.id.toString();
     } else if (event.message && event.message.id) {
       msgId = event.message.id.toString();
     }
+
     if (msgId) {
       if (!processedMessages[userId]) {
         processedMessages[userId] = new Set();
@@ -2038,121 +2061,172 @@ async function handleIncomingMessage(userId, event) {
         return;
       }
       processedMessages[userId].add(msgId);
-      saveProcessedMessages();
+      saveProcessedMessages(); // ajusta según tu proyecto
     }
 
-    // Extraer el texto del mensaje
-    let messageText = "Only image";
-    if (event.message) {
-      if (typeof event.message === "string") {
-        messageText = event.message;
-      } else if (typeof event.message === "object" && event.message.message) {
-        messageText = event.message.message;
+    // 7) Extraer el texto
+    let messageText = "";
+    if (typeof event.message === "string") {
+      messageText = event.message;
+    } else if (event.message && typeof event.message.message === "string") {
+      messageText = event.message.message;
+    }
+
+    // 8) Buscar la media
+    let theMedia = null;
+    if (event.media) {
+      theMedia = event.media;
+    } else if (event.message && event.message.media) {
+      theMedia = event.message.media;
+    }
+
+    let imageBase64 = null;
+    let hasMedia = false;
+    let mediaType = null;  // "image" | "video" | "audio" | "document" | etc.
+
+    if (theMedia) {
+        // Primero, verificar si la media corresponde a una ubicación o lugar
+        if (theMedia.className === "MessageMediaGeo" || theMedia.className === "MessageMediaVenue") {
+          mediaType = "location";
+          hasMedia = false; // No hay archivo descargable en una ubicación
+        } else {
+          // Intentar descargar el contenido binario de la media
+          try {
+            const mediaBuffer = await client.downloadMedia(theMedia, { workers: 1 });
+            if (mediaBuffer) {
+              imageBase64 = mediaBuffer.toString("base64");
+              hasMedia = true;
+            }
+          } catch (err) {
+            console.error("Error descargando media:", err);
+          }
+
+          // Determinar el tipo de media según la clase y mimeType
+          if (theMedia.className === "MessageMediaPhoto") {
+            mediaType = "image";
+          } else if (theMedia.className === "MessageMediaDocument" && theMedia.document) {
+            const mime = theMedia.document.mimeType || "";
+            if (mime.startsWith("image/")) {
+              mediaType = "image";
+            } else if (mime.startsWith("video/")) {
+              mediaType = "video";
+            } else if (mime.startsWith("audio/")) {
+              mediaType = "audio";
+            } else {
+              mediaType = "document";
+            }
+          } else {
+            mediaType = "document"; // fallback para otros tipos
+          }
+        }
       }
+
+    // Si no hay texto y sí hay media => "Only image" (o "Only media")
+    if (!messageText.trim() && hasMedia) {
+      messageText = "Only " + (mediaType || "media");
     }
 
-    // Extracción robusta del identificador del otro usuario o chat.
-    // Lo llamamos aquí "rawPeer" para luego definir chatPeer.
+    // 9) Determinar sender y chatPeer
+    let sender;
+    let chatPeer;
+
+    // Revisar si hay event.chatId o event.message.peerId
     let rawPeer = null;
     if (event.chatId != null) {
       rawPeer = event.chatId.toString();
-    } else if (event.fromId != null) {
-      rawPeer = event.fromId.toString();
-    } else if (event.senderId != null) {
-      rawPeer = event.senderId.toString();
-    } else if (event.userId != null) { // Para UpdateShortMessage
-      rawPeer = event.userId.toString();
-    }
-    if (!rawPeer && event.message && event.message.peerId) {
-      const peerId = event.message.peerId;
-      if (typeof peerId === "object") {
-        if (peerId.userId != null) {
-          rawPeer = peerId.userId.toString();
-        } else if (peerId.chatId != null) {
-          rawPeer = peerId.chatId.toString();
-        } else if (peerId.channelId != null) {
-          rawPeer = peerId.channelId.toString();
-        }
-      } else {
-        rawPeer = peerId.toString();
+    } else if (event.message && event.message.peerId) {
+      const p = event.message.peerId;
+      if (p.userId != null) {
+        rawPeer = p.userId.toString();
+      } else if (p.chatId != null) {
+        rawPeer = p.chatId.toString();
+      } else if (p.channelId != null) {
+        rawPeer = p.channelId.toString();
       }
     }
-    if (!rawPeer) {
-      console.log("Mensaje sin peer válido, se ignora.");
-      return;
+
+    if (!rawPeer && realFromId) {
+      rawPeer = realFromId;
     }
 
-    // Obtener el ID propio de la sesión (miId)
-    let myId = null;
-    try {
-      const me = await sessions[userId].getMe();
-      myId = me.id.toString();
-    } catch (err) {
-      console.error("Error obteniendo datos de la sesión:", err);
-    }
-
-    // Determinar quién es el remitente (sender) y quién es el chat (chatPeer)
-    // Usamos event.out: true si el mensaje fue enviado desde tu sesión
-    let sender = null;
-    let chatPeer = null;
-    let status = event.out ? "sent" : "received";
-
-    if (event.out) {
-      // Mensaje enviado: sender es miId, chatPeer es el destinatario
-      sender = myId;
-      chatPeer = rawPeer;
+    if (isOut) {
+      // Mensaje enviado por mí
+      sender = myId || "desconocido";
+      chatPeer = rawPeer || "desconocido";
     } else {
-      // Mensaje recibido: sender es el que envió, y chatPeer es ese mismo usuario
-      sender = rawPeer;
-      chatPeer = rawPeer;
+      // Mensaje recibido
+      sender = realFromId || "desconocido";
+      chatPeer = rawPeer || "desconocido";
     }
 
+    // 10) Fecha y descartar si es muy antiguo
     const currentTimestamp = Math.floor(Date.now() / 1000);
     const msgTimestamp = event.date || currentTimestamp;
-    const twoDays = 172800;
-    if (currentTimestamp - msgTimestamp > twoDays) {
-      console.log("Mensaje demasiado antiguo, se ignora.");
+    if (currentTimestamp - msgTimestamp > 172800) {
+      console.log("Mensaje muy antiguo, se ignora.");
       return;
     }
 
+    // 11) status
+    const status = isOut ? "sent" : "received";
+
+    // 12) Construir objeto final
     const messageData = {
-      user_id: String(userId),  // Identificador interno de la sesión
-      sender: sender,           // Quién envió el mensaje
-      chatPeer: chatPeer,       // El identificador del chat (la otra parte)
+      user_id: String(userId),
+      sender,
+      chatPeer,
       message: messageText,
       date: msgTimestamp,
-      status: status,           // "sent" o "received"
+      status,
       image: imageBase64,
-      hasMedia: hasMedia,
-      mediaType: mediaType
+      hasMedia,
+      mediaType // "image" | "video" | "audio" | "document" | etc.
     };
 
-    console.log("Mensaje recibido:", messageData);
+    console.log("Mensaje procesado:", messageData);
 
-    // Enviar a API externa (usamos un agente HTTPS para pruebas)
+    // 13) Enviar a API externa (opcional)
     if (API_EXTERNAL) {
       try {
-        const https = require('https');
+        const https = require("https");
         const agent = new https.Agent({ rejectUnauthorized: false });
         await axios.post(API_EXTERNAL_URL, messageData, {
           headers: { Authorization: `Bearer ${API_EXTERNAL_TOKEN}` },
           httpsAgent: agent
         });
-        console.log("Mensaje enviado a API externa:", messageData);
+        console.log("Mensaje enviado a API externa.");
       } catch (error) {
-        console.error("Error enviando a API externa:", error.response ? error.response.data : error.message);
+        console.error(
+          "Error enviando a API externa:",
+          error.response ? error.response.data : error.message
+        );
       }
     }
 
-    // Guardar el mensaje en disco
+    // 14) Guardar en disco/BD
     const userMessagesPath = path.join(DATA_FOLDER, `${userId}_messages.json`);
-    let messages = fs.existsSync(userMessagesPath)
-      ? JSON.parse(fs.readFileSync(userMessagesPath))
-      : [];
-    messages.push(messageData);
-    fs.writeFileSync(userMessagesPath, JSON.stringify(messages, null, 2));
-  }
+    let storedMsgs = [];
+    if (fs.existsSync(userMessagesPath)) {
+      storedMsgs = JSON.parse(fs.readFileSync(userMessagesPath));
+    }
+    storedMsgs.push(messageData);
+    fs.writeFileSync(userMessagesPath, JSON.stringify(storedMsgs, null, 2));
 
+    // 15) Auto-respuestas (opcional)
+    if (status === "received" && autoResponseRules[userId]) {
+      for (const rule of autoResponseRules[userId]) {
+        if (messageText.toLowerCase().includes(rule.keyword.toLowerCase())) {
+          try {
+            await client.sendMessage(chatPeer, { message: rule.response });
+            console.log(`Auto-respuesta enviada: "${rule.response}" (keyword: ${rule.keyword})`);
+            break; // si sólo aplicas la primera coincidencia
+          } catch (err) {
+            console.error("Error enviando auto-respuesta:", err);
+          }
+        }
+      }
+    }
+  }
 
 /**
  * Iniciar la API y cargar sesiones y mensajes procesados.
