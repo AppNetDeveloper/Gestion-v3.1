@@ -2017,11 +2017,13 @@ async function handleIncomingMessage(userId, event) {
       console.error("Error haciendo getMe():", err);
     }
 
+    // Variable de entorno para autosave Base64
+    const autosaveBase64 = process.env.AUTOSAVE_BASE64 === "true";
+
     // 4) Determinar el ID real del remitente (realFromId)
     let realFromId = null;
     if (event.message && event.message.fromId) {
-      // Si fromId es un objeto (por ejemplo, PeerUser) y tiene la propiedad userId
-      if (typeof event.message.fromId === 'object' && event.message.fromId.userId) {
+      if (typeof event.message.fromId === "object" && event.message.fromId.userId) {
         realFromId = event.message.fromId.userId.toString();
       } else {
         realFromId = event.message.fromId.toString();
@@ -2031,7 +2033,11 @@ async function handleIncomingMessage(userId, event) {
     } else if (event.senderId) {
       realFromId = event.senderId.toString();
     } else if (event.userId) {
-      realFromId = event.userId.toString();
+      if (typeof event.userId === "object" && event.userId.value != null) {
+        realFromId = event.userId.value.toString();
+      } else {
+        realFromId = event.userId.toString();
+      }
     }
 
     // 5) Determinar si es saliente (out) o entrante (in)
@@ -2051,7 +2057,6 @@ async function handleIncomingMessage(userId, event) {
     } else if (event.message && event.message.id) {
       msgId = event.message.id.toString();
     }
-
     if (msgId) {
       if (!processedMessages[userId]) {
         processedMessages[userId] = new Set();
@@ -2061,7 +2066,7 @@ async function handleIncomingMessage(userId, event) {
         return;
       }
       processedMessages[userId].add(msgId);
-      saveProcessedMessages(); // ajusta según tu proyecto
+      saveProcessedMessages();
     }
 
     // 7) Extraer el texto
@@ -2079,21 +2084,17 @@ async function handleIncomingMessage(userId, event) {
     } else if (event.message && event.message.media) {
       theMedia = event.message.media;
     }
-
     let imageBase64 = null;
     let hasMedia = false;
     let mediaType = null; // "image" | "video" | "audio" | "document" | etc.
-
     if (theMedia) {
-      // Primero, verificar si la media corresponde a una ubicación o lugar
       if (
         theMedia.className === "MessageMediaGeo" ||
         theMedia.className === "MessageMediaVenue"
       ) {
         mediaType = "location";
-        hasMedia = false; // No hay archivo descargable en una ubicación
+        hasMedia = false;
       } else {
-        // Intentar descargar el contenido binario de la media
         try {
           const mediaBuffer = await client.downloadMedia(theMedia, { workers: 1 });
           if (mediaBuffer) {
@@ -2103,14 +2104,9 @@ async function handleIncomingMessage(userId, event) {
         } catch (err) {
           console.error("Error descargando media:", err);
         }
-
-        // Determinar el tipo de media según la clase y mimeType
         if (theMedia.className === "MessageMediaPhoto") {
           mediaType = "image";
-        } else if (
-          theMedia.className === "MessageMediaDocument" &&
-          theMedia.document
-        ) {
+        } else if (theMedia.className === "MessageMediaDocument" && theMedia.document) {
           const mime = theMedia.document.mimeType || "";
           if (mime.startsWith("image/")) {
             mediaType = "image";
@@ -2122,47 +2118,53 @@ async function handleIncomingMessage(userId, event) {
             mediaType = "document";
           }
         } else {
-          mediaType = "document"; // fallback para otros tipos
+          mediaType = "document";
         }
       }
     }
-
-    // Si no hay texto y sí hay media => "Only image" (o "Only media")
     if (!messageText.trim() && hasMedia) {
       messageText = "Only " + (mediaType || "media");
     }
 
     // 9) Determinar sender y chatPeer
-    let sender;
-    let chatPeer;
+    let sender = "desconocido";
+    let chatPeer = "desconocido";
 
-    // Revisar si hay event.chatId o event.message.peerId
-    let rawPeer = null;
-    if (event.chatId != null) {
-      rawPeer = event.chatId.toString();
-    } else if (event.message && event.message.peerId) {
+    // Si el mensaje tiene la propiedad peerId, lo usamos para obtener el id del chat
+    if (event.message && event.message.peerId) {
       const p = event.message.peerId;
       if (p.userId != null) {
-        rawPeer = p.userId.toString();
+        chatPeer = p.userId.toString();
       } else if (p.chatId != null) {
-        rawPeer = p.chatId.toString();
+        chatPeer = p.chatId.toString();
       } else if (p.channelId != null) {
-        rawPeer = p.channelId.toString();
+        chatPeer = p.channelId.toString();
+      }
+      // Para sender, usamos el fromId si existe
+      if (event.message.fromId) {
+        if (typeof event.message.fromId === "object" && event.message.fromId.userId) {
+          sender = event.message.fromId.userId.toString();
+        } else {
+          sender = event.message.fromId.toString();
+        }
+      } else {
+        sender = isOut ? (myId || "desconocido") : chatPeer;
       }
     }
-
-    if (!rawPeer && realFromId) {
-      rawPeer = realFromId;
+    // Para UpdateShortMessage u otros eventos sin peerId
+    else if (event.userId != null) {
+      if (typeof event.userId === "object" && event.userId.value != null) {
+        chatPeer = event.userId.value.toString();
+      } else {
+        chatPeer = event.userId.toString();
+      }
+      // En estos casos, si el mensaje es saliente, sender es myId; si no, sender es el id del remitente (igual al chatPeer)
+      sender = isOut ? (myId || "desconocido") : chatPeer;
     }
-
-    if (isOut) {
-      // Mensaje enviado por mí
-      sender = myId || "desconocido";
-      chatPeer = rawPeer || "desconocido";
-    } else {
-      // Mensaje recibido
+    // Si no se encontró ninguna de las anteriores, usar realFromId como fallback para ambos
+    else {
+      chatPeer = realFromId || "desconocido";
       sender = realFromId || "desconocido";
-      chatPeer = rawPeer || "desconocido";
     }
 
     // 10) Fecha y descartar si es muy antiguo
@@ -2180,14 +2182,14 @@ async function handleIncomingMessage(userId, event) {
     const messageData = {
       messageId: msgId,
       user_id: String(userId),
-      sender,
-      chatPeer,
+      sender,      // Peer del usuario que envía (en mensajes salientes, myId)
+      chatPeer,    // Id del chat
       message: messageText,
       date: msgTimestamp,
       status,
-      base64: imageBase64,
+      Base64: autosaveBase64 ? imageBase64 : undefined,
       hasMedia,
-      mediaType // "image" | "video" | "audio" | "document" | etc.
+      mediaType
     };
 
     console.log("Mensaje procesado:", messageData);
@@ -2226,7 +2228,7 @@ async function handleIncomingMessage(userId, event) {
           try {
             await client.sendMessage(chatPeer, { message: rule.response });
             console.log(`Auto-respuesta enviada: "${rule.response}" (keyword: ${rule.keyword})`);
-            break; // si sólo aplicas la primera coincidencia
+            break;
           } catch (err) {
             console.error("Error enviando auto-respuesta:", err);
           }
@@ -2234,6 +2236,7 @@ async function handleIncomingMessage(userId, event) {
       }
     }
   }
+
 
 /**
  * Iniciar la API y cargar sesiones y mensajes procesados.
