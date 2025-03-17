@@ -746,17 +746,21 @@ app.get("/get-chat/:userId", async (req, res) => {
  *                   items:
  *                     type: object
  *                     properties:
- *                       id:
+ *                       messageId:
+ *                         type: string
+ *                       user_id:
+ *                         type: string
+ *                       sender:
+ *                         type: string
+ *                       chatPeer:
  *                         type: string
  *                       message:
  *                         type: string
  *                       date:
  *                         type: integer
- *                       peer:
- *                         type: string
  *                       status:
  *                         type: string
- *                       image:
+ *                       base64:
  *                         type: string
  *                         nullable: true
  *       404:
@@ -774,17 +778,24 @@ app.get("/get-messages/:userId/:peer", async (req, res) => {
         ? JSON.parse(fs.readFileSync(userMessagesPath))
         : [];
 
-      // Filtramos los mensajes cuya conversación (chatPeer) sea igual al valor de peer.
+      // Filtrar mensajes cuya propiedad chatPeer coincida con peer.
       const messages = storedMessages.filter(m => m.chatPeer === peer);
+
+      // Mapear la propiedad "Base64" a "base64" en la respuesta
+      const messagesMapped = messages.map(m => ({
+        ...m,
+        base64: m.Base64
+      }));
 
       res.json({
         success: true,
-        messages: messages
+        messages: messagesMapped
       });
     } catch (error) {
       res.status(500).json({ error: error.message });
     }
   });
+
 
 
 
@@ -1138,7 +1149,7 @@ app.get("/get-contacts/:userId", async (req, res) => {
     const result = await sessions[userId].invoke(new Api.contacts.GetContacts({ hash: 0 }));
     const contacts = result.users || [];
     const formattedContacts = contacts.map(contact => ({
-      id: contact.id,
+      peer: contact.id,
       first_name: contact.firstName,
       last_name: contact.lastName,
       phone: contact.phone,
@@ -2096,11 +2107,21 @@ async function handleIncomingMessage(userId, event) {
         hasMedia = false;
       } else {
         try {
-          const mediaBuffer = await client.downloadMedia(theMedia, { workers: 1 });
-          if (mediaBuffer) {
-            imageBase64 = mediaBuffer.toString("base64");
+    // Si se desea guardar el contenido Base64, se procede a descargar
+        if (autosaveBase64) {
+            try {
+            const mediaBuffer = await client.downloadMedia(theMedia, { workers: 1 });
+            if (mediaBuffer) {
+                imageBase64 = mediaBuffer.toString("base64");
+                hasMedia = true;
+            }
+            } catch (err) {
+            console.error("Error descargando media:", err);
+            }
+        } else {
+            // No descargar, pero se sabe que hay media
             hasMedia = true;
-          }
+        }
         } catch (err) {
           console.error("Error descargando media:", err);
         }
