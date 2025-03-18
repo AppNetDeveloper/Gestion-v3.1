@@ -257,7 +257,7 @@ app.post("/autoresponse/:userId", (req, res) => {
     saveAutoResponseRules();
     res.json({ success: true, rule: newRule });
   });
-  
+
 
 /**
  * @openapi
@@ -608,7 +608,7 @@ app.get("/download-media/:userId/:peer/:messageId", async (req, res) => {
 
     try {
       // Obtener mensajes recientes del chat (por ejemplo, los 50 últimos)
-      const messages = await sessions[userId].getMessages(peer, { limit: 50 });
+      const messages = await sessions[userId].getMessages(peer, { limit: 100 });
       const msg = messages.find(m => m.id.toString() === messageId);
 
       if (!msg) {
@@ -818,7 +818,7 @@ app.get("/get-messages/:userId/:peer", async (req, res) => {
 
     try {
       // Obtener los mensajes desde Telegram
-      const messages = await sessions[userId].getMessages(Number(peer), { limit: 10 });
+      const messages = await sessions[userId].getMessages(Number(peer), { limit: 100 });
 
       // Obtener la lista de contactos (para evitar múltiples llamadas, podrías cachearla)
       let contactsResult;
@@ -1030,7 +1030,7 @@ app.get("/get-messages/:userId/:peer", async (req, res) => {
 
     try {
       // Convertimos el peer a número, asumiendo que el id del chat es numérico.
-      const messages = await sessions[userId].getMessages(Number(peer), { limit: 10 });
+      const messages = await sessions[userId].getMessages(Number(peer), { limit: 100 });
 
       // Obtener la lista de contactos para agregar información de contacto (puedes implementar un caché si lo deseas)
       let contactsResult;
@@ -1240,6 +1240,59 @@ app.post("/send-group-message/:userId/:groupId/:message", async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
+/**
+ * @openapi
+ * /leave-group/{userId}/{groupId}:
+ *   post:
+ *     summary: Elimina al bot de un grupo (o canal) de Telegram
+ *     tags: [Groups]
+ *     parameters:
+ *       - in: path
+ *         name: userId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: ID del usuario
+ *       - in: path
+ *         name: groupId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: ID del grupo o canal
+ *     responses:
+ *       200:
+ *         description: El bot ha salido del grupo
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 message:
+ *                   type: string
+ *       404:
+ *         description: Sesión no iniciada
+ *       500:
+ *         description: Error en el servidor
+ */
+app.post("/leave-group/:userId/:groupId", async (req, res) => {
+    const { userId, groupId } = req.params;
+    if (!sessions[userId]) return res.status(404).json({ error: "Sesión no iniciada" });
+    try {
+      const client = sessions[userId];
+      // Llamada para que el bot salga del grupo
+      await client.leaveChat(groupId); // `leaveChat` es el método para salir de un grupo.
+
+      res.json({
+        success: true,
+        message: `Bot ha salido del grupo con ID: ${groupId}`
+      });
+    } catch (error) {
+      console.error("Error al intentar salir del grupo:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
 
 /**
  * @openapi
