@@ -47,7 +47,7 @@ class WhatsappController extends Controller
             })
             ->map(function ($contact) {
                 // Limpiar el número de teléfono de su formato completo
-                $phone = preg_replace('/@s\.whatsapp\.net$/', '', $contact['jid']);
+                $phone = preg_replace('/@.*$/', '', $contact['jid']);
                 return [
                     'jid'         => $contact['jid'], // 'jid' es necesario
                     'phone'       => $phone,
