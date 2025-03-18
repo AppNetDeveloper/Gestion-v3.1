@@ -166,7 +166,7 @@ async function sincronizarCorreos(user) {
       await connection.openBox(carpeta);
 
       // Usamos fetchOptions para obtener el mensaje raw y los encabezados
-      const searchCriteria = ['ALL'];
+      const searchCriteria = (user.import_model && user.import_model.toUpperCase() === 'UNSEEN') ? ['UNSEEN'] : ['ALL'];
       const fetchOptions = {
         bodies: ['', 'HEADER.FIELDS (FROM TO SUBJECT DATE)'],
         struct: true,
@@ -284,6 +284,16 @@ async function sincronizarCorreos(user) {
           };
           await sendEmailToExternalApi(user.id, carpeta, emailData);
         }
+
+        if (user.after_email_import === 'read') {
+            await connection.addFlags(uid, '\\Seen');
+            console.log(`Correo ${uid} marcado como leído en IMAP.`);
+          } else if (user.after_email_import === 'delete') {
+            await connection.addFlags(uid, '\\Deleted');
+            await connection.expunge();
+            console.log(`Correo ${uid} marcado para eliminar en IMAP.`);
+          }
+
       }
     }
     connection.end();
@@ -336,6 +346,17 @@ async function sincronizarCorreos(user) {
  *                 rejectUnauthorized:
  *                   type: boolean
  *                   example: false
+ *                 after_email_import:
+ *                   type: string
+ *                   description: Acción a tomar después de importar el correo ('read' para marcar como leído, 'delete' para eliminar)
+ *                   enum: ['read', 'delete', 'none']
+ *                   example: none
+ *                 import_model:
+ *                   type: string
+ *                   description: Modelo de importación ('ALL' o 'UNSEEN')
+ *                   enum: ['ALL', 'UNSEEN']
+ *                   example: ALL
+ *
  *     responses:
  *       200:
  *         description: Configuración almacenada con éxito
@@ -343,42 +364,43 @@ async function sincronizarCorreos(user) {
  *         description: Error en el servidor
  */
 app.post('/sync', async (req, res) => {
-  try {
-    const configPath = path.join(__dirname, 'imap_config.json');
-    let existingConfigs = [];
-    if (fs.existsSync(configPath)) {
-      existingConfigs = await fs.readJson(configPath);
+    try {
+      const configPath = path.join(__dirname, 'imap_config.json');
+      let existingConfigs = [];
+      if (fs.existsSync(configPath)) {
+        existingConfigs = await fs.readJson(configPath);
+      }
+      for (const newConfig of req.body) {
+        if (!newConfig.id) {
+          return res.status(400).json({ success: false, message: 'El campo "id" es requerido en cada configuración.' });
+        }
+        const index = existingConfigs.findIndex((config) => config.id === newConfig.id);
+        if (index !== -1) {
+          existingConfigs[index] = newConfig;
+          console.log(`Actualizada configuración para id: ${newConfig.id}`);
+        } else {
+          existingConfigs.push(newConfig);
+          console.log(`Agregada nueva configuración para id: ${newConfig.id}`);
+        }
+      }
+      await fs.writeJson(configPath, existingConfigs, { spaces: 2 });
+      console.log('Configuración IMAP actualizada:', existingConfigs);
+      res.json({ success: true, message: 'Configuración IMAP actualizada', data: existingConfigs });
+      // Sincronización inicial después de actualizar la configuración
+      (async () => {
+        console.log('Iniciando sincronización inicial de correos...');
+        const users = await obtenerUsuarios();
+        for (const user of users) {
+          await sincronizarCorreos(user);
+        }
+        console.log('Sincronización inicial completada.');
+      })();
+    } catch (error) {
+      console.error('Error al actualizar la configuración IMAP:', error.message);
+      res.status(500).json({ success: false, message: 'Error al actualizar la configuración', error: error.message });
     }
-    for (const newConfig of req.body) {
-      if (!newConfig.id) {
-        return res.status(400).json({ success: false, message: 'El campo "id" es requerido en cada configuración.' });
-      }
-      const index = existingConfigs.findIndex((config) => config.id === newConfig.id);
-      if (index !== -1) {
-        existingConfigs[index] = newConfig;
-        console.log(`Actualizada configuración para id: ${newConfig.id}`);
-      } else {
-        existingConfigs.push(newConfig);
-        console.log(`Agregada nueva configuración para id: ${newConfig.id}`);
-      }
-    }
-    await fs.writeJson(configPath, existingConfigs, { spaces: 2 });
-    console.log('Configuración IMAP actualizada:', existingConfigs);
-    res.json({ success: true, message: 'Configuración IMAP actualizada', data: existingConfigs });
-    // Sincronización inicial después de actualizar la configuración
-    (async () => {
-      console.log('Iniciando sincronización inicial de correos...');
-      const users = await obtenerUsuarios();
-      for (const user of users) {
-        await sincronizarCorreos(user);
-      }
-      console.log('Sincronización inicial completada.');
-    })();
-  } catch (error) {
-    console.error('Error al actualizar la configuración IMAP:', error.message);
-    res.status(500).json({ success: false, message: 'Error al actualizar la configuración', error: error.message });
-  }
-});
+  });
+
 
 /**
  * @openapi
