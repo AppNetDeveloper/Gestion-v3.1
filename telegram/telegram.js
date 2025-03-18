@@ -173,6 +173,30 @@ function deleteSession(userId) {
 /* ===================================================
    ENDPOINTS DE AUTORESPONSE
 =================================================== */
+const AUTO_RESPONSE_FILE = path.join(DATA_FOLDER, "autoResponseRules.json");
+
+function loadAutoResponseRules() {
+  if (fs.existsSync(AUTO_RESPONSE_FILE)) {
+    try {
+      autoResponseRules = JSON.parse(fs.readFileSync(AUTO_RESPONSE_FILE, "utf8"));
+      console.log("Reglas de autorespuesta cargadas");
+    } catch (err) {
+      console.error("Error leyendo autoResponseRules:", err);
+      autoResponseRules = {};
+    }
+  } else {
+    autoResponseRules = {};
+  }
+}
+
+function saveAutoResponseRules() {
+  try {
+    fs.writeFileSync(AUTO_RESPONSE_FILE, JSON.stringify(autoResponseRules, null, 2));
+    console.log("Reglas de autorespuesta guardadas");
+  } catch (err) {
+    console.error("Error guardando autoResponseRules:", err);
+  }
+}
 
 /**
  * @openapi
@@ -216,22 +240,24 @@ function deleteSession(userId) {
  *                   type: object
  */
 app.post("/autoresponse/:userId", (req, res) => {
-  const { userId } = req.params;
-  const { keyword, response: reply } = req.body;
-  if (!keyword || !reply) {
-    return res.status(400).json({ error: "Se requiere 'keyword' y 'response'" });
-  }
-  if (!autoResponseRules[userId]) {
-    autoResponseRules[userId] = [];
-  }
-  const newRule = {
-    id: Date.now(), // Utilizamos el timestamp como ID
-    keyword,
-    response: reply
-  };
-  autoResponseRules[userId].push(newRule);
-  res.json({ success: true, rule: newRule });
-});
+    const { userId } = req.params;
+    const { keyword, response: reply } = req.body;
+    if (!keyword || !reply) {
+      return res.status(400).json({ error: "Se requiere 'keyword' y 'response'" });
+    }
+    if (!autoResponseRules[userId]) {
+      autoResponseRules[userId] = [];
+    }
+    const newRule = {
+      id: Date.now(), // Utilizamos el timestamp como ID
+      keyword,
+      response: reply
+    };
+    autoResponseRules[userId].push(newRule);
+    saveAutoResponseRules();
+    res.json({ success: true, rule: newRule });
+  });
+  
 
 /**
  * @openapi
@@ -690,33 +716,39 @@ app.post("/logout/:userId", async (req, res) => {
  *                         type: string
  *                       name:
  *                         type: string
+ *                       is_channel:
+ *                         type: boolean
+ *                       is_group:
+ *                         type: boolean
  *       404:
  *         description: Sesión no iniciada
  *       500:
  *         description: Error en el servidor
  */
 app.get("/get-chat/:userId", async (req, res) => {
-  const { userId } = req.params;
-  if (!sessions[userId]) return res.status(404).json({ error: "Sesión no iniciada" });
-  try {
-    const dialogs = await sessions[userId].getDialogs();
-    res.json({
-      success: true,
-      chats: dialogs.map((chat) => ({
-        id: chat.id,
-        name: chat.title || chat.username,
-      })),
-    });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
+    const { userId } = req.params;
+    if (!sessions[userId]) return res.status(404).json({ error: "Sesión no iniciada" });
+    try {
+      const dialogs = await sessions[userId].getDialogs();
+      res.json({
+        success: true,
+        chats: dialogs.map((chat) => ({
+          id: chat.id,
+          name: chat.title || chat.username,
+          is_channel: chat.isChannel || false,
+          is_group: chat.isGroup || false,  // Se asume que la propiedad isGroup está disponible o se define según tu lógica.
+        })),
+      });
+    } catch (error) {
+      res.status(500).json({ error: error.message });
+    }
+  });
 
 /**
  * @openapi
  * /get-messages/{userId}/{peer}:
  *   get:
- *     summary: Obtiene mensajes de un chat individual
+ *     summary: Obtiene mensajes de un chat individual (directamente desde Telegram) y agrega información de contacto
  *     tags: [Messages]
  *     parameters:
  *       - in: path
@@ -752,6 +784,12 @@ app.get("/get-chat/:userId", async (req, res) => {
  *                         type: string
  *                       sender:
  *                         type: string
+ *                       contactName:
+ *                         type: string
+ *                         nullable: true
+ *                       phone:
+ *                         type: string
+ *                         nullable: true
  *                       chatPeer:
  *                         type: string
  *                       message:
@@ -763,6 +801,11 @@ app.get("/get-chat/:userId", async (req, res) => {
  *                       base64:
  *                         type: string
  *                         nullable: true
+ *                       hasMedia:
+ *                         type: boolean
+ *                       mediaType:
+ *                         type: string
+ *                         nullable: true
  *       404:
  *         description: Sesión no iniciada
  *       500:
@@ -770,26 +813,142 @@ app.get("/get-chat/:userId", async (req, res) => {
  */
 app.get("/get-messages/:userId/:peer", async (req, res) => {
     const { userId, peer } = req.params;
-    if (!sessions[userId]) return res.status(404).json({ error: "Sesión no iniciada" });
+    if (!sessions[userId])
+      return res.status(404).json({ error: "Sesión no iniciada" });
 
     try {
-      const userMessagesPath = path.join(DATA_FOLDER, `${userId}_messages.json`);
-      const storedMessages = fs.existsSync(userMessagesPath)
-        ? JSON.parse(fs.readFileSync(userMessagesPath))
-        : [];
+      // Obtener los mensajes desde Telegram
+      const messages = await sessions[userId].getMessages(Number(peer), { limit: 10 });
 
-      // Filtrar mensajes cuya propiedad chatPeer coincida con peer.
-      const messages = storedMessages.filter(m => m.chatPeer === peer);
+      // Obtener la lista de contactos (para evitar múltiples llamadas, podrías cachearla)
+      let contactsResult;
+      try {
+        contactsResult = await sessions[userId].invoke(new Api.contacts.GetContacts({ hash: 0 }));
+      } catch (err) {
+        console.error("Error obteniendo contactos:", err);
+        contactsResult = { users: [] };
+      }
+      const contacts = contactsResult.users || [];
 
-      // Mapear la propiedad "Base64" a "base64" en la respuesta
-      const messagesMapped = messages.map(m => ({
-        ...m,
-        base64: m.Base64
-      }));
+      // Convertir la lista de contactos a un diccionario (key: id)
+      const contactDict = {};
+      contacts.forEach(contact => {
+        contactDict[contact.id.toString()] = {
+          first_name: contact.firstName,
+          last_name: contact.lastName,
+          phone: contact.phone,
+          username: contact.username || null
+        };
+      });
+
+      // Mapear los mensajes y, para cada mensaje, agregar la información de contacto
+      const messagesMapped = await Promise.all(
+        messages.map(async (msg) => {
+          // Message ID
+          const messageId = msg.id ? msg.id.toString() : "N/A";
+
+          // Extraer texto del mensaje
+          let messageText = "";
+          if (typeof msg.message === "string") {
+            messageText = msg.message;
+          } else if (msg.message && typeof msg.message.message === "string") {
+            messageText = msg.message.message;
+          }
+
+          // Determinar el sender (remitente)
+          let sender = "desconocido";
+          if (msg.fromId) {
+            if (typeof msg.fromId === "object" && msg.fromId.userId) {
+              sender = msg.fromId.userId.toString();
+            } else {
+              sender = msg.fromId.toString();
+            }
+          } else if (msg.userId) {  // Fallback para mensajes sin fromId
+            if (typeof msg.userId === "object" && msg.userId.value != null) {
+              sender = msg.userId.value.toString();
+            } else {
+              sender = msg.userId.toString();
+            }
+          }
+          //ponemos un if si sender es desconocido usamos el peer
+          if (sender === "desconocido") {
+            sender = peer; // Usamos el peer como sender si no hay fromId o userId
+          }
+
+
+          // Para este endpoint usamos directamente el valor peer para chatPeer
+          const chatPeer = peer;
+
+          // Fecha del mensaje
+          const date = msg.date;
+
+          // Estado: si msg.out es true, "sent"; de lo contrario "received"
+          const status = msg.out === true ? "sent" : "received";
+
+          // Determinar si hay media y su tipo (sin descargar Base64 para evitar latencia)
+          let hasMedia = false;
+          let mediaType = null;
+          let base64 = null;
+          if (msg.media) {
+            hasMedia = true;
+            if (msg.media.className === "MessageMediaPhoto") {
+              mediaType = "image";
+            } else if (msg.media.className === "MessageMediaDocument" && msg.media.document) {
+              const mime = msg.media.document.mimeType || "";
+              if (mime.startsWith("image/")) {
+                mediaType = "image";
+              } else if (mime.startsWith("video/")) {
+                mediaType = "video";
+              } else if (mime.startsWith("audio/")) {
+                mediaType = "audio";
+              } else {
+                mediaType = "document";
+              }
+            } else if (
+              msg.media.className === "MessageMediaGeo" ||
+              msg.media.className === "MessageMediaVenue"
+            ) {
+              mediaType = "location";
+            } else {
+              mediaType = "document";
+            }
+            // En este ejemplo no descargamos Base64 (puedes agregarlo si AUTOSAVE_BASE64 está habilitado)
+          }
+
+          // Si no hay texto y hay media, asignar un mensaje por defecto
+          if (!messageText.trim() && hasMedia) {
+            messageText = "Only " + (mediaType || "media");
+          }
+
+          // Obtener datos de contacto para el sender
+          let contactName = null;
+          let phone = null;
+          if (contactDict[sender]) {
+            const c = contactDict[sender];
+            contactName = ((c.first_name || "").trim() + " " + (c.last_name || "").trim()).trim();
+            phone = c.phone;
+          }
+
+          return {
+            messageId,
+            user_id: userId,
+            sender,
+            contactName,
+            phone,
+            chatPeer,
+            message: messageText,
+            date,
+            status,
+            base64,
+            hasMedia,
+            mediaType,
+          };
+        })
+      );
 
       res.json({
         success: true,
-        messages: messagesMapped
+        messages: messagesMapped,
       });
     } catch (error) {
       res.status(500).json({ error: error.message });
@@ -797,13 +956,11 @@ app.get("/get-messages/:userId/:peer", async (req, res) => {
   });
 
 
-
-
 /**
  * @openapi
- * /send-message/{userId}/{peer}/{message}:
- *   post:
- *     summary: Envía un mensaje a un chat individual
+ * /get-messages/{userId}/{peer}:
+ *   get:
+ *     summary: Obtiene mensajes de un chat individual (directamente desde Telegram) y agrega información de contacto
  *     tags: [Messages]
  *     parameters:
  *       - in: path
@@ -818,147 +975,6 @@ app.get("/get-messages/:userId/:peer", async (req, res) => {
  *         schema:
  *           type: string
  *         description: ID del peer (chat)
- *       - in: path
- *         name: message
- *         required: true
- *         schema:
- *           type: string
- *         description: Mensaje a enviar
- *     responses:
- *       200:
- *         description: Mensaje enviado correctamente
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 success:
- *                   type: boolean
- *                 message:
- *                   type: string
- *                 user_id:
- *                   type: string
- *                 peer:
- *                   type: string
- *                 status:
- *                   type: string
- *       404:
- *         description: Sesión no iniciada
- *       500:
- *         description: Error en el servidor
- */
-app.post("/send-message/:userId/:peer/:message", async (req, res) => {
-  const { userId, peer, message } = req.params;
-  if (!sessions[userId]) return res.status(404).json({ error: "Sesión no iniciada" });
-  try {
-    await sessions[userId].sendMessage(peer, { message });
-    const payload = {
-      user_id: String(userId),
-      message: message,
-      date: Math.floor(Date.now() / 1000),
-      peer: String(peer),
-      status: "sended",
-      image: null,
-    };
-    if (API_EXTERNAL) {
-      try {
-        await axios.post(API_EXTERNAL_URL, payload, {
-          headers: { Authorization: `Bearer ${API_EXTERNAL_TOKEN}` },
-        });
-        console.log("Notificación enviada a API externa:", payload);
-      } catch (error) {
-        console.error("Error notificando a API externa:", error.response ? error.response.data : error.message);
-      }
-    }
-    res.json({
-      success: true,
-      message: "Mensaje enviado correctamente",
-      user_id: userId,
-      peer: String(peer),
-      status: "sended",
-    });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-/**
- * @openapi
- * /get-groups/{userId}:
- *   get:
- *     summary: Obtiene la lista de grupos y canales
- *     tags: [Groups]
- *     parameters:
- *       - in: path
- *         name: userId
- *         required: true
- *         schema:
- *           type: string
- *         description: ID del usuario
- *     responses:
- *       200:
- *         description: Lista de grupos obtenida
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 success:
- *                   type: boolean
- *                 groups:
- *                   type: array
- *                   items:
- *                     type: object
- *                     properties:
- *                       id:
- *                         type: string
- *                       name:
- *                         type: string
- *                       is_channel:
- *                         type: boolean
- *       404:
- *         description: Sesión no iniciada
- *       500:
- *         description: Error en el servidor
- */
-app.get("/get-groups/:userId", async (req, res) => {
-  const { userId } = req.params;
-  if (!sessions[userId]) return res.status(404).json({ error: "Sesión no iniciada" });
-  try {
-    const dialogs = await sessions[userId].getDialogs();
-    const groups = dialogs.filter((chat) => chat.isGroup || chat.isChannel);
-    res.json({
-      success: true,
-      groups: groups.map((g) => ({
-        id: g.id,
-        name: g.title,
-        is_channel: g.isChannel,
-      })),
-    });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-/**
- * @openapi
- * /get-group-messages/{userId}/{groupId}:
- *   get:
- *     summary: Obtiene mensajes de un grupo o canal
- *     tags: [Groups]
- *     parameters:
- *       - in: path
- *         name: userId
- *         required: true
- *         schema:
- *           type: string
- *         description: ID del usuario
- *       - in: path
- *         name: groupId
- *         required: true
- *         schema:
- *           type: string
- *         description: ID del grupo o canal
  *     responses:
  *       200:
  *         description: Mensajes obtenidos
@@ -974,17 +990,32 @@ app.get("/get-groups/:userId", async (req, res) => {
  *                   items:
  *                     type: object
  *                     properties:
- *                       id:
+ *                       messageId:
+ *                         type: string
+ *                       user_id:
+ *                         type: string
+ *                       sender:
+ *                         type: string
+ *                       contactName:
+ *                         type: string
+ *                         nullable: true
+ *                       phone:
+ *                         type: string
+ *                         nullable: true
+ *                       chatPeer:
  *                         type: string
  *                       message:
  *                         type: string
  *                       date:
  *                         type: integer
- *                       peer:
- *                         type: string
  *                       status:
  *                         type: string
- *                       image:
+ *                       base64:
+ *                         type: string
+ *                         nullable: true
+ *                       hasMedia:
+ *                         type: boolean
+ *                       mediaType:
  *                         type: string
  *                         nullable: true
  *       404:
@@ -992,29 +1023,140 @@ app.get("/get-groups/:userId", async (req, res) => {
  *       500:
  *         description: Error en el servidor
  */
-app.get("/get-group-messages/:userId/:groupId", async (req, res) => {
-  const { userId, groupId } = req.params;
-  if (!sessions[userId]) return res.status(404).json({ error: "Sesión no iniciada" });
-  try {
-    const messages = await sessions[userId].getMessages(Number(groupId), { limit: 10 });
-    res.json({
-      success: true,
-      messages: messages.map((msg) => ({
-        id: msg.id,
-        message:
-          typeof msg.message === "string"
-            ? msg.message
-            : (msg.message && msg.message.message) || "Only image",
-        date: msg.date,
-        peer: String(groupId),
-        status: "received",
-        image: msg.image || null,
-      })),
-    });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
+app.get("/get-messages/:userId/:peer", async (req, res) => {
+    const { userId, peer } = req.params;
+    if (!sessions[userId])
+      return res.status(404).json({ error: "Sesión no iniciada" });
+
+    try {
+      // Convertimos el peer a número, asumiendo que el id del chat es numérico.
+      const messages = await sessions[userId].getMessages(Number(peer), { limit: 10 });
+
+      // Obtener la lista de contactos para agregar información de contacto (puedes implementar un caché si lo deseas)
+      let contactsResult;
+      try {
+        contactsResult = await sessions[userId].invoke(new Api.contacts.GetContacts({ hash: 0 }));
+      } catch (err) {
+        console.error("Error obteniendo contactos:", err);
+        contactsResult = { users: [] };
+      }
+      const contacts = contactsResult.users || [];
+      const contactDict = {};
+      contacts.forEach(contact => {
+        contactDict[contact.id.toString()] = {
+          first_name: contact.firstName,
+          last_name: contact.lastName,
+          phone: contact.phone,
+          username: contact.username || null,
+        };
+      });
+
+      const messagesMapped = await Promise.all(
+        messages.map(async (msg) => {
+          // Message ID
+          const messageId = msg.id ? msg.id.toString() : "N/A";
+
+          // Extraer texto del mensaje
+          let messageText = "";
+          if (typeof msg.message === "string") {
+            messageText = msg.message;
+          } else if (msg.message && typeof msg.message.message === "string") {
+            messageText = msg.message.message;
+          }
+
+          // Determinar el sender (remitente)
+          let sender = "desconocido";
+          if (msg.fromId) {
+            if (typeof msg.fromId === "object" && msg.fromId.userId) {
+              sender = msg.fromId.userId.toString();
+            } else {
+              sender = msg.fromId.toString();
+            }
+          } else if (msg.userId) {  // fallback para UpdateShortMessage
+            if (typeof msg.userId === "object" && msg.userId.value != null) {
+              sender = msg.userId.value.toString();
+            } else {
+              sender = msg.userId.toString();
+            }
+          }
+
+          // Para este endpoint usamos directamente el parámetro peer para chatPeer
+          const chatPeer = peer;
+
+          // Fecha del mensaje
+          const date = msg.date;
+
+          // Estado: si msg.out es true, "sent"; de lo contrario "received"
+          const status = msg.out === true ? "sent" : "received";
+
+          // Media: Determinar si hay media, su tipo y (opcionalmente) el contenido en Base64.
+          let hasMedia = false;
+          let mediaType = null;
+          let base64 = null;
+          if (msg.media) {
+            hasMedia = true;
+            if (msg.media.className === "MessageMediaPhoto") {
+              mediaType = "image";
+            } else if (msg.media.className === "MessageMediaDocument" && msg.media.document) {
+              const mime = msg.media.document.mimeType || "";
+              if (mime.startsWith("image/")) {
+                mediaType = "image";
+              } else if (mime.startsWith("video/")) {
+                mediaType = "video";
+              } else if (mime.startsWith("audio/")) {
+                mediaType = "audio";
+              } else {
+                mediaType = "document";
+              }
+            } else if (
+              msg.media.className === "MessageMediaGeo" ||
+              msg.media.className === "MessageMediaVenue"
+            ) {
+              mediaType = "location";
+            } else {
+              mediaType = "document";
+            }
+            // Aquí se podría agregar la descarga a Base64 si AUTOSAVE_BASE64 está habilitado,
+            // pero en este ejemplo se omite para evitar latencia.
+          }
+
+          if (!messageText.trim() && hasMedia) {
+            messageText = "Only " + (mediaType || "media");
+          }
+
+          // Obtener datos de contacto para el sender
+          let contactName = null;
+          let phone = null;
+          if (contactDict[sender]) {
+            const c = contactDict[sender];
+            contactName = ((c.first_name || "").trim() + " " + (c.last_name || "").trim()).trim();
+            phone = c.phone;
+          }
+
+          return {
+            messageId,
+            user_id: userId,
+            sender,
+            contactName,
+            phone,
+            chatPeer,
+            message: messageText,
+            date,
+            status,
+            base64, // permanecerá null si no se descarga la media
+            hasMedia,
+            mediaType,
+          };
+        })
+      );
+      res.json({
+        success: true,
+        messages: messagesMapped,
+      });
+    } catch (error) {
+      res.status(500).json({ error: error.message });
+    }
+  });
 
 /**
  * @openapi
@@ -2234,13 +2376,13 @@ async function handleIncomingMessage(userId, event) {
     }
 
     // 14) Guardar en disco/BD
-    const userMessagesPath = path.join(DATA_FOLDER, `${userId}_messages.json`);
-    let storedMsgs = [];
-    if (fs.existsSync(userMessagesPath)) {
-      storedMsgs = JSON.parse(fs.readFileSync(userMessagesPath));
-    }
-    storedMsgs.push(messageData);
-    fs.writeFileSync(userMessagesPath, JSON.stringify(storedMsgs, null, 2));
+   // const userMessagesPath = path.join(DATA_FOLDER, `${userId}_messages.json`);
+   // let storedMsgs = [];
+    //if (fs.existsSync(userMessagesPath)) {
+    //  storedMsgs = JSON.parse(fs.readFileSync(userMessagesPath));
+   // }
+    //storedMsgs.push(messageData);
+    //fs.writeFileSync(userMessagesPath, JSON.stringify(storedMsgs, null, 2));
 
     // 15) Auto-respuestas (opcional)
     if (status === "received" && autoResponseRules[userId]) {
@@ -2266,4 +2408,5 @@ app.listen(PORT, () => {
   console.log(`API corriendo en http://localhost:${PORT}`);
   console.log(`Swagger UI disponible en http://localhost:${PORT}/api-docs`);
   loadSessions();
+  loadAutoResponseRules(); // Cargar reglas de autorespuesta al iniciar
 });

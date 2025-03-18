@@ -52,3 +52,5 @@ whatsapp/baileys_auth_info/
 whatsapp/node_modules/
 whatsapp/media/
 whatsapp/file/
+email/files/*
+email/imap_config.json
