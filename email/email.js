@@ -302,6 +302,99 @@ async function sincronizarCorreos(user) {
     console.error(`Error al sincronizar correos para ${user.id}:`, error.message);
   }
 }
+/**
+ * @openapi
+ * /contacts/{id}:
+ *   get:
+ *     summary: Devuelve los contactos únicos para el usuario dado, extraídos de los metadatos de los correos.
+ *     tags:
+ *       - Contacts
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: ID del usuario.
+ *     responses:
+ *       200:
+ *         description: Lista de contactos únicos.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 contacts:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                     properties:
+ *                       email:
+ *                         type: string
+ *                       name:
+ *                         type: string
+ *       404:
+ *         description: Usuario no encontrado o sin correos.
+ */
+app.get('/contacts/:id', async (req, res) => {
+    try {
+      const userDir = path.join(__dirname, 'files', req.params.id);
+      if (!fs.existsSync(userDir)) {
+        return res.status(404).json({ success: false, error: 'Usuario no encontrado' });
+      }
+
+      // Usamos un Map para asegurar la unicidad de los contactos, clave: email
+      let contactsMap = new Map();
+
+      // Iterar cada carpeta del usuario (cada buzón)
+      const folders = await fs.readdir(userDir);
+      for (const folder of folders) {
+        const folderPath = path.join(userDir, folder);
+        const folderStats = await fs.stat(folderPath);
+        if (!folderStats.isDirectory()) continue;
+
+        // Consideramos las subcarpetas "Leidos" y "No_Leidos"
+        const subfolders = ['Leidos', 'No_Leidos'];
+        for (const subfolder of subfolders) {
+          const subfolderPath = path.join(folderPath, subfolder);
+          if (!fs.existsSync(subfolderPath)) continue;
+          const files = await fs.readdir(subfolderPath);
+          for (const file of files) {
+            if (file.endsWith('.json')) {
+              // Leer el archivo de metadatos
+              const metadata = await fs.readJson(path.join(subfolderPath, file));
+              let fromField = metadata.from;
+              if (fromField) {
+                let email = '';
+                let name = '';
+                // Usar una expresión regular para extraer el nombre y el email en caso de que el campo tenga el formato "Nombre <email>"
+                const match = fromField.match(/^(.*)<([^>]+)>$/);
+                if (match) {
+                  name = match[1].trim();
+                  email = match[2].trim();
+                } else {
+                  // Si no coincide, asumimos que es solo el email
+                  email = fromField.trim();
+                }
+                // Si tenemos un email válido y aún no está en el Map, lo agregamos
+                if (email && !contactsMap.has(email)) {
+                  contactsMap.set(email, { email, name });
+                }
+              }
+            }
+          }
+        }
+      }
+
+      const contacts = Array.from(contactsMap.values());
+      res.json({ success: true, contacts });
+    } catch (error) {
+      console.error('Error al obtener contactos:', error.message);
+      res.status(500).json({ success: false, error: error.message });
+    }
+  });
 
 // ---------------------------------------------------
 // Endpoints de la API
