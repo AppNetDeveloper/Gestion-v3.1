@@ -218,6 +218,7 @@ Route::middleware(['auth'])->group(function () {
 
     // Ruta para ver la conversación de un teléfono en específico
     Route::get('/whatsapp/{phone}', [WhatsappController::class, 'conversation'])->name('whatsapp.conversation');
+    Route::post('/whatsapp/import-contacts', [WhatsappController::class, 'importContacts'])->name('whatsapp.importContacts');
 
 });
     //para tranformar los videos en mp4 de whatsapp

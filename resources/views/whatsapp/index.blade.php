@@ -56,7 +56,6 @@
             }
         }
 
-
     @endphp
 
     {{-- Mensajes flash --}}
@@ -86,6 +85,15 @@
                                     <div id="connection-btn" class="text-center"></div>
                                 </div>
                             </div>
+                        </div>
+                        <!-- Botón para Importar Contactos -->
+                        <div class="py-3 px-6">
+                            <form action="{{ route('whatsapp.importContacts') }}" method="POST">
+                                @csrf
+                                <button type="submit" class="btn btn-primary w-full">
+                                    {{ __('Import Contacts') }}
+                                </button>
+                            </form>
                         </div>
                         <!-- Buscador de Contactos -->
                         <div class="border-b border-slate-100 dark:border-slate-700 py-1">
