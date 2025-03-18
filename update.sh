@@ -94,6 +94,9 @@ COMMANDS=(
     "/var/www/html/verne.sh"
     "/var/www/html/reset-sensor.sh"
     "/var/www/html/python/*"
+    "/var/www/html/telegram/*"
+    "/var/www/html/email/*"
+    "/var/www/html/whatsapp/*"
 )
 
 
