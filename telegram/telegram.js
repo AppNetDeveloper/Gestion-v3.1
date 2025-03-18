@@ -2085,23 +2085,35 @@ app.post("/send-media/:userId/:peer", async (req, res) => {
  *                 isValidated:
  *                   type: boolean
  *       404:
- *         description: Sesión no encontrada.
+ *         description: Sesión no encontrada
+ *       500:
+ *         description: Error en el servidor
  */
 app.get("/session-status/:userId", async (req, res) => {
     const { userId } = req.params;
+
+    // Verificar si la sesión existe
     if (!sessions[userId]) {
       return res.status(404).json({ error: "Sesión no encontrada" });
     }
+
     try {
-      // Usamos getMe para verificar si la sesión está autenticada
+      // Intentar obtener el usuario desde la sesión para verificar si está validada
       const user = await sessions[userId].getMe();
-      const isConnected = !!user; // true si getMe retorna un objeto válido
-      res.json({ userId, isConnected });
-    } catch (err) {
-      console.error(`Error verificando sesión para usuario ${userId}:`, err);
-      res.status(500).json({ error: err.message });
+      const isValidated = !!user; // Si getMe() devuelve un objeto, significa que la sesión está validada
+
+      // Retornar el estado de la sesión
+      res.json({
+        userId,
+        isValidated, // true si la sesión está validada, false si no lo está
+      });
+    } catch (error) {
+      console.error(`Error verificando sesión para usuario ${userId}:`, error);
+      res.status(500).json({ error: error.message });
     }
   });
+
+
 /**
  * @openapi
  * /all-session-status:

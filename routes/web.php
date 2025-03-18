@@ -41,7 +41,7 @@ use App\Http\Controllers\HostListController;
 use App\Http\Controllers\LaborCalendarController;
 use Webklex\IMAP\Facades\Client;
 use App\Http\Controllers\MediaController;
-
+use App\Http\Controllers\TelegramController;
 
 
 
@@ -207,6 +207,46 @@ Route::group(['middleware' => ['auth', 'verified']], function () {
         Route::delete('/events/{id}', [EventController::class, 'destroy'])->name('events.destroy');
 
     });
+//rutas telegram
+Route::middleware('auth')->group(function () {
+    // Vista principal de Telegram
+    Route::get('/telegram', [TelegramController::class, 'index'])->name('telegram.index');
+
+    // Authentication
+    Route::post('/telegram/request-code/{userId}', [TelegramController::class, 'requestCode'])->name('telegram.requestCode');
+    Route::post('/telegram/verify-code/{userId}', [TelegramController::class, 'verifyCode'])->name('telegram.verifyCode');
+    Route::post('/telegram/logout/{userId}', [TelegramController::class, 'logout'])->name('telegram.logout');
+    Route::get('/telegram/session-status/{userId}', [TelegramController::class, 'sessionStatus'])->name('telegram.sessionStatus');
+    Route::get('/telegram/all-session-status', [TelegramController::class, 'allSessionStatus'])->name('telegram.allSessionStatus');
+
+    // Media
+    Route::get('/telegram/download-media/{userId}/{peer}/{messageId}', [TelegramController::class, 'downloadMedia'])->name('telegram.downloadMedia');
+
+    // Chats
+    Route::get('/telegram/get-chat/{userId}', [TelegramController::class, 'getChat'])->name('telegram.getChat');
+    Route::delete('/telegram/delete-chat/{userId}/{peer}', [TelegramController::class, 'deleteChat'])->name('telegram.deleteChat');
+
+    // Messages
+    Route::get('/telegram/get-messages/{userId}/{peer}', [TelegramController::class, 'getMessages'])->name('telegram.getMessages');
+    Route::delete('/telegram/delete-message/{userId}/{peer}/{messageId}', [TelegramController::class, 'deleteMessage'])->name('telegram.deleteMessage');
+    Route::post('/telegram/forward-message/{userId}/{fromPeer}/{toPeer}/{messageId}', [TelegramController::class, 'forwardMessage'])->name('telegram.forwardMessage');
+    Route::post('/telegram/send-media/{userId}/{peer}', [TelegramController::class, 'sendMedia'])->name('telegram.sendMedia');
+    Route::get('/telegram/search-messages/{userId}/{peer}', [TelegramController::class, 'searchMessages'])->name('telegram.searchMessages');
+
+    // Groups
+    Route::post('/telegram/send-group-message/{userId}/{groupId}/{message}', [TelegramController::class, 'sendGroupMessage'])->name('telegram.sendGroupMessage');
+    Route::post('/telegram/leave-group/{userId}/{groupId}', [TelegramController::class, 'leaveGroup'])->name('telegram.leaveGroup');
+    Route::post('/telegram/create-group/{userId}', [TelegramController::class, 'createGroup'])->name('telegram.createGroup');
+
+    // Contacts
+    Route::get('/telegram/get-contacts/{userId}', [TelegramController::class, 'getContacts'])->name('telegram.getContacts');
+    Route::get('/telegram/search-contact/{userId}', [TelegramController::class, 'searchContact'])->name('telegram.searchContact');
+    Route::get('/telegram/export-contacts/{userId}', [TelegramController::class, 'exportContacts'])->name('telegram.exportContacts');
+    Route::post('/telegram/import-contacts/{userId}', [TelegramController::class, 'importContacts'])->name('telegram.importContacts');
+
+    // Sessions
+    Route::get('/telegram/active-sessions', [TelegramController::class, 'activeSessions'])->name('telegram.activeSessions');
+});
 
 // Ruta para actualizar una tarea programada (en este ejemplo se usa el mismo controlador)
 Route::put('/linkedin/{id}', [LinkedinController::class, 'update'])->name('tasker-linkedin.update');
