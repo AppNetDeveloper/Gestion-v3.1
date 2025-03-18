@@ -101,10 +101,14 @@
                             <h3 class="font-bold mb-4 px-3">{{ __("Contacts") }}</h3>
                             <ul class="space-y-2">
                                 @foreach($sortedContacts as $contact)
+                                    @php
+                                        // Limpiar el número de teléfono de cualquier parte después del '@'
+                                        $cleanName = preg_replace('/@.*$/', '', $contact['name']);
+                                    @endphp
                                     <li class="flex items-center justify-between">
                                         <a href="{{ route('whatsapp.conversation', $contact['phone']) }}"
                                            class="block p-2 rounded bg-blue-500 text-gray-800 dark:bg-blue-700 dark:text-white hover:bg-blue-600 dark:hover:bg-blue-800">
-                                            {{ $contact['name'] }}
+                                            {{ $cleanName}}
                                         </a>
                                         <!-- Botón para eliminar chat -->
                                         <form action="{{ route('whatsapp.chat.destroy', $contact['phone']) }}" method="POST" style="display:inline;">

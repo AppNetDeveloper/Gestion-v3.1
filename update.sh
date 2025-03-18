@@ -160,6 +160,13 @@ if [ ! -f "telegram/.env" ]; then
 else
     echo "El archivo .env ya existe."
 fi
+# Verifica si el archivo .env no existe en la carpeta telegram
+if [ ! -f "email/.env" ]; then
+    cp "email/.env.example" "email/.env"
+    echo "Se ha copiado .env.example a .env"
+else
+    echo "El archivo .env ya existe."
+fi
 
 
 # Reiniciar Supervisor con nueva configuración
