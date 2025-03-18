@@ -150,7 +150,7 @@ for KEY in "${!ENV_VARS[@]}"; do
     fi
 done
 
-php artisan db:seed --force || { echo "Error: Falló la ejecución de las seeds."; exit 1; }
+#php artisan db:seed || { echo "Error: Falló la ejecución de las seeds."; exit 1; }
 
 
 # Verifica si el archivo .env no existe en la carpeta telegram
