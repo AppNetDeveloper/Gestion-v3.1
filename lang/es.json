@@ -464,5 +464,9 @@
     "Edit SMTP": "Editar SMTP",
     "Email Campaign": "Campaña de Correo",
     "Reply (HTML allowed):": "Responder (HTML permitido):",
-    "Send Reply": "Enviar Respuesta"
+    "Send Reply": "Enviar Respuesta",
+    "Contacts imported successfully.": "Contactos importados con éxito.",
+    "No new contacts were imported.": "No existen nuevos contactos.",
+    "Failed to fetch contacts from API.": "Falló al obtener los contactos desde la API.",
+    "Import Contacts": "Importar Contactos"
   }

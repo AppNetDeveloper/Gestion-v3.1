@@ -6,6 +6,8 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
+use App\Models\Contact;
+use Session;
 
 class WhatsappController extends Controller
 {
@@ -116,7 +118,11 @@ class WhatsappController extends Controller
         })->values();
 
         // Obtener los mensajes para el contacto seleccionado
-        $jid = $phone . '@s.whatsapp.net';
+        if (strpos($phone, '@') === false) {
+            $jid = $phone . '@s.whatsapp.net';
+        } else {
+            $jid = $phone;
+        }
         $responseMsgs = Http::get("$nodeUrl/get-messages/$sessionId/$jid");
         if ($responseMsgs->successful()) {
             $messages = collect($responseMsgs->json()['messages'] ?? []);
@@ -197,6 +203,56 @@ class WhatsappController extends Controller
             }
         } catch (\Exception $e) {
             return back()->with('error', "Error en la solicitud: " . $e->getMessage());
+        }
+    }
+    // Función para importar contactos desde la API de Node.js
+    public function importContacts(Request $request)
+    {
+        // Obtener el userId desde la sesión autenticada
+        $userId = Auth::id();
+        $nodeUrl = env('WATSHAPP_URL');  // URL de la API de Node.js (asegúrate de que esté configurada en .env)
+
+        // Llamada a la API de Node.js para obtener los contactos
+        $response = Http::get("$nodeUrl/get-contacts/$userId");
+
+        // Verificamos si la solicitud fue exitosa
+        if ($response->successful()) {
+            // Obtener los contactos del JSON que se devuelve
+            $contactsData = $response->json()['contacts'];
+
+            // Array para almacenar los contactos a insertar
+            $contactsToInsert = [];
+
+            // Iterar sobre los contactos y procesarlos
+            foreach ($contactsData as $contact) {
+                // Limpiar el número de teléfono (si tiene @...)
+                $phone = preg_replace('/@.*$/', '', $contact['jid']);  // Extraemos solo el teléfono limpio
+
+                // Verificar si el teléfono ya existe en la base de datos
+                if (!Contact::where('phone', $phone)->exists()) {
+                    $contactsToInsert[] = [
+                        'user_id'   => $userId, // ID del usuario al que pertenece el contacto
+                        'name' => $contact['name'],  // Nombre del contacto
+                        'phone' => $phone,           // Teléfono limpio
+                        'created_at' => now(),
+                        'updated_at' => now(),
+                    ];
+                }
+            }
+
+            // Si hay contactos para insertar, los agregamos a la base de datos
+            if (count($contactsToInsert) > 0) {
+                Contact::insert($contactsToInsert);
+                // Log para seguimiento
+                Log::info("Contactos importados: " . json_encode($contactsToInsert));
+                return redirect()->route('whatsapp.index')->with('success', __('Contacts imported successfully.'));
+            } else {
+                Log::info("No contactos nuevos para importar.");
+                return redirect()->route('whatsapp.index')->with('success', __('No new contacts were imported.'));
+            }
+        } else {
+            // En caso de que la llamada a la API falle
+            return redirect()->route('whatsapp.index')->with('error', __('Failed to fetch contacts from API.'));
         }
     }
 }
