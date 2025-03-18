@@ -130,14 +130,12 @@
                             $('#start-session-btn').click(function() {
                                 startSession();
                             });
+                            //quitar el button de reset
+                            $('#connection-btn2').html(``);
 
                         } else {
-                            // Verificar si la sesión está conectada
-                            if (data.isConnected) {
-                                console.log('isConnected:', data.isConnected);
-
-                                // Si está conectado, mostrar botón de logout
-                                if (data.isConnected === true) {
+                            // Verificar si la sesión está conectada aqui deberiamos de separas {userId: '1', isValidated: true} si es true o false
+                            if (data.isValidated) {
                                     $('#connection-btn').html(`
                                         <button id="logout-btn" class="btn btn-danger">
                                             {{ __('Logout') }}
@@ -146,13 +144,14 @@
                                     $('#logout-btn').click(function() {
                                         logout();
                                     });
-
-                                } else {
-                                    // Si no está conectado, mostrar el pin code
-                                    $('#connection-btn').html(`
+                                    //quitar el button de reset
+                                    $('#connection-btn2').html(``);
+                            } else {
+                                // Si no está conectado, mostrar el pin code
+                                $('#connection-btn').html(`
                                         <input type="text" id="pin-code" placeholder="Enter pin code" class="w-full p-2">
                                         <button id="start-session-btn" class="btn btn-success">
-                                            {{ __('Start Session') }}
+                                            {{ __('inset pin code') }}
                                         </button>
                                     `);
                                     $('#start-session-btn').click(function() {
@@ -167,28 +166,6 @@
                                     $('#logout-btn').click(function() {
                                         logout();
                                     });
-                                }
-
-                            } else {
-                                // Si la sesión no está conectada, manejar la lógica de inicio
-                                $('#connection-btn').html(`
-                                    <input type="text" id="phone" placeholder="Enter phone number" class="w-full p-2">
-                                    <button id="start-session-btn" class="btn btn-success">
-                                        {{ __('Start Session') }}
-                                    </button>
-                                `);
-                                $('#start-session-btn').click(function() {
-                                    startSession();
-                                });
-
-                                $('#connection-btn2').html(`
-                                    <button id="logout-btn" class="btn btn-danger">
-                                        {{ __('RESET SESSION') }}
-                                    </button>
-                                `);
-                                $('#logout-btn').click(function() {
-                                    logout();
-                                });
                             }
                         }
 
@@ -211,10 +188,12 @@
                     data: { phone: phone, _token: csrfToken },
                     success: function(response) {
                         // Mostrar mensaje de éxito
+                        checkSessionStatus();
                         Swal.fire('Success', 'Verification code sent!', 'success');
                     },
                     error: function(error) {
                         // Mostrar mensaje de error
+                        checkSessionStatus();
                         Swal.fire('Error', 'Failed to send verification code.', 'error');
                     }
                 });
@@ -231,10 +210,12 @@
                     data: { code: pinCode, _token: csrfToken },
                     success: function(response) {
                         // Mostrar mensaje de éxito
+                        checkSessionStatus();
                         Swal.fire('Success', 'Code verified!', 'success');
                     },
                     error: function(error) {
                         // Mostrar mensaje de error
+                        checkSessionStatus();
                         Swal.fire('Error', 'Failed verify the code.', 'error');
                     }
                 });
@@ -248,10 +229,12 @@
                     type: 'POST',
                     data: { _token: csrfToken },
                     success: function(response) {
+                        checkSessionStatus();
                         Swal.fire('Success', 'Logged out successfully!', 'success');
                         checkSessionStatus();
                     },
                     error: function(error) {
+                        checkSessionStatus();
                         let errorMsg = error.responseJSON && error.responseJSON.message ? error.responseJSON.message : '';
                         Swal.fire('Error', 'Failed to logout. ' + errorMsg, 'error');
                     }

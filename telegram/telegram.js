@@ -2094,12 +2094,14 @@ app.get("/session-status/:userId", async (req, res) => {
 
     // Verificar si la sesión existe
     if (!sessions[userId]) {
-      return res.status(404).json({ error: "Sesión no encontrada" });
+      return res.status(404).json({ error: "UserId not found" });
     }
 
     try {
       // Intentar obtener el usuario desde la sesión para verificar si está validada
       const user = await sessions[userId].getMe();
+
+      // Si ocurre el error AUTH_KEY_UNREGISTERED, marcar como no validada
       const isValidated = !!user; // Si getMe() devuelve un objeto, significa que la sesión está validada
 
       // Retornar el estado de la sesión
@@ -2109,9 +2111,20 @@ app.get("/session-status/:userId", async (req, res) => {
       });
     } catch (error) {
       console.error(`Error verificando sesión para usuario ${userId}:`, error);
+
+      // Manejo específico para el error "AUTH_KEY_UNREGISTERED"
+      if (error.code === 401 && error.errorMessage === "AUTH_KEY_UNREGISTERED") {
+        return res.json({
+          userId,
+          isValidated: false, // Si ocurre este error, la sesión no está validada
+        });
+      }
+
+      // Si es otro tipo de error, devolverlo como está
       res.status(500).json({ error: error.message });
     }
   });
+
 
 
 /**
