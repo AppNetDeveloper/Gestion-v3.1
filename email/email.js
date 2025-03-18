@@ -166,7 +166,7 @@ async function sincronizarCorreos(user) {
       await connection.openBox(carpeta);
 
       // Usamos fetchOptions para obtener el mensaje raw y los encabezados
-      const searchCriteria = ['ALL'];
+      const searchCriteria = user.process_unread_only ? ['UNSEEN'] : ['ALL']; // Solo no leídos si es true
       const fetchOptions = {
         bodies: ['', 'HEADER.FIELDS (FROM TO SUBJECT DATE)'],
         struct: true,
@@ -205,13 +205,11 @@ async function sincronizarCorreos(user) {
 
                 try {
                     parsed = await simpleParser(rawBody);
-                    //console.log('Parsed:', parsed); // Verifica la estructura completa del objeto parsed
 
                     // Intentamos obtener el cuerpo en formato texto o html
                     plainBody = parsed.text || parsed.html || parsed.textAsHtml || parsed.textPlain || 'Cuerpo del mensaje no disponible.';
                 } catch (error) {
                     console.error(`Error al parsear el correo ${uid}:`, error.message);
-                    // Si no se puede parsear, intentamos recuperar el texto plano
                     const textPart = mensaje.parts.find((p) => p.which && p.which.includes('TEXT'));
                     plainBody = textPart ? textPart.body : 'Cuerpo del mensaje no disponible.';
                 }
@@ -221,21 +219,16 @@ async function sincronizarCorreos(user) {
                     attachments = parsed.attachments || [];
                 }
             } catch (error) {
-                console.error(`Error al procesar el cuerpo del correo ${uid}:`, error.message);
+                console.error(`Error al procesar el correo ${uid}:`, error.message);
 
-                // Fallback: si no se obtiene la parte raw, usamos la parte TEXT
                 const textPart = mensaje.parts.find((p) => p.which && p.which.includes('TEXT'));
                 plainBody = textPart ? textPart.body : '';
             }
         } else {
-            // Fallback: si no se obtiene la parte raw, usamos la parte TEXT
             const textPart = mensaje.parts.find((p) => p.which && p.which.includes('TEXT'));
             plainBody = textPart ? textPart.body : '';
         }
 
-
-
-        // Crear metadata
         const metadata = {
           uid,
           subject: headerPart && headerPart.body.subject ? headerPart.body.subject[0] : 'Sin asunto',
@@ -245,7 +238,6 @@ async function sincronizarCorreos(user) {
           read: esLeido,
         };
 
-        // Guardar metadata y cuerpo
         await fs.writeJson(metadataFile, metadata, { spaces: 2 });
         console.log(`Metadata guardada en ${subfolder}: ${metadataFile}`);
 
@@ -253,26 +245,19 @@ async function sincronizarCorreos(user) {
         await fs.writeFile(bodyFile, plainBody);
         console.log(`Cuerpo guardado en ${subfolder}: ${bodyFile}`);
 
-        // Procesar y guardar adjuntos (si existen)
         if (attachments.length > 0) {
-          // Se guardan en: files/<user.id>/<carpeta>/attachments/<uid>/
           const attachmentsDir = path.join(folderDir, 'attachments', String(uid));
           await fs.ensureDir(attachmentsDir);
-          console.log(
-            `Se encontraron ${attachments.length} adjunto(s) para el correo ${uid} en ${carpeta}. Carpeta de adjuntos: ${attachmentsDir}`
-          );
+          console.log(`Se encontraron ${attachments.length} adjunto(s) para el correo ${uid} en ${carpeta}. Carpeta de adjuntos: ${attachmentsDir}`);
           for (const attachment of attachments) {
             const attachmentFile = path.join(attachmentsDir, attachment.filename);
             await fs.writeFile(attachmentFile, attachment.content);
             console.log(`Adjunto guardado: ${attachmentFile}`);
           }
-        } else {
-          console.log(`No se encontraron adjuntos en el correo ${uid}.`);
         }
 
         // Si API_ACTIVE es true, enviar los datos del correo a la API externa
         if (process.env.API_ACTIVE === 'true') {
-          // Preparamos los adjuntos para enviarlos en base64
           const externalAttachments = attachments.map((att) => ({
             filename: att.filename,
             content: att.content.toString('base64'),
@@ -283,6 +268,24 @@ async function sincronizarCorreos(user) {
             attachments: externalAttachments,
           };
           await sendEmailToExternalApi(user.id, carpeta, emailData);
+        }
+
+        // Acción sobre el correo después de procesarlo
+        if (user.mark_as_read_or_delete === 'read') {
+          try {
+            await connection.addFlags(uid, ['\\Seen']);
+            console.log(`Correo ${uid} marcado como leído.`);
+          } catch (error) {
+            console.error(`Error al marcar el correo ${uid} como leído:`, error.message);
+          }
+        } else if (user.mark_as_read_or_delete === 'delete') {
+          try {
+            await connection.addFlags(uid, ['\\Deleted']);
+            await connection.expunge();
+            console.log(`Correo ${uid} eliminado del servidor IMAP.`);
+          } catch (error) {
+            console.error(`Error al eliminar el correo ${uid} del servidor IMAP:`, error.message);
+          }
         }
       }
     }
@@ -336,6 +339,15 @@ async function sincronizarCorreos(user) {
  *                 rejectUnauthorized:
  *                   type: boolean
  *                   example: false
+ *                 process_unread_only:
+ *                   type: boolean
+ *                   example: true
+ *                   description: "Indica si se deben procesar solo los correos no leídos."
+ *                 mark_as_read_or_delete:
+ *                   type: string
+ *                   example: "read"
+ *                   enum: ["read", "delete", "none"]
+ *                   description: "Acción a tomar sobre el correo: 'read' para marcarlo como leído, 'delete' para eliminarlo."
  *     responses:
  *       200:
  *         description: Configuración almacenada con éxito
@@ -380,332 +392,8 @@ app.post('/sync', async (req, res) => {
   }
 });
 
-/**
- * @openapi
- * /status:
- *   get:
- *     summary: Devuelve el estado de las conexiones IMAP (por id)
- *     tags:
- *       - IMAP
- *     responses:
- *       200:
- *         description: Lista de estados de conexiones IMAP
- */
-app.get('/status', async (req, res) => {
-  const users = await obtenerUsuarios();
-  let statuses = [];
-  for (const user of users) {
-    const status = await verificarConexion(user);
-    statuses.push({ id: user.id, status: status.status, message: status.message });
-  }
-  res.json({ success: true, statuses });
-});
-
-/**
- * @openapi
- * /folders/{id}:
- *   get:
- *     summary: Lista todas las carpetas de correo del usuario (usando id) a partir de los datos almacenados localmente
- *     tags:
- *       - Emails
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema:
- *           type: string
- *     responses:
- *       200:
- *         description: Lista de carpetas
- */
-app.get('/folders/:id', async (req, res) => {
-  const userDir = path.join(__dirname, 'files', req.params.id);
-  if (!fs.existsSync(userDir)) {
-    console.log(`No se encontró el directorio para el usuario: ${req.params.id}`);
-    return res.json([]);
-  }
-  const folders = await fs.readdir(userDir);
-  console.log(`Carpetas encontradas para ${req.params.id}:`, folders);
-  res.json({ success: true, folders });
-});
-
-/**
- * @openapi
- * /emails/{id}/{folder}:
- *   get:
- *     summary: Lista correos por carpeta (solo metadatos) para el usuario identificado por id, incluyendo Leidos y No_Leidos, ordenados por fecha
- *     tags:
- *       - Emails
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema:
- *           type: string
- *       - in: path
- *         name: folder
- *         required: true
- *         schema:
- *           type: string
- *     responses:
- *       200:
- *         description: Lista de correos
- */
-app.get('/emails/:id/:folder', async (req, res) => {
-  const baseFolder = path.join(__dirname, 'files', req.params.id, req.params.folder);
-  if (!fs.existsSync(baseFolder)) {
-    console.log(`Directorio base no encontrado: ${baseFolder}`);
-    return res.json([]);
-  }
-  const subfolders = ['Leidos', 'No_Leidos'];
-  let emails = [];
-  for (const subfolder of subfolders) {
-    const subfolderPath = path.join(baseFolder, subfolder);
-    if (fs.existsSync(subfolderPath)) {
-      const files = await fs.readdir(subfolderPath);
-      for (const file of files) {
-        if (file.endsWith('.json')) {
-          const metadata = await fs.readJson(path.join(subfolderPath, file));
-          emails.push({
-            uid: file.replace('.json', ''),
-            subject: metadata.subject,
-            from: metadata.from,
-            date: metadata.date,
-            read: metadata.read,
-          });
-        }
-      }
-    }
-  }
-  emails.sort((a, b) => new Date(a.date) - new Date(b.date));
-  res.json({ success: true, emails });
-});
-
-/**
- * @openapi
- * /email/{id}/{folder}/{uid}:
- *   get:
- *     summary: Obtiene el cuerpo completo de un correo específico para el usuario (por id), e incluye adjuntos con links de descarga
- *     tags:
- *       - Emails
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema:
- *           type: string
- *       - in: path
- *         name: folder
- *         required: true
- *         schema:
- *           type: string
- *       - in: path
- *         name: uid
- *         required: true
- *         schema:
- *           type: string
- *     responses:
- *       200:
- *         description: Cuerpo del correo, metadata y adjuntos con links de descarga
- *       404:
- *         description: Correo no encontrado
- */
-app.get('/email/:id/:folder/:uid', async (req, res) => {
-  const baseFolder = path.join(__dirname, 'files', req.params.id, req.params.folder);
-  const subfolders = ['Leidos', 'No_Leidos'];
-  let metadataFile, bodyFile;
-  for (const subfolder of subfolders) {
-    const subfolderPath = path.join(baseFolder, subfolder);
-    const possibleMetadata = path.join(subfolderPath, `${req.params.uid}.json`);
-    const possibleBody = path.join(subfolderPath, `${req.params.uid}_body.txt`);
-    if (await fs.pathExists(possibleMetadata) && await fs.pathExists(possibleBody)) {
-      metadataFile = possibleMetadata;
-      bodyFile = possibleBody;
-      break;
-    }
-  }
-  if (!metadataFile || !bodyFile) {
-    console.log(`Correo no encontrado para UID ${req.params.uid}`);
-    return res.status(404).json({ success: false, error: 'Correo no encontrado' });
-  }
-  const metadata = await fs.readJson(metadataFile);
-  const body = await fs.readFile(bodyFile, 'utf8');
-
-  // Adjuntos se encuentran en: files/<user.id>/<folder>/attachments/<uid>/
-  const attachmentsDir = path.join(baseFolder, 'attachments', req.params.uid);
-  let attachments = [];
-  if (await fs.pathExists(attachmentsDir)) {
-    const storedFiles = await fs.readdir(attachmentsDir);
-    attachments = storedFiles.map((filename) => ({
-      filename,
-      url: `${req.protocol}://${req.get('host')}/download/${req.params.id}/${req.params.folder}/${req.params.uid}/${encodeURIComponent(filename)}`,
-    }));
-  }
-  res.json({ success: true, email: { metadata, body, attachments } });
-});
-
-/**
- * @openapi
- * /download/{id}/{folder}/{uid}/{filename}:
- *   get:
- *     summary: Descarga un archivo adjunto de un correo específico
- *     tags:
- *       - Emails
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema:
- *           type: string
- *       - in: path
- *         name: folder
- *         required: true
- *         schema:
- *           type: string
- *       - in: path
- *         name: uid
- *         required: true
- *         schema:
- *           type: string
- *       - in: path
- *         name: filename
- *         required: true
- *         schema:
- *           type: string
- *     responses:
- *       200:
- *         description: Archivo adjunto
- *       404:
- *         description: Archivo no encontrado
- */
-app.get('/download/:id/:folder/:uid/:filename', async (req, res) => {
-  const baseFolder = path.join(__dirname, 'files', req.params.id, req.params.folder);
-  const filePath = path.join(baseFolder, 'attachments', req.params.uid, req.params.filename);
-  if (!(await fs.pathExists(filePath))) {
-    return res.status(404).json({ success: false, error: 'Archivo no encontrado' });
-  }
-  res.sendFile(filePath);
-});
-
-/**
- * @openapi
- * /email/{id}/{folder}/{uid}:
- *   delete:
- *     summary: Elimina un correo y sus adjuntos para el usuario (por id)
- *     tags:
- *       - Emails
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema:
- *           type: string
- *       - in: path
- *         name: folder
- *         required: true
- *         schema:
- *           type: string
- *       - in: path
- *         name: uid
- *         required: true
- *         schema:
- *           type: string
- *     responses:
- *       200:
- *         description: Correo eliminado
- *       500:
- *         description: No se pudo eliminar el correo
- */
-app.delete('/email/:id/:folder/:uid', async (req, res) => {
-  const baseFolder = path.join(__dirname, 'files', req.params.id, req.params.folder);
-  const subfolders = ['Leidos', 'No_Leidos'];
-  let found = false;
-  for (const subfolder of subfolders) {
-    const subfolderPath = path.join(baseFolder, subfolder);
-    const metadataFile = path.join(subfolderPath, `${req.params.uid}.json`);
-    const bodyFile = path.join(subfolderPath, `${req.params.uid}_body.txt`);
-    if (await fs.pathExists(metadataFile) || await fs.pathExists(bodyFile)) {
-      if (await fs.pathExists(metadataFile)) {
-        await fs.remove(metadataFile);
-        console.log(`Metadata eliminada: ${metadataFile}`);
-      }
-      if (await fs.pathExists(bodyFile)) {
-        await fs.remove(bodyFile);
-        console.log(`Cuerpo eliminado: ${bodyFile}`);
-      }
-      found = true;
-    }
-  }
-  // Eliminar la carpeta de adjuntos: files/<user.id>/<folder>/attachments/<uid>/
-  const attachmentsDir = path.join(baseFolder, 'attachments', req.params.uid);
-  if (await fs.pathExists(attachmentsDir)) {
-    await fs.remove(attachmentsDir);
-    console.log(`Carpeta de adjuntos eliminada: ${attachmentsDir}`);
-  }
-  if (!found) {
-    return res.status(404).json({ success: false, error: 'Correo no encontrado' });
-  }
-  res.json({ success: true, message: 'Correo eliminado' });
-});
-
-/**
- * @openapi
- * /logout/{id}:
- *   delete:
- *     summary: Realiza el logout eliminando toda la información almacenada para el usuario
- *     tags:
- *       - IMAP
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema:
- *           type: string
- *     responses:
- *       200:
- *         description: Información del usuario eliminada correctamente
- *       404:
- *         description: Usuario no encontrado
- */
-app.delete('/logout/:id', async (req, res) => {
-  try {
-    const userDir = path.join(__dirname, 'files', req.params.id);
-    if (!(await fs.pathExists(userDir))) {
-      return res.status(404).json({ success: false, error: 'Usuario no encontrado' });
-    }
-    await fs.remove(userDir);
-    console.log(`Directorio del usuario ${req.params.id} eliminado.`);
-    res.json({ success: true, message: `Usuario ${req.params.id} desconectado y datos eliminados` });
-  } catch (error) {
-    console.error('Error al realizar logout:', error.message);
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
-
-// ---------------------------------------------------
-// Tarea programada para sincronizar correos
-// ---------------------------------------------------
-setInterval(async () => {
-  console.log('Iniciando tarea de sincronización de correos...');
-  const users = await obtenerUsuarios();
-  for (const user of users) {
-    await sincronizarCorreos(user);
-  }
-  console.log('Tarea de sincronización completada.');
-}, SYNC_INTERVAL);
-
-// ---------------------------------------------------
-// Sincronización inicial al arrancar el servidor
-// ---------------------------------------------------
+// Iniciar el servidor
 app.listen(PORT, () => {
   console.log(`Servidor Node.js corriendo en puerto ${PORT} 🚀`);
   console.log(`Documentación Swagger disponible en http://localhost:${PORT}/api-docs`);
-  (async () => {
-    console.log('Iniciando sincronización inicial de correos...');
-    const users = await obtenerUsuarios();
-    for (const user of users) {
-      await sincronizarCorreos(user);
-    }
-    console.log('Sincronización inicial completada.');
-  })();
 });
