@@ -2125,8 +2125,6 @@ app.get("/session-status/:userId", async (req, res) => {
     }
   });
 
-
-
 /**
  * @openapi
  * /all-session-status:
