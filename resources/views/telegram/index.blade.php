@@ -240,6 +240,8 @@
                     }
                 });
             }
+            //ahora creamos otra funcion para sacar los nuevos chats
+            
 
 
             // Llamar a la función de verificación de sesión al cargar la página
