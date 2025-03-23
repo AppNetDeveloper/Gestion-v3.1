@@ -50,13 +50,28 @@
                         <div class="border-b border-slate-100 dark:border-slate-700 pb-4">
                             <div class="p-3">
                                 <div id="connection-btn" class="text-center">
-                                    <!-- Aquí cargamos el estado de la conexión -->
+                                    <!-- Aquí se muestra el estado de la conexión -->
                                 </div>
-                                <div id="connection-btn2" class="text-center">
-                                    <!-- Aquí cargamos el estado de la conexión -->
-                                </div>
+                                <div id="connection-btn2" class="text-center"></div>
                             </div>
                         </div>
+                        <!-- Buscador de Contactos -->
+                        <div class="border-b border-slate-100 dark:border-slate-700 py-1">
+                            <div class="search px-3 mx-6 rounded flex items-center space-x-3 rtl:space-x-reverse">
+                                <div class="flex-none text-base text-slate-900 dark:text-slate-400">
+                                    <iconify-icon icon="bytesize:search"></iconify-icon>
+                                </div>
+                                <input type="text" id="contactSearch" placeholder="{{ __('Search...') }}" class="w-full flex-1 block bg-transparent placeholder:font-normal placeholder:text-slate-400 py-2 focus:ring-0 focus:outline-none dark:text-slate-200 dark:placeholder:text-slate-400">
+                            </div>
+                        </div>
+                        <!-- Lista de Chats -->
+                        <div id="chat-list-container" class="py-3 px-6" style="max-height: 70%; overflow-y: auto;">
+                            <h3 class="font-bold mb-4">{{ __("Chats") }}</h3>
+                            <ul id="chat-list" class="list-group space-y-2">
+                                <!-- Se cargarán dinámicamente -->
+                            </ul>
+                        </div>
+
                     </div>
                 </div>
             </div>
@@ -68,7 +83,7 @@
                         <div class="h-full card">
                             <div class="p-0 h-full body-class">
                                 <div id="chat-container" class="flex flex-col space-y-4 overflow-y-auto h-96 p-4">
-                                    <!-- Los mensajes de la conversación se cargarán aquí -->
+                                    <!-- Los mensajes del chat seleccionado se cargarán aquí -->
                                 </div>
 
                                 <!-- Formulario para enviar mensaje vía AJAX con TinyMCE -->
@@ -102,8 +117,8 @@
 
     {{-- Scripts --}}
     @push('scripts')
-    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
-
+        <!-- jQuery -->
+        <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
         <!-- Configuración de AJAX para CSRF -->
         <script>
             $.ajaxSetup({
@@ -111,15 +126,251 @@
                     'X-CSRF-TOKEN': $('meta[name="csrf-token"]').attr('content')
                 }
             });
+        </script>
 
-            // Verificar el estado de la sesión
+        <!-- TinyMCE -->
+        <script src="https://cdn.tiny.cloud/1/v6bk2mkmbxcn1oybhyu2892lyn9zykthl51xgkrh7ye0f7xv/tinymce/7/tinymce.min.js" referrerpolicy="origin"></script>
+        <script>
+            tinymce.init({
+                selector: '#tiny-editor',
+                plugins: 'autoresize link image code',
+                toolbar: 'undo redo | bold italic underline | alignleft aligncenter alignright | code',
+                autoresize_min_height: 150,
+                autoresize_max_height: 500,
+                autoresize_bottom_margin: 16,
+                readonly: false
+            });
+        </script>
+
+        <!-- SweetAlert2 -->
+        <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+
+        <script>
+            var autoResponseConfig = {!! json_encode($autoResponseConfig ?? null) !!};
+
+            // Función para desplazar el chat hacia abajo
+            function scrollChatToBottom() {
+                var chatContainer = document.getElementById('chat-container');
+                if (chatContainer) {
+                    chatContainer.scrollTop = chatContainer.scrollHeight;
+                }
+            }
+
+            // Función para abrir modal de imagen
+            function openZoomModal(src) {
+                Swal.fire({
+                    imageUrl: src,
+                    imageAlt: 'Imagen',
+                    width: '80%',
+                    showConfirmButton: false,
+                    background: 'transparent'
+                });
+            }
+
+            // Función para abrir modal de video
+            function openVideoModal(videoSrc) {
+                Swal.fire({
+                    html: `<video controls style="width:100%; max-height:80vh;">
+                                <source src="${videoSrc}" type="video/mp4">
+                                Tu navegador no soporta el elemento de video.
+                           </video>`,
+                    width: '80%',
+                    showConfirmButton: false,
+                    background: 'transparent'
+                });
+            }
+
+            // Función para actualizar la lista de chats
+            function fetchChats() {
+                $.ajax({
+                    url: '/telegram/get-chat/{{ auth()->id() }}',
+                    type: 'GET',
+                    success: function(response) {
+                        console.log("Chats:", response);
+                        let html = '';
+                        if (response.chats && response.chats.length > 0) {
+                            response.chats.forEach(chat => {
+                                html += `<li class="chat-item list-group-item cursor-pointer" data-peer="${chat.id}">
+                                            ${chat.name}
+                                        </li>`;
+                            });
+                        } else {
+                            html = '<li class="list-group-item">No chats found</li>';
+                        }
+                        $('#chat-list').html(html);
+                    },
+                    error: function(error) {
+                        console.error('Error fetching chats:', error);
+                    }
+                });
+            }
+
+            // Variables globales para chat activo y actualización de mensajes
+            let currentPeer = null;
+            let messagesIntervalId = null;
+            let currentMessageRequest = null;
+
+            // Función para obtener los mensajes de un chat específico
+            function fetchMessages(peer) {
+                // Si hay una petición en curso, abortarla
+                if (currentMessageRequest) {
+                    currentMessageRequest.abort();
+                }
+
+                // Guardar información del scroll antes de actualizar
+                const chatContainer = $('#chat-container');
+                const currentScroll = chatContainer.scrollTop();
+                const scrollHeightBefore = chatContainer[0].scrollHeight;
+                const containerHeight = chatContainer.innerHeight();
+                const threshold = 100; // píxeles
+
+                currentMessageRequest = $.ajax({
+                    url: '/telegram/get-messages/{{ auth()->id() }}/' + peer,
+                    type: 'GET',
+                    timeout: 30000, // 30 segundos
+                    success: function(response) {
+                        console.log("Messages:", response);
+                        let html = '';
+                        if (response.messages && response.messages.length > 0) {
+                            // Ordenar mensajes por date (ascendente: los más antiguos primero)
+                            let sortedMessages = response.messages.sort((a, b) => a.date - b.date);
+
+                            sortedMessages.forEach(msg => {
+                                // Alineación: "sent" a la derecha, "received" a la izquierda
+                                let alignmentClass = msg.status === 'sent' ? 'justify-end' : 'justify-start';
+
+                                if (msg.hasMedia) {
+                                    if (msg.mediaType === 'image') {
+                                        let downloadUrl = `/telegram/download-media/{{ auth()->id() }}/${msg.chatPeer}/${msg.messageId}`;
+                                        html += `<div class="flex ${alignmentClass} mb-2">
+                                                    <div class="message-bubble">
+                                                        <img src="${downloadUrl}"
+                                                            alt="Imagen"
+                                                            class="chat-image cursor-pointer"
+                                                            onclick="openZoomModal('${downloadUrl}')">
+                                                    </div>
+                                                </div>`;
+                                    } else if (msg.mediaType === 'video') {
+                                        let downloadUrl = `/telegram/download-media/{{ auth()->id() }}/${msg.chatPeer}/${msg.messageId}`;
+                                        html += `<div class="flex ${alignmentClass} mb-2">
+                                                    <div class="message-bubble">
+                                                        <button class="btn btn-sm btn-primary" onclick="openVideoModal('${downloadUrl}')">
+                                                            Ver Video
+                                                        </button>
+                                                    </div>
+                                                </div>`;
+                                    } else if (msg.mediaType === 'audio') {
+                                        let downloadUrl = `/telegram/download-media/{{ auth()->id() }}/${msg.chatPeer}/${msg.messageId}`;
+                                        html += `<div class="flex ${alignmentClass} mb-2">
+                                                    <div class="message-bubble">
+                                                        <audio controls>
+                                                            <source src="${downloadUrl}" type="audio/mpeg">
+                                                            Tu navegador no soporta el elemento de audio.
+                                                        </audio>
+                                                    </div>
+                                                </div>`;
+                                    } else if (msg.mediaType === 'location') {
+                                        html += `<div class="flex ${alignmentClass} mb-2">
+                                                    <div class="message-bubble">
+                                                        <a href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(msg.message)}" target="_blank" class="btn btn-info">
+                                                            Ver Ubicación
+                                                        </a>
+                                                    </div>
+                                                </div>`;
+                                    } else {
+                                        // Para documentos u otro tipo de media
+                                        let downloadUrl = `/telegram/download-media/{{ auth()->id() }}/${msg.chatPeer}/${msg.messageId}`;
+                                        html += `<div class="flex ${alignmentClass} mb-2">
+                                                    <div class="message-bubble">
+                                                        <a href="${downloadUrl}" download class="btn btn-secondary">
+                                                            Descargar Archivo
+                                                        </a>
+                                                    </div>
+                                                </div>`;
+                                    }
+                                } else {
+                                    // Mensaje de texto simple
+                                    html += `<div class="flex ${alignmentClass} mb-2">
+                                                <div class="message-bubble">
+                                                    ${msg.message}
+                                                </div>
+                                            </div>`;
+                                }
+                            });
+                        } else {
+                            html = '<p>No messages found for this chat</p>';
+                        }
+
+                        // Actualizar el contenedor de mensajes
+                        chatContainer.html(html);
+
+                        // Calcular la nueva altura del scroll
+                        const newScrollHeight = chatContainer[0].scrollHeight;
+
+                        // Si el usuario estaba cerca del final, bajar hasta el final
+                        if (currentScroll + containerHeight >= scrollHeightBefore - threshold) {
+                            chatContainer.scrollTop(newScrollHeight);
+                        } else {
+                            // Si no, mantener la posición actual ajustada con la diferencia
+                            const heightDiff = newScrollHeight - scrollHeightBefore;
+                            chatContainer.scrollTop(currentScroll + heightDiff);
+                        }
+                    },
+                    error: function(error) {
+                        if (error.statusText !== 'abort') { // Ignorar si fue abortada
+                            console.error('Error fetching messages:', error);
+                        }
+                    },
+                    complete: function() {
+                        currentMessageRequest = null;
+                    }
+                });
+            }
+
+            // Evento para filtrar los chats al escribir en el buscador
+            $(document).on('keyup', '#contactSearch', function() {
+                let searchTerm = $(this).val().toLowerCase();
+
+                // Iteramos sobre cada elemento de la lista de chats
+                $('#chat-list li').each(function() {
+                    let chatName = $(this).text().toLowerCase();
+
+                    // Si el nombre del chat incluye el término de búsqueda, lo mostramos, de lo contrario se oculta.
+                    if(chatName.indexOf(searchTerm) !== -1){
+                        $(this).show();
+                    } else {
+                        $(this).hide();
+                    }
+                });
+            });
+
+            // Función para iniciar actualización automática de mensajes cada 30 segundos
+            function startMessagesAutoRefresh(peer) {
+                if (messagesIntervalId) {
+                    clearInterval(messagesIntervalId);
+                }
+                messagesIntervalId = setInterval(() => {
+                    fetchMessages(peer);
+                }, 30000);
+            }
+
+            // Delegación de evento para cargar mensajes al hacer clic en un chat
+            $(document).on('click', '.chat-item', function() {
+                let peer = $(this).data('peer');
+                currentPeer = peer;
+                fetchMessages(peer);
+                startMessagesAutoRefresh(peer);
+            });
+
+            // Actualizar lista de chats cada 30 segundos
+            setInterval(fetchChats, 30000);
+
+            // Funciones de sesión
             function checkSessionStatus() {
                 fetch('/telegram/session-status/{{ auth()->id() }}')
                     .then(response => response.json())
                     .then(data => {
                         console.log(data);
-
-                        // Verificar si hay un error (como 'Sesión no encontrada')
                         if (data.error) {
                             $('#connection-btn').html(`
                                 <input type="text" id="phone" placeholder="Enter phone number" class="w-full p-2">
@@ -130,55 +381,52 @@
                             $('#start-session-btn').click(function() {
                                 startSession();
                             });
-                            //quitar el button de reset
                             $('#connection-btn2').html(``);
-
                         } else {
-                            // Verificar si la sesión está conectada aqui deberiamos de separas {userId: '1', isValidated: true} si es true o false
                             if (data.isValidated) {
-                                    $('#connection-btn').html(`
-                                        <button id="logout-btn" class="btn btn-danger">
-                                            {{ __('Logout') }}
-                                        </button>
-                                    `);
-                                    $('#logout-btn').click(function() {
-                                        logout();
-                                    });
-                                    //quitar el button de reset
-                                    $('#connection-btn2').html(``);
-                            } else {
-                                // Si no está conectado, mostrar el pin code
                                 $('#connection-btn').html(`
-                                        <input type="text" id="pin-code" placeholder="Enter pin code" class="w-full p-2">
-                                        <button id="start-session-btn" class="btn btn-success">
-                                            {{ __('inset pin code') }}
-                                        </button>
-                                    `);
-                                    $('#start-session-btn').click(function() {
-                                        inputPinCode();
-                                    });
-
-                                    $('#connection-btn2').html(`
-                                        <button id="logout-btn" class="btn btn-danger">
-                                            {{ __('RESET SESSION') }}
-                                        </button>
-                                    `);
-                                    $('#logout-btn').click(function() {
-                                        logout();
-                                    });
+                                    <button id="logout-btn" class="btn btn-danger">
+                                        {{ __('Logout') }}
+                                    </button>
+                                `);
+                                $('#logout-btn').click(function() {
+                                    logout();
+                                });
+                                $('#connection-btn2').html(`
+                                    <button id="sync-contacts" class="btn btn-primary">
+                                        {{ __('SYNC CONTACTS FROM TELEGRAM TO DATABASE') }}
+                                    </button>
+                                `);
+                                $('#sync-contacts').click(function() {
+                                    syncContactsFromTelegramToDatabase();
+                                });
+                            } else {
+                                $('#connection-btn').html(`
+                                    <input type="text" id="pin-code" placeholder="Enter pin code" class="w-full p-2">
+                                    <button id="start-session-btn" class="btn btn-success">
+                                        {{ __('Insert pin code') }}
+                                    </button>
+                                `);
+                                $('#start-session-btn').click(function() {
+                                    inputPinCode();
+                                });
+                                $('#connection-btn2').html(`
+                                    <button id="logout-btn" class="btn btn-danger">
+                                        {{ __('RESET SESSION') }}
+                                    </button>
+                                `);
+                                $('#logout-btn').click(function() {
+                                    logout();
+                                });
                             }
                         }
-
                     })
                     .catch(error => {
-                        // Manejar errores en la conexión o en la respuesta
                         console.error('Error al verificar el estado de la sesión:', error);
                         Swal.fire('Error', 'No se pudo verificar el estado de la sesión.', 'error');
                     });
             }
 
-
-            // Iniciar sesión
             function startSession() {
                 let csrfToken = $('meta[name="csrf-token"]').attr('content');
                 let phone = $('#phone').val();
@@ -187,20 +435,16 @@
                     type: 'POST',
                     data: { phone: phone, _token: csrfToken },
                     success: function(response) {
-                        // Mostrar mensaje de éxito
                         checkSessionStatus();
                         Swal.fire('Success', 'Verification code sent!', 'success');
                     },
                     error: function(error) {
-                        // Mostrar mensaje de error
                         checkSessionStatus();
                         Swal.fire('Error', 'Failed to send verification code.', 'error');
                     }
                 });
             }
 
-
-            // Iniciar sesión
             function inputPinCode() {
                 let csrfToken = $('meta[name="csrf-token"]').attr('content');
                 let pinCode = $('#pin-code').val();
@@ -209,19 +453,16 @@
                     type: 'POST',
                     data: { code: pinCode, _token: csrfToken },
                     success: function(response) {
-                        // Mostrar mensaje de éxito
                         checkSessionStatus();
                         Swal.fire('Success', 'Code verified!', 'success');
                     },
                     error: function(error) {
-                        // Mostrar mensaje de error
                         checkSessionStatus();
                         Swal.fire('Error', 'Failed verify the code.', 'error');
                     }
                 });
             }
 
-            // Logout
             function logout() {
                 let csrfToken = $('meta[name="csrf-token"]').attr('content');
                 $.ajax({
@@ -231,7 +472,6 @@
                     success: function(response) {
                         checkSessionStatus();
                         Swal.fire('Success', 'Logged out successfully!', 'success');
-                        checkSessionStatus();
                     },
                     error: function(error) {
                         checkSessionStatus();
@@ -240,13 +480,65 @@
                     }
                 });
             }
-            //ahora creamos otra funcion para sacar los nuevos chats
-            
 
+            function syncContactsFromTelegramToDatabase() {
+                let csrfToken = $('meta[name="csrf-token"]').attr('content');
+                $.ajax({
+                    url: '/telegram/sync-contacts/{{ auth()->id() }}',
+                    type: 'GET',
+                    data: { _token: '{{ csrf_token() }}' },
+                    success: function(response) {
+                        checkSessionStatus();
+                        Swal.fire('Success', 'Contacts synced successfully!', 'success');
+                    },
+                    error: function(error) {
+                        checkSessionStatus();
+                        let errorMsg = error.responseJSON && error.responseJSON.message ? error.responseJSON.message : '';
+                        Swal.fire('Error', 'Failed to sync contacts. ' + errorMsg, 'error');
+                    }
+                });
+            }
 
-            // Llamar a la función de verificación de sesión al cargar la página
             $(document).ready(function() {
                 checkSessionStatus();
+                fetchChats(); // Llamada inicial para chats
+            });
+
+            // Evento para enviar mensaje al chat activo
+            $(document).on('click', '#sendMessageButton', function(e) {
+                e.preventDefault();
+                let messageText = tinymce.get('tiny-editor').getContent({ format: 'text' });
+                if (!messageText || messageText.trim() === '') {
+                    Swal.fire('Error', 'Please enter a message.', 'error');
+                    return;
+                }
+                if (!currentPeer) {
+                    Swal.fire('Error', 'No chat selected.', 'error');
+                    return;
+                }
+                let userId = "{{ auth()->id() }}";
+                let csrfToken = $('meta[name="csrf-token"]').attr('content');
+                $.ajax({
+                    url: '/telegram/send-message/' + userId + '/' + currentPeer,
+                    type: 'POST',
+                    data: {
+                        message: messageText,
+                        _token: csrfToken
+                    },
+                    success: function(response) {
+                        if (response.success) {
+                            Swal.fire('Success', 'Message sent!', 'success');
+                            tinymce.get('tiny-editor').setContent('');
+                            fetchMessages(currentPeer);
+                        } else {
+                            Swal.fire('Error', 'Failed to send message.', 'error');
+                        }
+                    },
+                    error: function(error) {
+                        let errorMsg = error.responseJSON && error.responseJSON.message ? error.responseJSON.message : '';
+                        Swal.fire('Error', 'Failed to send message. ' + errorMsg, 'error');
+                    }
+                });
             });
         </script>
     @endpush

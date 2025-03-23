@@ -4,6 +4,8 @@ namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Cache;
 
 class TelegramController extends Controller
 {
@@ -12,8 +14,10 @@ class TelegramController extends Controller
      */
     public function index(Request $request)
     {
-        return view('telegram.index');
+        $autoResponseConfig = null; // O el valor que consideres por defecto
+        return view('telegram.index', compact('autoResponseConfig'));
     }
+
 
     /*===========================
       Authentication Endpoints
@@ -97,11 +101,48 @@ class TelegramController extends Controller
      */
     public function downloadMedia($userId, $peer, $messageId)
     {
+        $cacheDirectory = storage_path("app/media/{$userId}/{$peer}");
+        $cachePath = "{$cacheDirectory}/{$messageId}";
+
+        // 30 días expresados en segundos
+        $thirtyDaysInSeconds = 30 * 24 * 60 * 60;
+
+        // Verifica si el archivo existe y si no tiene más de 30 días
+        if (file_exists($cachePath) && (time() - filemtime($cachePath)) < $thirtyDaysInSeconds) {
+            $content = file_get_contents($cachePath);
+            $mimeType = mime_content_type($cachePath);
+
+            return response($content, 200)
+                    ->header('Content-Type', $mimeType)
+                    ->header('Content-Disposition', 'inline');
+        }
+
+        // Si el archivo no existe o ya expiró la caché, se descarga de nuevo
         $telegramUrl = env('TELEGRAM_URL');
         $response = Http::get("$telegramUrl/download-media/{$userId}/{$peer}/{$messageId}");
 
-        return response()->json($response->json());
+        if ($response->failed()) {
+            return response()->json(['error' => 'Error descargando la media'], $response->status());
+        }
+
+        // Crea el directorio de caché si no existe
+        if (!is_dir($cacheDirectory)) {
+            mkdir($cacheDirectory, 0755, true);
+        }
+
+        // Guarda el contenido en el caché
+        file_put_contents($cachePath, $response->body());
+
+        // Recupera los headers de respuesta originales
+        $contentType = $response->header('Content-Type', 'application/octet-stream');
+        $disposition = $response->header('Content-Disposition', 'attachment; filename="downloaded_media"');
+
+        return response($response->body(), 200)
+                ->header('Content-Type', $contentType)
+                ->header('Content-Disposition', $disposition);
     }
+
+
 
     /*===========================
       Chats Endpoints
@@ -137,16 +178,65 @@ class TelegramController extends Controller
     ===========================*/
 
     /**
-     * GET /get-messages/{userId}/{peer}
-     * Obtiene mensajes de un chat individual y agrega información de contacto.
+     * Obtiene mensajes de un chat individual y utiliza caché para optimizar llamadas.
+     * Si no hay mensajes en caché, se obtienen todos.
+     * Si ya hay mensajes en caché, se traen solo 10 mensajes nuevos después del último mensaje cacheado.
+     *
+     * @param Request $request
+     * @param string $userId
+     * @param string $peer
+     * @return \Illuminate\Http\JsonResponse
      */
-    public function getMessages($userId, $peer)
+    public function getMessages(Request $request, $userId, $peer)
     {
+        $cacheKey = "messages_{$userId}_{$peer}";
         $telegramUrl = env('TELEGRAM_URL');
-        $response = Http::get("$telegramUrl/get-messages/{$userId}/{$peer}");
 
-        return response()->json($response->json());
+        // Intentamos obtener los mensajes cacheados
+        $cachedMessages = Cache::get($cacheKey);
+
+        if (!$cachedMessages) {
+            // No hay mensajes en caché: obtenemos todos los mensajes de la API
+            $response = Http::get("$telegramUrl/get-messages/{$userId}/{$peer}");
+            $messages = $response->json()['messages'] ?? [];
+
+            // Almacenamos en caché (por ejemplo, por 30 días, ajusta según tus necesidades)
+            Cache::put($cacheKey, $messages, now()->addDays(30));
+        } else {
+            // Ya hay mensajes en caché: obtenemos el último mensaje
+            $lastMessage = end($cachedMessages);
+            // Suponemos que el identificador está en 'id' o en 'messageId'
+            $lastId = $lastMessage['id'] ?? $lastMessage['messageId'] ?? null;
+
+            if ($lastId) {
+                // Llamada a la API para obtener solo los nuevos mensajes: limitamos a 10 y enviamos 'after'
+                $response = Http::get("$telegramUrl/get-messages/{$userId}/{$peer}", [
+                    'limit' => 10,
+                    'after' => $lastId,
+                ]);
+                $newMessages = $response->json()['messages'] ?? [];
+
+                // Combina los mensajes nuevos con los ya cacheados y elimina duplicados
+                $messages = collect(array_merge($cachedMessages, $newMessages))
+                            ->unique(function ($item) {
+                                return $item['id'] ?? $item['messageId'];
+                            })
+                            ->values()
+                            ->all();
+
+                // Actualiza la caché
+                Cache::put($cacheKey, $messages, now()->addDays(30));
+            } else {
+                $messages = $cachedMessages;
+            }
+        }
+
+        return response()->json([
+            'success'  => true,
+            'messages' => $messages,
+        ]);
     }
+
 
     /**
      * DELETE /delete-message/{userId}/{peer}/{messageId}
@@ -155,10 +245,27 @@ class TelegramController extends Controller
     public function deleteMessage($userId, $peer, $messageId)
     {
         $telegramUrl = env('TELEGRAM_URL');
+
+        // Llamada a la API para borrar el mensaje
         $response = Http::delete("$telegramUrl/delete-message/{$userId}/{$peer}/{$messageId}");
+
+        // Intentamos obtener los mensajes cacheados para este chat
+        $cacheKey = "messages_{$userId}_{$peer}";
+        $cachedMessages = Cache::get($cacheKey);
+
+        if ($cachedMessages) {
+            // Filtramos los mensajes, quitando aquel cuyo messageId coincide
+            $updatedMessages = array_filter($cachedMessages, function ($msg) use ($messageId) {
+                return $msg['messageId'] != $messageId;
+            });
+
+            // Actualizamos la caché (por ejemplo, manteniendo la expiración previa, aquí usamos 30 días)
+            Cache::put($cacheKey, $updatedMessages, now()->addDays(30));
+        }
 
         return response()->json($response->json());
     }
+
 
     /**
      * POST /forward-message/{userId}/{fromPeer}/{toPeer}/{messageId}
@@ -220,6 +327,29 @@ class TelegramController extends Controller
 
         return response()->json($response->json());
     }
+
+        /**
+     * POST /send-message/{userId}/{groupId}/{message}
+     * Envía un mensaje a un grupo o canal.
+     */
+    public function sendMessage($userId, $groupId, Request $request)
+    {
+        $message = $request->input('message');
+        if (!$message) {
+            return response()->json(['error' => 'El mensaje es obligatorio'], 400);
+        }
+
+        $telegramUrl = env('TELEGRAM_URL');
+        $response = Http::post("$telegramUrl/send-message/{$userId}/{$groupId}", [
+            'message' => $message,
+        ]);
+        //ponemos un log para ver la respuesta de la llamada api
+        Log::info('Response from Telegram API:', ['response' => $response->json()]);
+
+
+        return response()->json($response->json());
+    }
+
 
     /**
      * POST /leave-group/{userId}/{groupId}
@@ -321,4 +451,123 @@ class TelegramController extends Controller
 
         return response()->json($response->json());
     }
+
+
+    /**
+     * Sincroniza los contactos desde la API de Telegram.
+     *
+     * JSON esperado:
+     * {
+     *   "success": true,
+     *   "contacts": [
+     *     {
+     *       "peer": "string",
+     *       "first_name": "string",
+     *       "last_name": "string",
+     *       "phone": "string",
+     *       "username": "string"
+     *     }
+     *   ]
+     * }
+     *
+     * Se utiliza para buscar si el contacto ya existe (por su telegram id o por su teléfono, normalizado quitando el "+").
+     * Si no existe, se crea un nuevo registro en la tabla de contactos.
+     *
+     * @openapi
+     * /sync-contacts/{userId}:
+     *   get:
+     *     summary: Sincroniza los contactos desde Telegram
+     *     tags: [Contacts]
+     *     parameters:
+     *       - in: path
+     *         name: userId
+     *         required: true
+     *         schema:
+     *           type: string
+     *         description: ID del usuario.
+     *     responses:
+     *       200:
+     *         description: Contactos sincronizados correctamente.
+     *         content:
+     *           application/json:
+     *             schema:
+     *               type: object
+     *               properties:
+     *                 success:
+     *                   type: boolean
+     *                 imported:
+     *                   type: array
+     *                   items:
+     *                     type: object
+     *                     properties:
+     *                       id:
+     *                         type: integer
+     *                       user_id:
+     *                         type: integer
+     *                       name:
+     *                         type: string
+     *                       phone:
+     *                         type: string
+     *                       telegram:
+     *                         type: string
+     *       500:
+     *         description: Error al obtener o sincronizar los contactos.
+     */
+    public function syncContacts($userId)
+    {
+        $telegramUrl = env('TELEGRAM_URL');
+
+        // Llamada a la API para obtener los contactos
+        $response = Http::get("$telegramUrl/get-contacts/{$userId}");
+        $data = $response->json();
+
+        if (!isset($data['success']) || $data['success'] !== true) {
+            return response()->json(['error' => 'Error al obtener contactos desde Telegram'], 500);
+        }
+
+        $contacts = $data['contacts'] ?? [];
+        $importedContacts = [];
+
+        foreach ($contacts as $tc) {
+            // Verificar que exista la clave 'id'
+            if (!isset($tc['peer'])) {
+                Log::warning('Contacto sin peer recibido', $tc);
+                continue;
+            }
+
+            // Normalizar el teléfono: quitar el signo '+' si existe.
+            $phoneNormalized = isset($tc['phone']) ? ltrim($tc['phone'], '+') : null;
+
+            // Buscar un contacto existente para este usuario que tenga el mismo telegram (id) o el mismo teléfono.
+            $contact = \App\Models\Contact::where('user_id', $userId)
+                ->where(function ($query) use ($tc, $phoneNormalized) {
+                    $query->where('telegram', $tc['peer'])
+                        ->orWhere('phone', $phoneNormalized);
+                })->first();
+
+            if (!$contact) {
+                // Si no existe, se crea el contacto.
+                // Si first_name o last_name no están definidos, se puede asignar un valor por defecto.
+                $firstName = $tc['first_name'] ?? 'Unknown';
+                $lastName = $tc['last_name'] ?? '';
+                $name = trim($firstName . ' ' . $lastName);
+
+                $contact = \App\Models\Contact::create([
+                    'user_id'  => $userId,
+                    'name'     => $name,
+                    'phone'    => $phoneNormalized,
+                    'telegram' => $tc['peer']
+                ]);
+                $importedContacts[] = $contact;
+                Log::info('Nuevo contacto creado', ['contact' => $contact]);
+            }
+        }
+
+        return response()->json([
+            'success' => true,
+            'imported' => $importedContacts
+        ]);
+    }
+
+
 }

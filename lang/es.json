@@ -468,5 +468,9 @@
     "Contacts imported successfully.": "Contactos importados con éxito.",
     "No new contacts were imported.": "No existen nuevos contactos.",
     "Failed to fetch contacts from API.": "Falló al obtener los contactos desde la API.",
-    "Import Contacts": "Importar Contactos"
+    "Import Contacts": "Importar Contactos",
+    "telegram": "Telegram",
+    "IMAP Connection Failed: ": "Conexión IMAP Fallida:",
+    "Reply (HTML allowed): ": "Responder (HTML permitido):",
+    "SYNC CONTACTS FROM TELEGRAM TO DATABASE": "IMPORTAR CONTACTOS"
   }

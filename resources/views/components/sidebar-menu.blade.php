@@ -74,6 +74,14 @@
                 </a>
             </li>
             <li>
+                <a href="{{ route('telegram.index') }}" class="navItem {{ (\Request::route()->getName() == 'telegram.index') ? 'active' : '' }}">
+                    <span class="flex items-center">
+                        <iconify-icon class="nav-icon" icon="hugeicons:telegram"></iconify-icon>
+                        <span>{{ __('telegram') }}</span>
+                    </span>
+                </a>
+            </li>
+            <li>
                 <a href="{{ route('contacts.index') }}" class="navItem {{ (\Request::route()->getName() == 'contacts.index') ? 'active' : '' }}">
                     <span class="flex items-center">
                         <iconify-icon class="nav-icon" icon="mdi:contact-outline"></iconify-icon>
