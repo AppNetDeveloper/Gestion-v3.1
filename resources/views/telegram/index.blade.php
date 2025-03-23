@@ -49,10 +49,17 @@
                         <!-- Perfil y Conexión/Desconexión -->
                         <div class="border-b border-slate-100 dark:border-slate-700 pb-4">
                             <div class="p-3">
-                                <div id="connection-btn" class="text-center">
-                                    <!-- Aquí se muestra el estado de la conexión -->
+                                <div class="flex justify-center items-center gap-2 flex-nowrap">
+                                    <div id="connection-btn" class="text-center">
+                                        <!-- Contenido del botón 1 -->
+                                    </div>
+                                    <div id="connection-btn3" class="text-center">
+                                        <!-- Contenido del botón 3 -->
+                                    </div>
                                 </div>
-                                <div id="connection-btn2" class="text-center"></div>
+                                <div id="connection-btn2" class="text-center mt-2">
+                                    <!-- Contenido del botón 2 (fuera de la línea) -->
+                                </div>
                             </div>
                         </div>
                         <!-- Buscador de Contactos -->
@@ -378,28 +385,39 @@
                                     {{ __('Start Session') }}
                                 </button>
                             `);
+
                             $('#start-session-btn').click(function() {
                                 startSession();
                             });
+
                             $('#connection-btn2').html(``);
                         } else {
                             if (data.isValidated) {
                                 $('#connection-btn').html(`
-                                    <button id="logout-btn" class="btn btn-danger">
-                                        {{ __('Logout') }}
+                                    <button id="logout-btn" class="btn btn-danger rounded-full px-4 py-2" title="{{ __('Logout') }}">
+                                        <iconify-icon icon="mdi:login" style="font-size: 1.5rem;"></iconify-icon>
                                     </button>
                                 `);
+
                                 $('#logout-btn').click(function() {
                                     logout();
                                 });
+
                                 $('#connection-btn2').html(`
-                                    <button id="sync-contacts" class="btn btn-primary">
-                                        {{ __('SYNC CONTACTS FROM TELEGRAM TO DATABASE') }}
+                                    <button id="sync-contacts"  class="btn btn-primary rounded-full px-4 py-2" title="{{ __('SYNC CONTACTS FROM TELEGRAM TO DATABASE') }}">
+                                        <iconify-icon icon="mdi:sync-circle" style="font-size: 1.5rem;"></iconify-icon>
                                     </button>
                                 `);
+
                                 $('#sync-contacts').click(function() {
                                     syncContactsFromTelegramToDatabase();
                                 });
+
+                                $('#connection-btn3').html(`
+                                    <button id="edit-auto-responses-btn"  class="btn btn-secondary rounded-full px-4 py-2" title="{{ __('Change Auto Responses') }}">
+                                        <iconify-icon icon="mdi:robot" style="font-size: 1.5rem;"></iconify-icon>
+                                    </button>
+                                `);
                             } else {
                                 $('#connection-btn').html(`
                                     <input type="text" id="pin-code" placeholder="Enter pin code" class="w-full p-2">
@@ -407,14 +425,17 @@
                                         {{ __('Insert pin code') }}
                                     </button>
                                 `);
+
                                 $('#start-session-btn').click(function() {
                                     inputPinCode();
                                 });
+
                                 $('#connection-btn2').html(`
-                                    <button id="logout-btn" class="btn btn-danger">
-                                        {{ __('RESET SESSION') }}
+                                    <button id="logout-btn" class="btn btn-danger  rounded-full px-4 py-2" title="{{ __('RESET SESSION') }}">
+                                        <iconify-icon icon="mdi:login" style="font-size: 1.5rem;"></iconify-icon>
                                     </button>
                                 `);
+
                                 $('#logout-btn').click(function() {
                                     logout();
                                 });
@@ -540,6 +561,69 @@
                     }
                 });
             });
+
+            $(document).on('click', '#edit-auto-responses-btn', function() {
+                let csrfToken = $('meta[name="csrf-token"]').attr('content');
+
+                // Primero obtenemos la configuración actual mediante una llamada AJAX GET
+                $.ajax({
+                    url: '/auto-response-telegram-get',
+                    type: 'GET',
+                    headers: { 'X-CSRF-TOKEN': csrfToken },
+                    success: function(response) {
+                        if (response.success) {
+                            let data = response.data || {};
+                            let currentTelegram = data.telegram !== undefined ? data.telegram : '0';
+                            let currentPrompt = data.telegram_prompt || '';
+
+                            // Abrir SweetAlert2 con los campos pre-populados
+                            Swal.fire({
+                                title: '{{ __("Edit Telegram Auto Responses") }}',
+                                html: `
+                                    <select id="swal-telegram" class="swal2-input">
+                                        <option value="0" ${currentTelegram == 0 ? 'selected' : ''}>{{ __("Deactivated") }}</option>
+                                        <option value="1" ${currentTelegram == 1 ? 'selected' : ''}>{{ __("Auto text") }}</option>
+                                        <option value="2" ${currentTelegram == 2 ? 'selected' : ''}>{{ __("With AI") }}</option>
+                                        <option value="3" ${currentTelegram == 3 ? 'selected' : ''}>{{ __("With ticket") }}</option>
+                                    </select>
+                                    <input id="swal-telegram-prompt" class="swal2-input" placeholder="{{ __('Prompt message') }}" value="${currentPrompt}"></br>
+                                    <small>{{ __("Prompt message is required for this option.") }}</small>
+                                `,
+                                focusConfirm: false,
+                                preConfirm: () => {
+                                    let telegram = $('#swal-telegram').val();
+                                    let telegram_prompt = $('#swal-telegram-prompt').val();
+                                    if (telegram !== '0' && (!telegram_prompt || telegram_prompt.trim() === '')) {
+                                        Swal.showValidationMessage('{{ __("Prompt message is required for this option.") }}');
+                                    }
+                                    return { telegram, telegram_prompt };
+                                }
+                            }).then((result) => {
+                                if (result.isConfirmed) {
+                                    let data = result.value;
+                                    $.ajax({
+                                        url: '/auto-response-telegram',
+                                        type: 'POST',
+                                        headers: { 'X-CSRF-TOKEN': csrfToken },
+                                        data: data,
+                                        success: function(response) {
+                                            Swal.fire('{{ __("Success") }}', response.message, 'success');
+                                        },
+                                        error: function(error) {
+                                            let errorMsg = error.responseJSON && error.responseJSON.message ? error.responseJSON.message : '{{ __("Error updating configuration.") }}';
+                                            Swal.fire('{{ __("Error") }}', errorMsg, 'error');
+                                        }
+                                    });
+                                }
+                            });
+                        }
+                    },
+                    error: function(error) {
+                        Swal.fire('{{ __("Error") }}', '{{ __("Unable to retrieve current configuration.") }}', 'error');
+                    }
+                });
+            });
+
         </script>
     @endpush
 </x-app-layout>

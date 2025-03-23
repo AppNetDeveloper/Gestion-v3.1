@@ -472,5 +472,14 @@
     "telegram": "Telegram",
     "IMAP Connection Failed: ": "Conexión IMAP Fallida:",
     "Reply (HTML allowed): ": "Responder (HTML permitido):",
-    "SYNC CONTACTS FROM TELEGRAM TO DATABASE": "IMPORTAR CONTACTOS"
+    "SYNC CONTACTS FROM TELEGRAM TO DATABASE": "IMPORTAR CONTACTOS",
+    "Change Auto Responses": "CAMBIAR RESPUESTAS AUTOMÁTICAS",
+    "Edit Telegram Auto Responses": "Editar respuestas automáticas de Telegram",
+    "Deactivated": "Desactivado",
+    "Auto text": "Texto automático",
+    "With AI": "Con IA",
+    "With ticket": "Con ticket",
+    "Prompt message": "Mensaje de prompt",
+    "Prompt message is required for this option.": "El mensaje de prompt es obligatorio para esta opción.",
+    "Error updating configuration.": "Error al actualizar la configuración."
   }

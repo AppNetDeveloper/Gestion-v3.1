@@ -276,7 +276,10 @@ Route::post('/import-contacts', [ContactController::class, 'import'])->name('con
 
 
 //auto response rutas para editar si se permite auto respuesta
-Route::post('/auto-response', [AutoProcessController::class, 'update'])->name('auto-response.update');
+Route::post('/auto-response-whatsapp', [AutoProcessController::class, 'updateWhatsapp'])->name('auto-response-whatsapp.update');
+Route::post('/auto-response-telegram', [AutoProcessController::class, 'updateTelegram'])->name('auto-response-telegram.update');
+Route::get('/auto-response-telegram-get', [AutoProcessController::class, 'getTelegram'])->middleware('auth');
+
 
     //OLAMA
     Route::post('/ollama/process', [OllamaController::class, 'processPrompt'])->name('ollama.process');
