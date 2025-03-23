@@ -559,7 +559,7 @@ class TelegramController extends Controller
                     'telegram' => $tc['peer']
                 ]);
                 $importedContacts[] = $contact;
-                Log::info('Nuevo contacto creado', ['contact' => $contact]);
+                //Log::info('Nuevo contacto creado', ['contact' => $contact]);
             }
         }
 

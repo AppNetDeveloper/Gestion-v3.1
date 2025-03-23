@@ -86,15 +86,7 @@
                                 </div>
                             </div>
                         </div>
-                        <!-- Botón para Importar Contactos -->
-                        <div class="py-3 px-6">
-                            <form action="{{ route('whatsapp.importContacts') }}" method="POST">
-                                @csrf
-                                <button type="submit" class="btn btn-primary w-full">
-                                    {{ __('Import Contacts') }}
-                                </button>
-                            </form>
-                        </div>
+
                         <!-- Buscador de Contactos -->
                         <div class="border-b border-slate-100 dark:border-slate-700 py-1">
                             <div class="search px-3 mx-6 rounded flex items-center space-x-3 rtl:space-x-reverse">
@@ -331,6 +323,15 @@
                                         <button id="btnAutoResponse" class="btn btn-secondary rounded-full px-4 py-2" title="{{ __('Auto Response: Configure automatic responses') }}">
                                             <iconify-icon icon="mdi:robot" style="font-size: 1.5rem;"></iconify-icon>
                                         </button>
+                                        <!-- Botón para Importar Contactos -->
+                                        <div class="py-3 px-6">
+                                            <form action="{{ route('whatsapp.importContacts') }}" method="POST">
+                                                @csrf
+                                                 <button id="sync-contacts"  class="btn btn-primary rounded-full px-4 py-2" title="{{ __('Import Contacts') }}">
+                                                    <iconify-icon icon="mdi:sync-circle" style="font-size: 1.5rem;"></iconify-icon>
+                                                </button>
+                                            </form>
+                                        </div>
                                     </div>`;
                                 document.getElementById('btnDisconnect').addEventListener('click', function() {
                                     fetch('{{ secure_url("/api/whatsapp/logout?user_id=" . auth()->id()) }}', { method: 'GET' })
@@ -365,9 +366,6 @@
                                     <div class="d-flex justify-content-center align-items-center gap-2">
                                         <button id="btnConnect" class="btn btn-success rounded-full px-4 py-2" title="{{ __('Connect: Click to start session') }}">
                                             <iconify-icon icon="mdi:login" style="font-size: 1.5rem;"></iconify-icon>
-                                        </button>
-                                        <button id="btnAutoResponse" class="btn btn-secondary rounded-full px-4 py-2" title="{{ __('Auto Response: Configure automatic responses') }}">
-                                            <iconify-icon icon="mdi:robot" style="font-size: 1.5rem;"></iconify-icon>
                                         </button>
                                     </div>`;
                                 document.getElementById('btnConnect').addEventListener('click', function() {
@@ -409,7 +407,7 @@
                                     if(result.isConfirmed){
                                         const data = result.value;
                                         $.ajax({
-                                            url: '/auto-response',
+                                            url: '/auto-response-whatsapp',
                                             method: 'POST',
                                             data: {
                                                 _token: $('meta[name="csrf-token"]').attr('content'),

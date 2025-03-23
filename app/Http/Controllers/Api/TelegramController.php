@@ -7,8 +7,8 @@ use Illuminate\Http\Request;
 use App\Models\TelegramMessage;
 use App\Models\Contact; // Asegúrate de importar el modelo de contactos
 use Illuminate\Support\Facades\Http;
-//anadimos use log
 use Illuminate\Support\Facades\Log;
+use App\Models\AutoProcess; // Asegúrate de tener este modelo si no existe, créalo
 
 class TelegramController extends Controller
 {
@@ -112,9 +112,72 @@ class TelegramController extends Controller
         // Crear el mensaje de Telegram
         $telegramMessage = TelegramMessage::create($data);
 
+
+        // Verificar en auto_processes si hay opción de respuesta automática
+        $autoProcess = AutoProcess::where('user_id', $data['user_id'])->first();
+        if ($autoProcess && $autoProcess->telegram != 0) {
+            // Opciones: 1 = texto automático, 2 = con IA, 3 = con ticket
+            switch ($autoProcess->telegram) {
+                case 1:
+                    // Opción 1: Texto automático
+                    // Se verifica si el último mensaje anterior del mismo chat es mayor a 30 minutos.
+                    $previousMessage = TelegramMessage::where('user_id', $data['user_id'])
+                        ->where('peer', $data['peer'])
+                        ->where('id', '<>', $telegramMessage->id)
+                        ->orderBy('date', 'desc')
+                        ->first();
+
+                    $shouldSendPrompt = false;
+                    if ($previousMessage) {
+                        $timeDiff = $telegramMessage->date - $previousMessage->date;
+                        if ($timeDiff > 1800) { // 1800 segundos = 30 minutos
+                            $shouldSendPrompt = true;
+                        }
+                    } else {
+                        // Si no hay mensaje anterior, se envía el prompt
+                        $shouldSendPrompt = true;
+                    }
+
+                    if ($shouldSendPrompt) {
+                        Log::info('Sending auto text response');
+                        Log::info('Auto text response: ' . $autoProcess->telegram_prompt);
+                        $this->sendAutoTextResponse($autoProcess->telegram_prompt, $data['user_id'], $data['peer']);
+                    }
+                    break;
+                case 2:
+                    // Opción 2: Respuesta con IA (pendiente de implementación)
+                    break;
+                case 3:
+                    // Opción 3: Respuesta con ticket (pendiente de implementación)
+                    break;
+            }
+        }
+
         return response()->json([
             'success' => true,
             'data'    => $telegramMessage
         ], 201);
+    }
+
+    /**
+     * Función para enviar la respuesta automática de texto.
+     *
+     * @param string $prompt Texto del mensaje automático
+     * @param int $userId ID del usuario
+     * @param string $peer Identificador del chat
+     * @return void
+     */
+    private function sendAutoTextResponse($prompt, $userId, $peer)
+    {
+
+        if (!$prompt) {
+            return;
+        }
+
+        $telegramUrl = env('TELEGRAM_URL');
+        $response = Http::post("$telegramUrl/send-message/{$userId}/{$peer}", [
+            'message' => $prompt,
+        ]);
+        Log::info('Response from Telegram API:', ['response' => $response->json()]);
     }
 }
