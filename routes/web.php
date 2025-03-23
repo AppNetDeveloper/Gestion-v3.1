@@ -225,7 +225,7 @@ Route::middleware('auth')->group(function () {
     // Chats
     Route::get('/telegram/get-chat/{userId}', [TelegramController::class, 'getChat'])->name('telegram.getChat');
     Route::delete('/telegram/delete-chat/{userId}/{peer}', [TelegramController::class, 'deleteChat'])->name('telegram.deleteChat');
-
+    Route::post('/telegram/send-message/{userId}/{groupId}', [TelegramController::class, 'sendMessage'])->name('telegram.sendMessage');
     // Messages
     Route::get('/telegram/get-messages/{userId}/{peer}', [TelegramController::class, 'getMessages'])->name('telegram.getMessages');
     Route::delete('/telegram/delete-message/{userId}/{peer}/{messageId}', [TelegramController::class, 'deleteMessage'])->name('telegram.deleteMessage');
@@ -243,6 +243,8 @@ Route::middleware('auth')->group(function () {
     Route::get('/telegram/search-contact/{userId}', [TelegramController::class, 'searchContact'])->name('telegram.searchContact');
     Route::get('/telegram/export-contacts/{userId}', [TelegramController::class, 'exportContacts'])->name('telegram.exportContacts');
     Route::post('/telegram/import-contacts/{userId}', [TelegramController::class, 'importContacts'])->name('telegram.importContacts');
+    Route::get('/telegram/sync-contacts/{userId}', [TelegramController::class, 'syncContacts'])->name('telegram.syncContacts');
+
 
     // Sessions
     Route::get('/telegram/active-sessions', [TelegramController::class, 'activeSessions'])->name('telegram.activeSessions');

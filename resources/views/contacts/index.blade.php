@@ -81,6 +81,10 @@
                                 <a href="/whatsapp/{{ $contact->phone }}" class="text-blue-600 hover:underline">
                                     <i class="fa-brands fa-whatsapp"></i>
                                 </a>
+                                {{-- Botón para WhatsApp --}}
+                                <a href="/telegram/{{ $contact->phone }}" class="text-blue-600 hover:underline">
+                                    <i class="fa-brands fa-telegram"></i>
+                                </a>
                                 {{-- Eliminar --}}
                                 <form action="{{ route('contacts.destroy', $contact->id) }}" method="POST" class="inline-block ml-2"
                                       onsubmit="return confirm('{{ __("Are you sure you want to delete this contact?") }}')">

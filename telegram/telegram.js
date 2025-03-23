@@ -10,6 +10,7 @@ const fs = require("fs");
 const path = require("path");
 const swaggerJsdoc = require("swagger-jsdoc");
 const swaggerUi = require("swagger-ui-express");
+const contactsCache = {};
 
 const app = express();
 app.use(express.json());
@@ -748,7 +749,7 @@ app.get("/get-chat/:userId", async (req, res) => {
  * @openapi
  * /get-messages/{userId}/{peer}:
  *   get:
- *     summary: Obtiene mensajes de un chat individual (directamente desde Telegram) y agrega información de contacto
+ *     summary: Obtiene mensajes de un chat individual (directamente desde Telegram) y agrega información de contacto!!!
  *     tags: [Messages]
  *     parameters:
  *       - in: path
@@ -763,6 +764,18 @@ app.get("/get-chat/:userId", async (req, res) => {
  *         schema:
  *           type: string
  *         description: ID del peer (chat)
+ *       - in: query
+ *         name: limit
+ *         required: false
+ *         schema:
+ *           type: string
+ *         description: Límite de mensajes a obtener. Se puede usar "all" o un número (ej. 10, 100)
+ *       - in: query
+ *         name: after
+ *         required: false
+ *         schema:
+ *           type: string
+ *         description: ID del mensaje a partir del cual obtener mensajes nuevos
  *     responses:
  *       200:
  *         description: Mensajes obtenidos
@@ -813,226 +826,44 @@ app.get("/get-chat/:userId", async (req, res) => {
  */
 app.get("/get-messages/:userId/:peer", async (req, res) => {
     const { userId, peer } = req.params;
+    const { limit, after } = req.query;
+
     if (!sessions[userId])
       return res.status(404).json({ error: "Sesión no iniciada" });
 
     try {
-      // Obtener los mensajes desde Telegram
-      const messages = await sessions[userId].getMessages(Number(peer), { limit: 100 });
-
-      // Obtener la lista de contactos (para evitar múltiples llamadas, podrías cachearla)
-      let contactsResult;
-      try {
-        contactsResult = await sessions[userId].invoke(new Api.contacts.GetContacts({ hash: 0 }));
-      } catch (err) {
-        console.error("Error obteniendo contactos:", err);
-        contactsResult = { users: [] };
+      // Determinar el límite: si se envía "all", dejamos sin límite; si se pasa un número, lo usamos; por defecto, 100.
+      let messagesLimit;
+      if (limit) {
+        if (limit.toLowerCase() === "all") {
+          messagesLimit = undefined;
+        } else {
+          messagesLimit = parseInt(limit);
+          if (isNaN(messagesLimit)) {
+            messagesLimit = 100;
+          }
+        }
+      } else {
+        messagesLimit = 100;
       }
-      const contacts = contactsResult.users || [];
 
-      // Convertir la lista de contactos a un diccionario (key: id)
-      const contactDict = {};
-      contacts.forEach(contact => {
-        contactDict[contact.id.toString()] = {
-          first_name: contact.firstName,
-          last_name: contact.lastName,
-          phone: contact.phone,
-          username: contact.username || null
-        };
-      });
+      // Preparar las opciones para obtener mensajes.
+      // Nota: Es posible que el parámetro "after" no funcione a nivel de la API, por lo que se filtrará manualmente.
+      const options = { limit: messagesLimit };
+      if (after) {
+        options.after = parseInt(after);
+      }
 
-      // Mapear los mensajes y, para cada mensaje, agregar la información de contacto
-      const messagesMapped = await Promise.all(
-        messages.map(async (msg) => {
-          // Message ID
-          const messageId = msg.id ? msg.id.toString() : "N/A";
-
-          // Extraer texto del mensaje
-          let messageText = "";
-          if (typeof msg.message === "string") {
-            messageText = msg.message;
-          } else if (msg.message && typeof msg.message.message === "string") {
-            messageText = msg.message.message;
-          }
-
-          // Determinar el sender (remitente)
-          let sender = "desconocido";
-          if (msg.fromId) {
-            if (typeof msg.fromId === "object" && msg.fromId.userId) {
-              sender = msg.fromId.userId.toString();
-            } else {
-              sender = msg.fromId.toString();
-            }
-          } else if (msg.userId) {  // Fallback para mensajes sin fromId
-            if (typeof msg.userId === "object" && msg.userId.value != null) {
-              sender = msg.userId.value.toString();
-            } else {
-              sender = msg.userId.toString();
-            }
-          }
-          //ponemos un if si sender es desconocido usamos el peer
-          if (sender === "desconocido") {
-            sender = peer; // Usamos el peer como sender si no hay fromId o userId
-          }
-
-
-          // Para este endpoint usamos directamente el valor peer para chatPeer
-          const chatPeer = peer;
-
-          // Fecha del mensaje
-          const date = msg.date;
-
-          // Estado: si msg.out es true, "sent"; de lo contrario "received"
-          const status = msg.out === true ? "sent" : "received";
-
-          // Determinar si hay media y su tipo (sin descargar Base64 para evitar latencia)
-          let hasMedia = false;
-          let mediaType = null;
-          let base64 = null;
-          if (msg.media) {
-            hasMedia = true;
-            if (msg.media.className === "MessageMediaPhoto") {
-              mediaType = "image";
-            } else if (msg.media.className === "MessageMediaDocument" && msg.media.document) {
-              const mime = msg.media.document.mimeType || "";
-              if (mime.startsWith("image/")) {
-                mediaType = "image";
-              } else if (mime.startsWith("video/")) {
-                mediaType = "video";
-              } else if (mime.startsWith("audio/")) {
-                mediaType = "audio";
-              } else {
-                mediaType = "document";
-              }
-            } else if (
-              msg.media.className === "MessageMediaGeo" ||
-              msg.media.className === "MessageMediaVenue"
-            ) {
-              mediaType = "location";
-            } else {
-              mediaType = "document";
-            }
-            // En este ejemplo no descargamos Base64 (puedes agregarlo si AUTOSAVE_BASE64 está habilitado)
-          }
-
-          // Si no hay texto y hay media, asignar un mensaje por defecto
-          if (!messageText.trim() && hasMedia) {
-            messageText = "Only " + (mediaType || "media");
-          }
-
-          // Obtener datos de contacto para el sender
-          let contactName = null;
-          let phone = null;
-          if (contactDict[sender]) {
-            const c = contactDict[sender];
-            contactName = ((c.first_name || "").trim() + " " + (c.last_name || "").trim()).trim();
-            phone = c.phone;
-          }
-
-          return {
-            messageId,
-            user_id: userId,
-            sender,
-            contactName,
-            phone,
-            chatPeer,
-            message: messageText,
-            date,
-            status,
-            base64,
-            hasMedia,
-            mediaType,
-          };
-        })
-      );
-
-      res.json({
-        success: true,
-        messages: messagesMapped,
-      });
-    } catch (error) {
-      res.status(500).json({ error: error.message });
-    }
-  });
-
-
-/**
- * @openapi
- * /get-messages/{userId}/{peer}:
- *   get:
- *     summary: Obtiene mensajes de un chat individual (directamente desde Telegram) y agrega información de contacto
- *     tags: [Messages]
- *     parameters:
- *       - in: path
- *         name: userId
- *         required: true
- *         schema:
- *           type: string
- *         description: ID del usuario
- *       - in: path
- *         name: peer
- *         required: true
- *         schema:
- *           type: string
- *         description: ID del peer (chat)
- *     responses:
- *       200:
- *         description: Mensajes obtenidos
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 success:
- *                   type: boolean
- *                 messages:
- *                   type: array
- *                   items:
- *                     type: object
- *                     properties:
- *                       messageId:
- *                         type: string
- *                       user_id:
- *                         type: string
- *                       sender:
- *                         type: string
- *                       contactName:
- *                         type: string
- *                         nullable: true
- *                       phone:
- *                         type: string
- *                         nullable: true
- *                       chatPeer:
- *                         type: string
- *                       message:
- *                         type: string
- *                       date:
- *                         type: integer
- *                       status:
- *                         type: string
- *                       base64:
- *                         type: string
- *                         nullable: true
- *                       hasMedia:
- *                         type: boolean
- *                       mediaType:
- *                         type: string
- *                         nullable: true
- *       404:
- *         description: Sesión no iniciada
- *       500:
- *         description: Error en el servidor
- */
-app.get("/get-messages/:userId/:peer", async (req, res) => {
-    const { userId, peer } = req.params;
-    if (!sessions[userId])
-      return res.status(404).json({ error: "Sesión no iniciada" });
-
-    try {
       // Convertimos el peer a número, asumiendo que el id del chat es numérico.
-      const messages = await sessions[userId].getMessages(Number(peer), { limit: 100 });
+      let messages = await sessions[userId].getMessages(Number(peer), options);
 
-      // Obtener la lista de contactos para agregar información de contacto (puedes implementar un caché si lo deseas)
+      // Si el parámetro "after" fue enviado, filtramos manualmente los mensajes
+      if (after) {
+        const afterVal = parseInt(after);
+        messages = messages.filter(msg => parseInt(msg.id) > afterVal);
+      }
+
+      // Obtener la lista de contactos para agregar información de contacto.
       let contactsResult;
       try {
         contactsResult = await sessions[userId].invoke(new Api.contacts.GetContacts({ hash: 0 }));
@@ -1116,8 +947,7 @@ app.get("/get-messages/:userId/:peer", async (req, res) => {
             } else {
               mediaType = "document";
             }
-            // Aquí se podría agregar la descarga a Base64 si AUTOSAVE_BASE64 está habilitado,
-            // pero en este ejemplo se omite para evitar latencia.
+            // Se podría agregar la descarga a Base64 si es necesario, pero se omite para evitar latencia.
           }
 
           if (!messageText.trim() && hasMedia) {
@@ -1157,6 +987,7 @@ app.get("/get-messages/:userId/:peer", async (req, res) => {
       res.status(500).json({ error: error.message });
     }
   });
+
 
 /**
  * @openapi
@@ -1338,23 +1169,16 @@ app.post("/leave-group/:userId/:groupId", async (req, res) => {
  *         description: Error en el servidor
  */
 app.get("/get-contacts/:userId", async (req, res) => {
-  const { userId } = req.params;
-  if (!sessions[userId]) return res.status(404).json({ error: "Sesión no iniciada" });
-  try {
-    const result = await sessions[userId].invoke(new Api.contacts.GetContacts({ hash: 0 }));
-    const contacts = result.users || [];
-    const formattedContacts = contacts.map(contact => ({
-      peer: contact.id,
-      first_name: contact.firstName,
-      last_name: contact.lastName,
-      phone: contact.phone,
-      username: contact.username || null,
-    }));
-    res.json({ success: true, contacts: formattedContacts });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
+    const { userId } = req.params;
+    if (!sessions[userId]) return res.status(404).json({ error: "Sesión no iniciada" });
+    try {
+      const contacts = await getCachedContacts(userId);
+      res.json({ success: true, contacts });
+    } catch (error) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
 
 /**
  * @openapi
@@ -1612,7 +1436,7 @@ app.post("/forward-message/:userId/:fromPeer/:toPeer/:messageId", async (req, re
  * @openapi
  * /search-contact/{userId}:
  *   get:
- *     summary: Busca un contacto por teléfono o nombre
+ *     summary: Busca un contacto por teléfono, nombre o peer
  *     tags: [Contacts]
  *     parameters:
  *       - in: path
@@ -1631,6 +1455,11 @@ app.post("/forward-message/:userId/:fromPeer/:toPeer/:messageId", async (req, re
  *         schema:
  *           type: string
  *         description: Nombre (o parte de él) a buscar en first_name, last_name o username
+ *       - in: query
+ *         name: peer
+ *         schema:
+ *           type: string
+ *         description: ID del contacto (peer) a buscar
  *     responses:
  *       200:
  *         description: Contactos filtrados obtenidos
@@ -1662,40 +1491,46 @@ app.post("/forward-message/:userId/:fromPeer/:toPeer/:messageId", async (req, re
  *         description: Error en el servidor
  */
 app.get("/search-contact/:userId", async (req, res) => {
-  const { userId } = req.params;
-  const { phone, name } = req.query;
-  if (!sessions[userId]) {
-    return res.status(404).json({ error: "Sesión no iniciada" });
-  }
-  try {
-    const result = await sessions[userId].invoke(new Api.contacts.GetContacts({ hash: 0 }));
-    const contacts = result.users || [];
-    const formattedContacts = contacts.map(contact => ({
-      id: contact.id,
-      first_name: contact.firstName || "",
-      last_name: contact.lastName || "",
-      phone: contact.phone || "",
-      username: contact.username || "",
-    }));
-    const filteredContacts = formattedContacts.filter(contact => {
-      let phoneMatch = true, nameMatch = true;
-      if (phone) {
-        phoneMatch = contact.phone.includes(phone);
-      }
-      if (name) {
-        const searchName = name.toLowerCase();
-        nameMatch =
-          contact.first_name.toLowerCase().includes(searchName) ||
-          contact.last_name.toLowerCase().includes(searchName) ||
-          contact.username.toLowerCase().includes(searchName);
-      }
-      return phoneMatch && nameMatch;
-    });
-    res.json({ success: true, contacts: filteredContacts });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
+    const { userId } = req.params;
+    const { phone, name, peer } = req.query; // Se agrega el parámetro peer
+    if (!sessions[userId]) {
+      return res.status(404).json({ error: "Sesión no iniciada" });
+    }
+    try {
+      const result = await sessions[userId].invoke(new Api.contacts.GetContacts({ hash: 0 }));
+      const contacts = result.users || [];
+      const formattedContacts = contacts.map(contact => ({
+        id: contact.id,
+        first_name: contact.firstName || "",
+        last_name: contact.lastName || "",
+        phone: contact.phone || "",
+        username: contact.username || ""
+      }));
+
+      const filteredContacts = formattedContacts.filter(contact => {
+        let phoneMatch = true, nameMatch = true, peerMatch = true;
+        if (phone) {
+          phoneMatch = contact.phone.includes(phone);
+        }
+        if (name) {
+          const searchName = name.toLowerCase();
+          nameMatch =
+            contact.first_name.toLowerCase().includes(searchName) ||
+            contact.last_name.toLowerCase().includes(searchName) ||
+            contact.username.toLowerCase().includes(searchName);
+        }
+        if (peer) {
+          // Se compara el peer (ID) de forma exacta
+          peerMatch = contact.id.toString() === peer.toString();
+        }
+        return phoneMatch && nameMatch && peerMatch;
+      });
+      res.json({ success: true, contacts: filteredContacts });
+    } catch (error) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
 
 /**
  * @openapi
@@ -2476,7 +2311,135 @@ async function handleIncomingMessage(userId, event) {
     }
   }
 
+/**
+ * @openapi
+ * /send-message/{userId}/{groupId}:
+ *   post:
+ *     summary: Envía un mensaje a un grupo o chat.
+ *     tags: [Messages]
+ *     parameters:
+ *       - in: path
+ *         name: userId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: ID del usuario.
+ *       - in: path
+ *         name: groupId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: ID del grupo o chat destino.
+ *     requestBody:
+ *       description: Objeto JSON que contiene el mensaje a enviar.
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               message:
+ *                 type: string
+ *                 description: El mensaje a enviar.
+ *             required:
+ *               - message
+ *     responses:
+ *       200:
+ *         description: Mensaje enviado correctamente.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 message:
+ *                   type: string
+ *       400:
+ *         description: El mensaje es obligatorio.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 error:
+ *                   type: string
+ *       404:
+ *         description: Sesión no iniciada.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 error:
+ *                   type: string
+ *       500:
+ *         description: Error en el servidor.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 error:
+ *                   type: string
+ */
+app.post("/send-message/:userId/:groupId", async (req, res) => {
+    const { userId, groupId } = req.params;
+    const { message } = req.body; // Se extrae el mensaje del cuerpo
+    if (!message) {
+      return res.status(400).json({ error: "El mensaje es obligatorio" });
+    }
+    if (!sessions[userId]) {
+      return res.status(404).json({ error: "Sesión no iniciada" });
+    }
+    try {
+      await sessions[userId].sendMessage(groupId, { message });
+      console.log(`Mensaje enviado a ${groupId} para usuario ${userId}`);
+      res.json({ success: true, message: "Mensaje enviado correctamente" });
+    } catch (error) {
+      console.error("Error enviando mensaje:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
 
+  // Función para obtener contactos, utilizando caché si está disponible y no expiró.
+async function getCachedContacts(userId) {
+    const cacheDuration = 10 * 60 * 1000; // 10 minutos en milisegundos
+    const now = Date.now();
+
+    // Si existe caché y no ha expirado, retornamos la información cacheada
+    if (contactsCache[userId] && contactsCache[userId].expiresAt > now) {
+      console.log(`Usando contactos cacheados para el usuario ${userId}`);
+      return contactsCache[userId].contacts;
+    }
+
+    // Sino, llamamos a la API de Telegram para obtener los contactos
+    let result;
+    try {
+      result = await sessions[userId].invoke(new Api.contacts.GetContacts({ hash: 0 }));
+    } catch (err) {
+      console.error("Error obteniendo contactos:", err);
+      return [];
+    }
+
+    // Se formatea la respuesta según se requiera
+    const contacts = (result.users || []).map(contact => ({
+      id: contact.id,
+      first_name: contact.firstName || "",
+      last_name: contact.lastName || "",
+      phone: contact.phone || "",
+      username: contact.username || null
+    }));
+
+    // Se guarda en caché junto con el tiempo de expiración
+    contactsCache[userId] = {
+      contacts,
+      expiresAt: now + cacheDuration
+    };
+
+    console.log(`Contactos actualizados en caché para el usuario ${userId}`);
+    return contacts;
+  }
 /**
  * Iniciar la API y cargar sesiones y mensajes procesados.
  */
