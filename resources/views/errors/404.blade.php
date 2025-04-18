@@ -9,7 +9,7 @@
                 </div>
             </div>
             <div class="max-w-[300px] mx-auto w-full">
-                <a href="{{ route('dashboards.analytic') }}" class="defaultButton">
+                <a href="{{ route('dashboard.unified') }}" class="defaultButton">
                     {{ __('Go To Homepage') }}
                 </a>
             </div>

@@ -72,4 +72,8 @@ return [
         'client_secret' => env('BITBUCKET_CLIENT_SECRET'),
         'redirect' => env('BITBUCKET_REDIRECT'),
     ],
+    'openroute' => [
+        'key' => env('API_OPENROUTE'),
+    ],
+
 ];

@@ -56,6 +56,8 @@ Route::group(['middleware' => ['auth', 'verified']], function () {
     // Dashboards
     Route::get('dashboard-analytic', [HomeController::class, 'analyticDashboard'])->name('dashboards.analytic');
     Route::get('dashboard-ecommerce', [HomeController::class, 'ecommerceDashboard'])->name('dashboards.ecommerce');
+    Route::get('dashboard', [HomeController::class, 'unifiedDashboard'])->middleware(['auth'])->name('dashboard.unified');
+    Route::get('get-time-control-section', [HomeController::class, 'getTimeControlSection'])->middleware('auth');
     // Locale
     Route::get('setlocale/{locale}', SetLocaleController::class)->name('setlocale');
 
