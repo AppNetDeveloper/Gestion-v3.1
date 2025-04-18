@@ -19,6 +19,8 @@ class TimeControlSeeder extends Seeder
             ['id' => 5, 'table_name' => 'Resume Workday',    'icon' => 'ic:sharp-restore'],
             ['id' => 6, 'table_name' => 'Doctor Visit',      'icon' => 'fa6-solid:house-medical-circle-check'],
             ['id' => 7, 'table_name' => 'Smoking Break',     'icon' => 'mdi:smoking'],
+            ['id' => 8, 'table_name' => 'In Vehicle',        'icon' => 'mdi:carback'],
+
         ];
 
         foreach ($statuses as $status) {
@@ -40,8 +42,13 @@ class TimeControlSeeder extends Seeder
             ['time_control_status_id' => 5, 'permission_id' => 4],
             ['time_control_status_id' => 6, 'permission_id' => 5],
             ['time_control_status_id' => 2, 'permission_id' => 6],
-            ['time_control_status_id' => 2, 'permission_id' => 7],
             ['time_control_status_id' => 5, 'permission_id' => 6],
+            ['time_control_status_id' => 2, 'permission_id' => 8],
+            ['time_control_status_id' => 5, 'permission_id' => 8],
+            ['time_control_status_id' => 2, 'permission_id' => 7],
+            ['time_control_status_id' => 5, 'permission_id' => 7],
+            ['time_control_status_id' => 7, 'permission_id' => 5],
+            ['time_control_status_id' => 8, 'permission_id' => 5],
         ];
 
         foreach ($rules as $rule) {
