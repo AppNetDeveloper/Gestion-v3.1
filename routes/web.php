@@ -42,7 +42,7 @@ use App\Http\Controllers\LaborCalendarController;
 use Webklex\IMAP\Facades\Client;
 use App\Http\Controllers\MediaController;
 use App\Http\Controllers\TelegramController;
-
+use App\Http\Controllers\MapController;
 
 
 
@@ -380,6 +380,18 @@ Route::get('/auto-response-telegram-get', [AutoProcessController::class, 'getTel
     Route::get('/images/{media}', [ImageController::class, 'show'])->name('image.show');
 
 });
+
+
+
+// Ruta para mostrar la página del mapa
+Route::get('/live-owntrack-map', [MapController::class, 'index'])->name('map.index'); // ->middleware('auth'); // Añade middleware si requiere login
+
+// Ruta API para obtener los datos de ubicación (convencional usar /api/)
+// Podrías moverla a routes/api.php si usas autenticación API,
+// pero para simplicidad con la sesión web, la dejamos aquí por ahora.
+Route::get('/api/locations/latest', [MapController::class, 'getLatestLocations'])->name('api.locations.latest'); // ->middleware('auth');
+// --- Nueva Ruta ver los puntos calientes permitidos 
+Route::get('/api/control-points', [MapController::class, 'getControlPoints'])->name('api.control-points');
 
 // Grupo de rutas públicas
 Route::group([], function () {
