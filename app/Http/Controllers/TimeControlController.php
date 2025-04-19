@@ -132,8 +132,36 @@ class TimeControlController extends Controller
             return 0;
         }
 
-        return DistanceHelper::carretera($lastPause->lat, $lastPause->long, $lat, $long);
+        // Cálculo de distancia en línea recta (Haversine)
+        $distanceLinealKm = $this->haversineDistance($lastPause->lat, $lastPause->long, $lat, $long);
+
+        if ($distanceLinealKm < 1) {
+            return 0; // Demasiado cerca para hacer petición a la API de carretera
+        }
+
+        // Solo si la distancia lineal es >= 1 km, calculamos por carretera
+        $km=DistanceHelper::carretera($lastPause->lat, $lastPause->long, $lat, $long);
+        if($km<0){
+            $km=DistanceHelper::carretera($lastPause->lat, $lastPause->long, $lat, $long);
+        }
+        return (int)$km; // Devolvemos la distancia en kilómetros como entero
     }
+    public function haversineDistance(float $lat1, float $lon1, float $lat2, float $lon2): float
+    {
+        $earthRadius = 6371; // km
+
+        $dLat = deg2rad($lat2 - $lat1);
+        $dLon = deg2rad($lon2 - $lon1);
+
+        $a = sin($dLat / 2) ** 2 +
+             cos(deg2rad($lat1)) * cos(deg2rad($lat2)) *
+             sin($dLon / 2) ** 2;
+
+        $c = 2 * asin(sqrt($a));
+
+        return $earthRadius * $c;
+    }
+
 
     // Función para calcular el tiempo de pausa
     public function calculateBreakTime($userId,$previousStatus)

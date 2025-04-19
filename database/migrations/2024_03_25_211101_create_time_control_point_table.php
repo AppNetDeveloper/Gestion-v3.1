@@ -13,7 +13,7 @@ class CreateTimeControlPointTable extends Migration
      */
     public function up()
     {
-        Schema::create('time_control_point', function (Blueprint $table) {
+        Schema::create('time_control_points', function (Blueprint $table) {
             $table->id();
             $table->string('name')->nullable();
             $table->string('long')->nullable();
@@ -30,7 +30,7 @@ class CreateTimeControlPointTable extends Migration
      */
     public function down()
     {
-        Schema::dropIfExists('time_control_point');
+        Schema::dropIfExists('time_control_points');
     }
 }
 
