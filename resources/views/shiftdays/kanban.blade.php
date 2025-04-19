@@ -16,6 +16,14 @@
             opacity: 0.8 !important; /* Ligeramente transparente */
             box-shadow: 0 4px 8px rgba(0,0,0,0.2) !important; /* Sombra más pronunciada */
         }
+        /* Estilo para el placeholder cuando está solo */
+        .users-droppable p.italic:only-child {
+            /* Puedes añadir estilos específicos si quieres, ej: centrarlo mejor */
+             display: flex;
+             align-items: center;
+             justify-content: center;
+             min-height: 30px; /* Asegura una altura mínima para soltar */
+        }
     </style>
     @endpush
 
@@ -119,18 +127,25 @@
                                                 {{ $shiftDay->shift->name }}
                                             </h4>
                                             {{-- Información del horario --}}
+                                            {{-- *** CORREGIDO AQUÍ *** --}}
                                             <p class="text-slate-600 dark:text-slate-400 text-xs">
                                                 <iconify-icon icon="mdi:clock-outline" class="inline-block mr-1"></iconify-icon>
                                                 @if($shiftDay->isSplitShift())
-                                                    {{ optional($shiftDay->start_time)->format('H:i') }} - {{ optional($shiftDay->split_start_time)->format('H:i') }}
-                                                    <span class="text-slate-400 dark:text-slate-500 mx-1">|</span>
-                                                    {{ optional($shiftDay->split_end_time)->format('H:i') }} - {{ optional($shiftDay->end_time)->format('H:i') }}
+                                                    {{-- Muestra el primer periodo de trabajo --}}
+                                                    {{ optional($shiftDay->start_time)->format('H:i') }} - {{ optional($shiftDay->end_time)->format('H:i') }}
+                                                    {{-- Indicador de descanso --}}
+                                                    <span class="text-slate-400 dark:text-slate-500 mx-1 text-[10px] italic">({{ __('Descanso') }})</span>
+                                                    {{-- Muestra el segundo periodo de trabajo --}}
+                                                    {{ optional($shiftDay->split_start_time)->format('H:i') }} - {{ optional($shiftDay->split_end_time)->format('H:i') }}
                                                 @else
+                                                    {{-- Muestra horario normal --}}
                                                     {{ optional($shiftDay->start_time)->format('H:i') }} - {{ optional($shiftDay->end_time)->format('H:i') }}
                                                 @endif
+                                                {{-- Separador y horas efectivas --}}
                                                 <span class="text-slate-400 dark:text-slate-500 mx-1">|</span>
                                                 {{ $shiftDay->effective_hours ?? __('N/A') }}h
                                             </p>
+                                            {{-- *** FIN CORRECCIÓN *** --}}
                                         </div>
                                     </header>
 
@@ -181,25 +196,25 @@
             document.querySelectorAll('[data-day-index]').forEach(dayContainer => {
                 const userContainers = Array.from(dayContainer.querySelectorAll('.users-droppable'));
                 if (userContainers.length > 0) {
-                    const drake = dragula(userContainers);
+                    const drake = dragula(userContainers, {
+                        invalid: function (el, handle) {
+                            if (el.tagName === 'P' && el.classList.contains('italic')) {
+                                return true;
+                            }
+                            return false;
+                        }
+                    });
                     drakeInstances.push(drake);
-                    // Añadir clases visuales durante el drag
                     drake.on('drag', (el, source) => {
-                        el.classList.add('opacity-50'); // El original se hace transparente
-                        // El 'mirror' (el que se mueve con el cursor/dedo) ya tiene estilos CSS aplicados
+                        el.classList.add('opacity-50');
                     });
                     drake.on('dragend', (el) => {
                         el.classList.remove('opacity-50');
                     });
-                     // Evento drop para actualizar placeholders
                     drake.on('drop', (el, target, source, sibling) => {
                         updatePlaceholderVisibility(source);
                         updatePlaceholderVisibility(target);
                     });
-                    // Opcional: Evento 'cloned' para aplicar estilos directamente al mirror si es necesario
-                    // drake.on('cloned', (mirror, original, type) => {
-                    //     // mirror.classList.add('custom-mirror-style');
-                    // });
                 }
             });
 
@@ -208,7 +223,8 @@
              * @param {HTMLElement} container - El contenedor (pool o shift-users).
              */
             function updatePlaceholderVisibility(container) {
-                if (!container) return;
+                // ... (código sin cambios) ...
+                 if (!container) return;
                 const isPool = container.id.startsWith('pool-');
                 const placeholderText = isPool
                     ? "{{ __('No hay empleados disponibles') }}"
@@ -234,8 +250,8 @@
              * @param {HTMLElement} button - El botón que disparó el evento.
              */
             window.copyPreviousDayUsers = function(button) {
-                const currentIndex = parseInt(button.getAttribute('data-day-index'));
-                // ... (resto de la función de copiar, sin cambios) ...
+                // ... (código sin cambios) ...
+                 const currentIndex = parseInt(button.getAttribute('data-day-index'));
                  console.log('[Copy] Iniciando copia para el día índice:', currentIndex);
 
                 if (isNaN(currentIndex) || currentIndex === 0) {
@@ -253,7 +269,6 @@
                  console.log('[Copy] Contenedor día actual:', currentDayContainer.id);
                  console.log('[Copy] Contenedor día anterior:', previousDayContainer.id);
 
-                // Selecciona TODOS los contenedores de usuarios de turnos en orden
                 const previousShiftUserContainers = previousDayContainer.querySelectorAll('[id^="shifts-"] [id^="shift-"][id$="-users"]');
                 const currentShiftUserContainers = currentDayContainer.querySelectorAll('[id^="shifts-"] [id^="shift-"][id$="-users"]');
                 const currentPoolContainer = currentDayContainer.querySelector('[id^="pool-"]');
@@ -270,7 +285,6 @@
                      console.log(`[Copy] Encontrados ${previousShiftUserContainers.length} turnos en día anterior y ${currentShiftUserContainers.length} en día actual.`);
                 }
 
-                // 1. Mover todas las tarjetas del día actual de vuelta al pool (si existe el pool)
                 if (currentPoolContainer) {
                     console.log('[Copy] Paso 1: Moviendo empleados actuales de vuelta al pool...');
                     currentShiftUserContainers.forEach(container => {
@@ -288,7 +302,6 @@
                      console.log('[Copy] Paso 1 omitido: No hay pool en el día actual.');
                 }
 
-                // 2. Iterar sobre los turnos POR ÍNDICE y copiar asignaciones
                 console.log('[Copy] Paso 2: Copiando asignaciones del día anterior por posición...');
                 previousShiftUserContainers.forEach((prevContainer, index) => {
                     const currentTargetContainer = currentShiftUserContainers[index];
@@ -316,7 +329,6 @@
                     }
                 });
 
-                // 3. Actualizar visibilidad de placeholders en todos los contenedores afectados del día actual
                  console.log('[Copy] Paso 3: Actualizando visibilidad de placeholders final...');
                  currentShiftUserContainers.forEach(updatePlaceholderVisibility);
                  if (currentPoolContainer) {
@@ -328,7 +340,7 @@
 
             // --- Listener para Restablecer Asignaciones ---
             document.getElementById('reset-assignments').addEventListener('click', function() {
-                // ... (código de reset sin cambios) ...
+                // ... (código sin cambios) ...
                  swalButtons.fire({
                     title: @json(__('Confirmación')),
                     text: @json(__('¿Restablecer todas las asignaciones? Los empleados volverán al pool de "Disponibles" de su día.')),
@@ -374,7 +386,7 @@
 
             // --- Listener para Guardar Cambios ---
             document.getElementById('save-changes').addEventListener('click', function() {
-                // ... (código de guardar sin cambios) ...
+                // ... (código sin cambios) ...
                  swalButtons.fire({
                     title: @json(__('Confirmación')),
                     text: @json(__('¿Guardar las asignaciones actuales de todos los días?')),
@@ -477,14 +489,12 @@
              // Inicializar placeholders al cargar la página
              document.querySelectorAll('.users-droppable').forEach(updatePlaceholderVisibility);
 
-             // --- NUEVO: Prevenir scroll de página mientras se arrastra en táctil ---
+             // Prevenir scroll de página mientras se arrastra en táctil
              document.addEventListener('touchmove', function(e) {
-                // Comprueba si existe el elemento espejo que crea Dragula al arrastrar
                 if (document.querySelector('.gu-mirror')) {
-                    // Si existe, previene el comportamiento por defecto (scroll)
                     e.preventDefault();
                 }
-             }, { passive: false }); // Importante: passive: false para que preventDefault funcione
+             }, { passive: false });
 
         </script>
     @endpush
