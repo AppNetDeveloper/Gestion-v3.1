@@ -13,15 +13,19 @@
         </div>
 
         {{-- Control Horario Section (from Dashboard 1 - Placed Prominently) --}}
-        {{-- El contenido interno (#buttons-container) se actualizará con AJAX --}}
-        <section class="control-horario card p-6 relative"> {{-- Added relative positioning for overlay --}}
+        {{-- El contenido interno (#buttons-container o #time-control-error-message) se actualizará con AJAX --}}
+        <section class="control-horario card p-6 relative min-h-[100px]"> {{-- Added relative positioning and min-height --}}
             <h2 class="text-xl font-medium text-slate-900 dark:text-white mb-4">Panel de Control de Horario</h2>
 
             {{-- Container for buttons - This div's content will be replaced --}}
             <div class="grid sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4" id="buttons-container">
                  {{-- Initial content rendered by the server (or load the partial here initially) --}}
-                 {{-- Make sure the variables are passed correctly if using @include --}}
                  @include('partials._control_horario_buttons', ['allowedButtons' => $allowedButtons ?? [], 'allowedAddButtons' => $allowedAddButtons ?? false])
+            </div>
+
+            {{-- Div to show persistent error messages (initially hidden) --}}
+            <div id="time-control-error-message" class="text-center text-danger-700 font-medium mt-4 p-4 border border-danger-500 rounded bg-danger-500 bg-opacity-10" style="display: none;">
+                {{-- Error messages will be inserted here by JavaScript --}}
             </div>
 
             {{-- Loading Overlay (Initially Hidden) --}}
@@ -555,7 +559,7 @@
         @vite(['resources/js/plugins/jquery-jvectormap-2.0.5.min.js'])
         @vite(['resources/js/plugins/jquery-jvectormap-world-mill-en.js'])
 
-        {{-- ** START: Javascript Block with AJAX Refresh & Interval (Flag Logic Corrected) ** --}}
+        {{-- ** START: Javascript Block with Persistent Error Display ** --}}
         <script type="module">
             // Wait for the DOM to be fully loaded
             document.addEventListener('DOMContentLoaded', function() {
@@ -573,8 +577,90 @@
                 let isUpdatingTimeControl = false;
                 let timeControlIntervalId = null; // To store the interval ID
 
+                // --- References to UI elements ---
+                const buttonsContainer = $("#buttons-container"); // jQuery object
+                const loadingOverlay = $("#loading-overlay"); // jQuery object
+                const errorMessageDiv = $("#time-control-error-message"); // jQuery object
+
+                // --- Geolocation Tracking using watchPosition ---
+                let latestLat = null;
+                let latestLong = null;
+                let watchId = null;
+                let initialLocationObtained = false; // Flag to know if we got at least one location
+                let geolocationSupported = ('geolocation' in navigator);
+
+
+                // Function to show persistent error messages and hide buttons
+                function showPersistentError(message) {
+                    console.error("Persistent Error:", message); // Log error for debugging
+                    if(errorMessageDiv.length) {
+                        errorMessageDiv.text(message).show(); // Set text and show error div
+                    }
+                    if(buttonsContainer.length) {
+                        buttonsContainer.hide(); // Hide buttons
+                    }
+                     if(loadingOverlay.length) {
+                        loadingOverlay.hide(); // Ensure loading is hidden
+                    }
+                }
+
+                 // Function to hide persistent error messages and show buttons
+                function hidePersistentError() {
+                    if(errorMessageDiv.length) {
+                        errorMessageDiv.hide().text(''); // Hide error div and clear text
+                    }
+                     if(buttonsContainer.length) {
+                         // Only show buttons if not currently updating (to avoid race conditions)
+                         if (!isUpdatingTimeControl) {
+                            buttonsContainer.css('display', 'grid'); // Show buttons using grid
+                         }
+                    }
+                }
+
+
+                if (geolocationSupported) {
+                    console.log('Iniciando seguimiento de ubicación...'); // Log location start
+                    watchId = navigator.geolocation.watchPosition(
+                        (position) => { // Success callback for watchPosition
+                            latestLat = position.coords.latitude;
+                            latestLong = position.coords.longitude;
+                            if (!initialLocationObtained) {
+                                initialLocationObtained = true;
+                                console.log('Ubicación inicial obtenida:', latestLat, latestLong);
+                                hidePersistentError(); // Hide any previous error message once location is obtained
+                            } else {
+                               console.log('Ubicación actualizada:', latestLat, latestLong);
+                            }
+                        },
+                        (error) => { // Error callback for watchPosition
+                            console.error("Error vigilando posición:", error.message, `(Code: ${error.code})`);
+                            latestLat = null; // Invalidate location on error
+                            latestLong = null;
+                            initialLocationObtained = false; // Reset flag
+
+                            // Show specific message for location denied/unavailable
+                            if (error.code === error.PERMISSION_DENIED || error.code === error.POSITION_UNAVAILABLE) {
+                                showPersistentError("La ubicación está desactivada o denegada. Por favor, actívala para poder fichar.");
+                            } else {
+                                // Show generic error for other geolocation issues
+                                showPersistentError(`Error obteniendo ubicación: ${error.message}`);
+                            }
+                        },
+                        { // Options for watchPosition
+                            enableHighAccuracy: true,
+                            timeout: 15000,
+                            maximumAge: 0
+                        }
+                    );
+                } else {
+                    console.warn("Geolocalización no soportada.");
+                    showPersistentError('Geolocalización no soportada por este navegador. No se puede fichar.');
+                }
+                // --- End Geolocation Tracking ---
+
+
                 // --- Chart Initializations (Using Vanilla JS) ---
-                // Wrapped in try...catch for better error isolation
+                // Restore FULL chart configurations here
                 try {
                     // Revenue Report Chart (Main Bar Chart)
                     const barChartOneEl = $q("#barChartOne");
@@ -631,7 +717,7 @@
                     if (columnChartEl && dashboardData.lastWeekOrder) {
                         const orderData = Array.isArray(dashboardData.lastWeekOrder.data) ? dashboardData.lastWeekOrder.data.map(v => Number(v) || 0) : [];
                         if(orderData.length > 0) {
-                            let lastWeekOrderChartConfig = {
+                             let lastWeekOrderChartConfig = {
                                 series: [{ name: dashboardData.lastWeekOrder.name ?? 'Orders', data: orderData }],
                                 chart: { type: "bar", height: 50, toolbar: { show: false }, sparkline: { enabled: true }, background: 'transparent' },
                                 plotOptions: { bar: { columnWidth: "60%", borderRadius: 2 } }, legend: { show: false }, dataLabels: { enabled: false },
@@ -686,7 +772,7 @@
                                 series: radialData, chart: { height: 350, type: 'radialBar', background: 'transparent' },
                                 plotOptions: { radialBar: { offsetY: 0, startAngle: 0, endAngle: 270, hollow: { margin: 5, size: '30%', background: 'transparent' }, dataLabels: { name: { show: false }, value: { show: false } } } },
                                 colors: ['#1ab7ea', '#0084ff', '#39539E', '#0077B5'], labels: productGrowthOverviewData.productNames ?? [],
-                                legend: { show: true, floating: true, fontSize: '12px', position: 'left', offsetX: 50, offsetY: 15, labels: { useSeriesColors: true }, markers: { size: 0 }, formatter: (seriesName, opts) => `${seriesName}: ${opts.w.globals.series[opts.seriesIndex]}`, itemMargin: { vertical: 3 } },
+                                legend: { show: true, floating: true, fontSize: '12px', position: 'left', offsetX: 50, offsetY: 15, labels: { useSeriesColors: true, colors: document.body.classList.contains('dark') ? '#cbd5e1' : '#475569' }, markers: { size: 0 }, formatter: (seriesName, opts) => `${seriesName}: ${opts.w.globals.series[opts.seriesIndex]}`, itemMargin: { vertical: 3 } },
                                 tooltip: { theme: document.body.classList.contains('dark') ? 'dark' : 'light', y: { formatter: (val) => val } },
                                 responsive: [ { breakpoint: 480, options: { legend: { show: false } } } ]
                             };
@@ -748,67 +834,85 @@
                                  console.log('Previous time control update still in progress, skipping interval refresh.');
                                  return;
                              }
-                             // ** REMOVED faulty check: if (isUpdatingTimeControl && !isInterval) { ... return; } **
-
-                            const buttonsContainer = $("#buttons-container");
-                            const loadingOverlay = $("#loading-overlay");
 
                             if (!buttonsContainer.length) return;
 
                             // Set flag *before* the request
-                            isUpdatingTimeControl = true; // Set flag indicating an update (either user or interval) is starting
-                            console.log('Refreshing time control section...', { isInterval });
+                            isUpdatingTimeControl = true;
+                            console.log('Refrescando sección Control Horario...', { isInterval }); // Log refresh start
 
                             // Don't show overlay for automatic interval refresh
-                            // Show overlay only if triggered by user click (isInterval === false)
-                            // Note: The click handler ALREADY shows the overlay before calling this function when isInterval is false.
-                            // So, no need to show overlay here.
+                            if (!isInterval) { /* Overlay shown by click handler */ }
 
                             $.ajax({
                                 url: '/get-time-control-section', // GET Route
                                 method: 'GET',
                                 dataType: 'json',
                                 success: function(response) {
+                                    console.log('Respuesta GET recibida para refrescar.'); // Log GET success
                                     if (response.html !== undefined) {
+                                        hidePersistentError(); // Hide any previous error message
                                         buttonsContainer.html(response.html); // Update content
-                                        console.log('Time control section refreshed successfully.');
+                                        console.log('Sección Control Horario refrescada con éxito.');
                                     } else {
-                                         console.warn('No HTML received for time control refresh.');
+                                         console.warn('No se recibió HTML para refrescar Control Horario.');
+                                         // Show error if HTML is missing? Depends on expected behavior.
+                                         showPersistentError("Error: No se pudo obtener el estado actual de los botones.");
                                     }
                                 },
                                 error: function(xhr, status, error) {
-                                    console.error('Error refreshing time control section:', status, error);
-                                    // Optionally display a non-intrusive error
+                                    console.error('Error refrescando sección Control Horario:', status, error);
+                                    // Check for network error on GET request
+                                    if (xhr.status === 0) {
+                                        console.error('Fallo de conexión al refrescar.'); // Log network error
+                                        showPersistentError("Sin conexión a internet. No se pudo actualizar el estado.");
+                                    } else {
+                                        // Show generic error for other GET failures
+                                         showPersistentError(`Error ${xhr.status} al refrescar estado.`);
+                                    }
                                 },
                                 complete: function() {
-                                    // ALWAYS ensure UI is in correct state after refresh attempt
-                                    buttonsContainer.css('display', 'grid'); // Show buttons
+                                    // UI state (buttons shown, overlay hidden) is handled here now
+                                    // Ensure buttons are displayed (might be hidden by error)
+                                    if (!errorMessageDiv.is(':visible')) { // Only show buttons if no error is displayed
+                                        buttonsContainer.css('display', 'grid');
+                                    }
                                     loadingOverlay.hide(); // Hide loading
                                     isUpdatingTimeControl = false; // Reset flag
-                                    console.log('Refresh complete, UI restored, flag reset.');
+                                    console.log('Refresco completado, UI restaurada, flag reseteado.'); // Log completion
                                 }
                             });
                         }
 
-                        // Function to show error alerts (can be customized)
-                        function showErrorAlert(message) {
-                            alert(`Error: ${message}`);
-                        }
 
                         // --- Event Handler for Button Clicks (POST Request) ---
                         // Use event delegation
                         $('.control-horario').on('click', '.attendance-button', function(event) {
                             event.preventDefault();
 
+                             // Check if geolocation is supported first
+                             if (!geolocationSupported) {
+                                 showPersistentError('Geolocalización no soportada por este navegador. No se puede fichar.');
+                                 return;
+                             }
+
+                            // Check if location is available from watchPosition
+                            if (!initialLocationObtained || latestLat === null || latestLong === null) {
+                                // If watchPosition hasn't provided a location yet, show the persistent error.
+                                showPersistentError('Ubicación actual no disponible todavía. Asegúrate de tener permisos y la ubicación activada.');
+                                console.warn('Intento de fichaje rechazado: Ubicación no disponible aún.');
+                                return; // Prevent clock-in if location isn't ready
+                            }
+
+
                             if (isUpdatingTimeControl) {
-                                console.log('Time control update in progress, please wait.');
+                                console.log('Actualización de Control Horario en progreso, por favor espera.');
                                 return;
                             }
                             isUpdatingTimeControl = true; // Set flag for user update
 
-                            const loadingOverlay = $("#loading-overlay");
-                            const buttonsContainer = $("#buttons-container");
-
+                            // Hide potential previous errors and show loading
+                            hidePersistentError();
                             loadingOverlay.css('display', 'flex'); // Show loading using jQuery
                             buttonsContainer.css('display', 'none'); // Hide buttons using jQuery
 
@@ -817,89 +921,135 @@
                             let csrfToken = $('meta[name="csrf-token"]').attr('content');
 
                             if (!csrfToken) {
-                                console.error('CSRF token not found!');
-                                showErrorAlert('Error de configuración: falta el token CSRF.');
+                                console.error('Token CSRF no encontrado!');
+                                showPersistentError('Error de configuración: falta el token CSRF.');
+                                isUpdatingTimeControl = false; // Reset flag before returning
+                                // Hide loading overlay and show buttons if CSRF is missing
                                 loadingOverlay.hide();
                                 buttonsContainer.css('display', 'grid');
-                                isUpdatingTimeControl = false;
                                 return;
                             }
 
-                            if (navigator.geolocation) {
-                                navigator.geolocation.getCurrentPosition(function(position) {
-                                    let lat = position.coords.latitude;
-                                    let long = position.coords.longitude;
+                            // Use the latest coordinates obtained by watchPosition
+                             console.log(`Enviando fichaje con estado ${statusId} en ubicación: ${latestLat}, ${latestLong}`);
 
-                                    $.ajax({
-                                        url: '/add-new-time-control', // POST Route
-                                        method: 'POST',
-                                        data: { _token: csrfToken, status_id: statusId, lat: lat, long: long },
-                                        dataType: 'json',
-                                        success: function(response) {
-                                            if (response.success) {
-                                                console.log('Fichaje registrado!');
-                                                // Refresh the section AFTER successful POST
-                                                // The refresh function will handle hiding overlay, showing buttons, and resetting the flag
-                                                refreshTimeControlSection({ isInterval: false });
-                                            } else {
-                                                console.error('Error from server:', response.message || 'Unknown error');
-                                                showErrorAlert(response.message || 'Error al guardar el registro.');
-                                                loadingOverlay.hide();
-                                                buttonsContainer.css('display', 'grid'); // Show buttons on server error
-                                                isUpdatingTimeControl = false; // Reset flag on error
-                                            }
-                                        },
-                                        error: function(xhr, status, error) {
-                                            console.error('Error sending AJAX request:', status, error);
-                                            let errorMsg = 'Error al enviar la solicitud.';
-                                            if (xhr.responseJSON && xhr.responseJSON.message) { errorMsg += ` ${xhr.responseJSON.message}`; }
-                                            else if (xhr.responseText) { errorMsg += ` Server response: ${xhr.responseText.substring(0, 100)}`;}
-                                            showErrorAlert(errorMsg);
-                                            loadingOverlay.hide();
-                                            buttonsContainer.css('display', 'grid'); // Show buttons on AJAX error
-                                            isUpdatingTimeControl = false; // Reset flag on error
-                                        }
-                                    });
-                                }, function(error) { // Geolocation error
-                                    console.error("Error getting location:", error.message);
-                                    let errorMsg = 'Error al obtener la ubicación: ';
-                                     switch(error.code) {
-                                        case error.PERMISSION_DENIED: errorMsg += "Permiso denegado."; break;
-                                        case error.POSITION_UNAVAILABLE: errorMsg += "Posición no disponible."; break;
-                                        case error.TIMEOUT: errorMsg += "Tiempo de espera agotado."; break;
-                                        default: errorMsg += "Error desconocido."; break;
+                            $.ajax({
+                                url: '/add-new-time-control', // POST Route
+                                method: 'POST',
+                                data: {
+                                    _token: csrfToken,
+                                    status_id: statusId,
+                                    lat: latestLat, // Use stored value
+                                    long: latestLong // Use stored value
+                                },
+                                dataType: 'json',
+                                success: function(response) {
+                                    console.log('Respuesta POST recibida.'); // Log POST success receive
+                                    if (response.success) {
+                                        console.log('Fichaje registrado con éxito en servidor!');
+                                        // Refresh the section AFTER successful POST
+                                        // The refresh function will handle hiding overlay, showing buttons, and resetting the flag
+                                        refreshTimeControlSection({ isInterval: false });
+                                    } else {
+                                        console.error('Error del servidor al fichar:', response.message || 'Error desconocido');
+                                        // Show persistent error from server message
+                                        showPersistentError(response.message || 'Error al guardar el registro.');
+                                        isUpdatingTimeControl = false; // Reset flag on server error
                                     }
-                                    showErrorAlert(errorMsg);
-                                    loadingOverlay.hide();
-                                    buttonsContainer.css('display', 'grid');
-                                    isUpdatingTimeControl = false; // Reset flag
-                                }, { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 });
-                            } else {
-                                console.log("Geolocation not supported.");
-                                showErrorAlert('Geolocalización no soportada.');
-                                loadingOverlay.hide();
-                                buttonsContainer.css('display', 'grid');
-                                isUpdatingTimeControl = false; // Reset flag
-                            }
+                                },
+                                error: function(xhr, status, error) {
+                                    console.error('Error enviando petición AJAX (POST):', status, error, xhr.status);
+                                    let errorMsg = 'Error al enviar la solicitud.';
+                                    // Check for network error
+                                    if (xhr.status === 0) {
+                                        errorMsg = "Fallo de conexión a internet. Revisa tu conexión e inténtalo de nuevo.";
+                                        console.error('Fallo de conexión a internet detectado (POST).');
+                                    } else if (xhr.responseJSON && xhr.responseJSON.message) {
+                                        errorMsg += ` ${xhr.responseJSON.message}`;
+                                    } else if (xhr.responseText) {
+                                        errorMsg += ` Respuesta servidor: ${xhr.responseText.substring(0, 100)}`;
+                                    }
+                                    // Show persistent error
+                                    showPersistentError(errorMsg);
+                                    isUpdatingTimeControl = false; // Reset flag on AJAX error
+                                }
+                                // No 'complete' needed here for POST, success/error handle flag reset or trigger refresh which handles it.
+                            });
+                           // Removed geolocation.getCurrentPosition call from here
                         }); // End click handler
 
+                        //reobtener la geolocalizacio
+                        function attemptLocationUpdate() {
+                            if (!geolocationSupported) {
+                                console.warn("Geolocation not supported, cannot update location.");
+                                // Ensure error is shown if not already
+                                if (!errorMessageDiv.is(':visible') || errorMessageDiv.text() !== 'Geolocalización no soportada. No se puede fichar.') {
+                                    showPersistentError('Geolocalización no soportada. No se puede fichar.');
+                                }
+                                return; // Stop if not supported
+                            }
+
+                            console.log('Intentando obtener ubicación actual...');
+                            navigator.geolocation.getCurrentPosition(
+                                (position) => { // Success
+                                    latestLat = position.coords.latitude;
+                                    latestLong = position.coords.longitude;
+                                    if (!initialLocationObtained) {
+                                        initialLocationObtained = true;
+                                        console.log('Ubicación inicial obtenida (vía getCurrentPosition):', latestLat, latestLong);
+                                        hidePersistentError(); // Hide errors now that we have a location
+                                    } else {
+                                        console.log('Ubicación actualizada (vía getCurrentPosition):', latestLat, latestLong);
+                                        // If an error was previously shown, hide it now
+                                        if (errorMessageDiv.is(':visible')) {
+                                            hidePersistentError();
+                                        }
+                                    }
+                                },
+                                (error) => { // Error
+                                    console.error("Error obteniendo ubicación actual:", error.message, `(Code: ${error.code})`);
+                                    latestLat = null; // Invalidate
+                                    latestLong = null;
+                                    initialLocationObtained = false;
+                                    if (error.code === error.PERMISSION_DENIED || error.code === error.POSITION_UNAVAILABLE) {
+                                        showPersistentError("La ubicación está desactivada o denegada. Por favor, actívala para poder fichar.");
+                                    } else {
+                                        showPersistentError(`Error obteniendo ubicación: ${error.message}`);
+                                    }
+                                },
+                                { // Options
+                                    enableHighAccuracy: true,
+                                    timeout: 10000, // Give 10 seconds for this attempt
+                                    maximumAge: 60000 // Allow using a location up to 1 minute old if needed quickly
+                                }
+                            );
+                        }
+                    //finalizar
+
                         // --- Auto-Refresh Setup ---
-                        if ($("#buttons-container").length) {
-                             console.log('Starting time control auto-refresh interval (5s).');
+                        if (buttonsContainer.length) {
+                             console.log('Iniciando intervalo de auto-refresco para Control Horario (5s).');
                              if (window.timeControlIntervalId) { clearInterval(window.timeControlIntervalId); }
                              // Pass flag indicating it IS from interval
+                            // Function to run in interval
+                             const intervalTask = () => {
+                                 // Attempt to get current location
+                                 attemptLocationUpdate();
+                                 // Refresh buttons (will run even if location fails, uses last known good location for clicks)
+                                 refreshTimeControlSection({ isInterval: true });
+                             };
                              window.timeControlIntervalId = setInterval(() => refreshTimeControlSection({ isInterval: true }), 5000);
                         }
 
                     } else { // End document ready check
-                        console.warn("jQuery (window.jQuery) not loaded. Control Horario functionality disabled.");
+                        console.warn("jQuery (window.jQuery) no cargado. Funcionalidad Control Horario desactivada.");
                     }
                 } catch (controlHorarioError) {
-                    console.error("Error setting up Control Horario:", controlHorarioError);
-                     const loadingOverlay = $q("#loading-overlay");
-                     const buttonsContainer = $q("#buttons-container");
-                     if (loadingOverlay) loadingOverlay.style.display = 'none';
-                     if (buttonsContainer) buttonsContainer.style.display = 'grid';
+                    console.error("Error configurando Control Horario:", controlHorarioError);
+                     // Try to restore UI just in case
+                     hidePersistentError(); // Hide error message div
+                     if(buttonsContainer.length) buttonsContainer.css('display', 'grid'); // Show buttons
+                     if(loadingOverlay.length) loadingOverlay.hide(); // Hide loading
                 }
 
             }); // End DOMContentLoaded
