@@ -1,4 +1,24 @@
 <x-app-layout>
+
+    {{-- Añadir estilos para deshabilitar pull-to-refresh en móviles --}}
+    @push('styles')
+    <style>
+        /* Previene el comportamiento de "pull-to-refresh" y el rebote al final del scroll */
+        body {
+            overscroll-behavior-y: contain;
+        }
+        /* Opcional: Asegura que el html también lo tenga si body no ocupa toda la altura */
+        /* html { overscroll-behavior-y: contain; } */
+
+        /* Opcional: Añade un sutil indicador visual al elemento que se arrastra */
+        .gu-mirror {
+            cursor: grabbing !important; /* Cambia el cursor */
+            opacity: 0.8 !important; /* Ligeramente transparente */
+            box-shadow: 0 4px 8px rgba(0,0,0,0.2) !important; /* Sombra más pronunciada */
+        }
+    </style>
+    @endpush
+
     <div class="space-y-8">
         {{-- Encabezado general con título y botones de acción --}}
         <div class="flex flex-wrap justify-between items-center gap-4 mb-4">
@@ -33,13 +53,9 @@
                     })->unique();
 
                     // Filtrar la lista general de usuarios para obtener los disponibles para este día.
-                    // Un usuario está disponible si NO está en $assignedUserIdsThisDay
-                    // y tiene el permiso 'timecontrolstatus index'.
                     $availableUsers = $users->reject(function($user) use ($assignedUserIdsThisDay) {
                         return $assignedUserIdsThisDay->contains($user->id);
                     })->filter(function($user) {
-                        // Asegúrate de que la relación 'roles' y 'permissions' esté cargada si usas Spatie Permissions
-                        // o ajusta según tu sistema de permisos.
                         return $user->can('timecontrolstatus index');
                     });
                 @endphp
@@ -93,7 +109,6 @@
                         @endif
 
                         {{-- Contenedor de turnos del día --}}
-                        {{-- Importante: El orden de estos contenedores debe ser consistente día a día para que la copia funcione --}}
                         <div id="shifts-{{ strtolower($day) }}" class="space-y-4 min-h-[calc(100vh-250px)]">
                             @foreach($shiftsOfDay as $shiftDay)
                                 <div class="card rounded-md bg-white dark:bg-slate-800 shadow-base custom-class card-body p-4 border border-slate-200 dark:border-slate-700">
@@ -120,7 +135,6 @@
                                     </header>
 
                                     {{-- Contenedor droppable para asignar empleados a este turno --}}
-                                    {{-- El ID sigue siendo único para cada ShiftDay, pero la copia usará el orden --}}
                                     <div id="shift-{{ $shiftDay->id }}-users" class="users-droppable flex flex-wrap gap-2 p-3 bg-slate-50 dark:bg-slate-700/50 rounded min-h-[50px] border border-dashed border-slate-300 dark:border-slate-600">
                                         @forelse($shiftDay->users as $user)
                                             <div class="employee-card bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 px-2 py-1 rounded text-xs text-slate-800 dark:text-slate-200 cursor-move shadow-sm hover:shadow-md transition-shadow" data-employee-id="{{ $user->id }}">
@@ -169,12 +183,23 @@
                 if (userContainers.length > 0) {
                     const drake = dragula(userContainers);
                     drakeInstances.push(drake);
-                    drake.on('drag', (el) => el.classList.add('opacity-50', 'shadow-lg'));
-                    drake.on('dragend', (el) => el.classList.remove('opacity-50', 'shadow-lg'));
+                    // Añadir clases visuales durante el drag
+                    drake.on('drag', (el, source) => {
+                        el.classList.add('opacity-50'); // El original se hace transparente
+                        // El 'mirror' (el que se mueve con el cursor/dedo) ya tiene estilos CSS aplicados
+                    });
+                    drake.on('dragend', (el) => {
+                        el.classList.remove('opacity-50');
+                    });
+                     // Evento drop para actualizar placeholders
                     drake.on('drop', (el, target, source, sibling) => {
                         updatePlaceholderVisibility(source);
                         updatePlaceholderVisibility(target);
                     });
+                    // Opcional: Evento 'cloned' para aplicar estilos directamente al mirror si es necesario
+                    // drake.on('cloned', (mirror, original, type) => {
+                    //     // mirror.classList.add('custom-mirror-style');
+                    // });
                 }
             });
 
@@ -210,7 +235,8 @@
              */
             window.copyPreviousDayUsers = function(button) {
                 const currentIndex = parseInt(button.getAttribute('data-day-index'));
-                console.log('[Copy] Iniciando copia para el día índice:', currentIndex);
+                // ... (resto de la función de copiar, sin cambios) ...
+                 console.log('[Copy] Iniciando copia para el día índice:', currentIndex);
 
                 if (isNaN(currentIndex) || currentIndex === 0) {
                     console.warn('[Copy] Índice inválido o es el primer día.');
@@ -302,7 +328,8 @@
 
             // --- Listener para Restablecer Asignaciones ---
             document.getElementById('reset-assignments').addEventListener('click', function() {
-                swalButtons.fire({
+                // ... (código de reset sin cambios) ...
+                 swalButtons.fire({
                     title: @json(__('Confirmación')),
                     text: @json(__('¿Restablecer todas las asignaciones? Los empleados volverán al pool de "Disponibles" de su día.')),
                     icon: 'warning',
@@ -347,6 +374,7 @@
 
             // --- Listener para Guardar Cambios ---
             document.getElementById('save-changes').addEventListener('click', function() {
+                // ... (código de guardar sin cambios) ...
                  swalButtons.fire({
                     title: @json(__('Confirmación')),
                     text: @json(__('¿Guardar las asignaciones actuales de todos los días?')),
@@ -384,46 +412,38 @@
                             let headers = {
                                 'X-CSRF-TOKEN': csrfToken,
                                 'Accept': 'application/json'
-                                // 'Content-Type' se añadirá condicionalmente
                             };
 
                             if (userIds.length > 0) {
-                                // --- Hay usuarios asignados: Actualizar usando POST a /update-users ---
-                                url = `/shift-days/${shiftDayId}/update-users`; // URL para actualizar
+                                url = `/shift-days/${shiftDayId}/update-users`;
                                 method = 'POST';
                                 body = JSON.stringify({ users: userIds });
-                                headers['Content-Type'] = 'application/json'; // Necesario para POST con body JSON
+                                headers['Content-Type'] = 'application/json';
                                 console.log(`[Save] Preparando UPDATE para ShiftDay ID: ${shiftDayId}, Método: ${method}, URL: ${url}, Usuarios: [${userIds.join(', ')}]`);
                             } else {
-                                // --- No hay usuarios asignados: Eliminar asignaciones usando DELETE a /users ---
-                                url = `/shift-days/${shiftDayId}/users`; // URL para eliminar
+                                url = `/shift-days/${shiftDayId}/users`;
                                 method = 'DELETE';
-                                // DELETE no necesita body ni Content-Type
                                 console.log(`[Save] Preparando DELETE para ShiftDay ID: ${shiftDayId}, Método: ${method}, URL: ${url}`);
                             }
 
                             const promise = fetch(url, {
                                 method: method,
                                 headers: headers,
-                                body: body // Será null para DELETE
+                                body: body
                             })
                             .then(response => {
-                                // Para DELETE exitoso, la respuesta puede no tener cuerpo (status 204 No Content)
                                 if (!response.ok) {
                                      console.error(`[Save] Error en respuesta para ShiftDay ${shiftDayId} (${method} ${url}): ${response.status}`);
-                                    // Intenta obtener el mensaje de error del JSON, si no, usa el statusText
-                                    return response.json().catch(() => ({ // Proporciona un objeto vacío si .json() falla
+                                    return response.json().catch(() => ({
                                             message: `Error ${response.status}: ${response.statusText}`
                                         }))
                                         .then(errData => {
                                             throw new Error(errData.message || `Error al procesar turno ${shiftDayId}`);
                                         });
                                 }
-                                // Si es DELETE y fue exitoso (204), no habrá JSON, devuelve algo indicando éxito
                                 if (response.status === 204) {
                                     return { success: true, message: `ShiftDay ${shiftDayId} cleared.` };
                                 }
-                                // Para POST exitoso (u otros como 200 OK con cuerpo)
                                 return response.json();
                             });
                             updatePromises.push(promise);
@@ -456,6 +476,15 @@
 
              // Inicializar placeholders al cargar la página
              document.querySelectorAll('.users-droppable').forEach(updatePlaceholderVisibility);
+
+             // --- NUEVO: Prevenir scroll de página mientras se arrastra en táctil ---
+             document.addEventListener('touchmove', function(e) {
+                // Comprueba si existe el elemento espejo que crea Dragula al arrastrar
+                if (document.querySelector('.gu-mirror')) {
+                    // Si existe, previene el comportamiento por defecto (scroll)
+                    e.preventDefault();
+                }
+             }, { passive: false }); // Importante: passive: false para que preventDefault funcione
 
         </script>
     @endpush
