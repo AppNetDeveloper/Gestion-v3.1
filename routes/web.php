@@ -390,8 +390,12 @@ Route::get('/live-owntrack-map', [MapController::class, 'index'])->name('map.ind
 // Podrías moverla a routes/api.php si usas autenticación API,
 // pero para simplicidad con la sesión web, la dejamos aquí por ahora.
 Route::get('/api/locations/latest', [MapController::class, 'getLatestLocations'])->name('api.locations.latest'); // ->middleware('auth');
-// --- Nueva Ruta ver los puntos calientes permitidos 
+// --- Nueva Ruta ver los puntos calientes permitidos
 Route::get('/api/control-points', [MapController::class, 'getControlPoints'])->name('api.control-points');
+Route::get('/api/history/user/{userId}/date/{date}', [MapController::class, 'getUserHistoryByDay'])
+    ->where('userId', '[0-9]+') // Asegura que userId sea numérico
+    ->where('date', '[0-9]{4}-[0-9]{2}-[0-9]{2}') // Asegura formato AAAA-MM-DD
+    ->name('api.history.user.day');
 
 // Grupo de rutas públicas
 Route::group([], function () {
