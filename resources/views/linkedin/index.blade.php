@@ -378,58 +378,84 @@
 
         <script>
             $(document).ready(function() {
-                // --- SweetAlert2 Dark Mode Configuration ---
-                // Automatically set Swal theme based on HTML class
-                const Toast = Swal.mixin({
-                    toast: true,
-                    position: 'top-end',
-                    showConfirmButton: false,
-                    timer: 3000,
-                    timerProgressBar: true,
-                    didOpen: (toast) => {
-                        toast.addEventListener('mouseenter', Swal.stopTimer)
-                        toast.addEventListener('mouseleave', Swal.resumeTimer)
-                    },
-                    // Apply dark theme if html has 'dark' class
-                    customClass: {
-                        popup: document.documentElement.classList.contains('dark') ? 'dark' : ''
-                    }
-                });
 
-                // Function to get Swal width
-                function getSwalWidth() {
-                    return window.innerWidth < 768 ? '95%' : (window.innerWidth < 1200 ? '700px' : '800px');
-                }
+                /* ──────────────────────────────────────────────────────────────
+                *  TOAST SweetAlert2 sin parámetros incompatibles
+                *  ────────────────────────────────────────────────────────────── */
 
-                // Apply dark class dynamically if theme changes
-                // (Requires your theme switcher to modify the <html> class)
-                const observer = new MutationObserver(mutations => {
-                    mutations.forEach(mutation => {
-                        if (mutation.attributeName === 'class') {
-                            const isDark = document.documentElement.classList.contains('dark');
-                            document.querySelectorAll('.swal2-popup').forEach(popup => {
-                                popup.classList.toggle('dark', isDark);
-                            });
-                            // Update Toast defaults if needed
-                            Toast.update({
-                                customClass: { popup: isDark ? 'dark' : '' }
-                            });
+                // 1) Generador del mixin limpio
+                function buildToast () {                        // ⬅️ CAMBIO
+                    const isDark = document.documentElement.classList.contains('dark');
+
+                    return Swal.mixin({
+                        toast: true,
+                        position: 'top-end',
+                        showConfirmButton: false,
+                        timer: 3000,
+                        timerProgressBar: true,
+
+                        /* Anulamos todas las opciones NO válidas para toast */
+                        backdrop: false,
+                        heightAuto: false,
+                        allowOutsideClick: false,
+                        allowEnterKey: false,
+                        returnFocus: false,
+                        focusConfirm: false,
+                        focusCancel: false,
+                        focusDeny: false,
+                        draggable: false,
+                        keydownListenerCapture: false,
+
+                        customClass: { popup: isDark ? 'dark' : '' },
+
+                        didOpen: (toast) => {
+                            toast.addEventListener('mouseenter', Swal.stopTimer);
+                            toast.addEventListener('mouseleave', Swal.resumeTimer);
                         }
                     });
+                }
+
+                // 2) Instancia inicial
+                let Toast = buildToast();                       // ⬅️ CAMBIO
+
+                /* ──────────────────────────────────────────────────────────────
+                *  Utilidades comunes
+                *  ────────────────────────────────────────────────────────────── */
+
+                function getSwalWidth () {
+                    return window.innerWidth < 768
+                        ? '95%'
+                        : (window.innerWidth < 1200 ? '700px' : '800px');
+                }
+
+                /* Observamos el cambio de tema sin usar Toast.update() */
+                const observer = new MutationObserver(() => {  // ⬅️ CAMBIO
+                    const isDark = document.documentElement.classList.contains('dark');
+
+                    // Ajustamos las alertas abiertas (opcional)
+                    document.querySelectorAll('.swal2-popup')
+                            .forEach(p => p.classList.toggle('dark', isDark));
+
+                    // Creamos una nueva instancia del mixin
+                    Toast = buildToast();                      // ⬅️ CAMBIO
                 });
                 observer.observe(document.documentElement, { attributes: true });
 
+
+                /* ──────────────────────────────────────────────────────────────
+                *  RESTO DE TU CÓDIGO                                    (igual)
+                * ────────────────────────────────────────────────────────────── */
 
                 // --- Disconnect ---
                 $('#btnDisconnect').on('click', function () {
                     Swal.fire({
                         title: '{{ __("Are you sure?") }}',
-                        text: '{{ __("If you confirm, your LinkedIn account will be disconnected and you'll have to log in again.") }}',
+                        text: '{{ __("If you confirm, your LinkedIn account will be disconnected and you\\'ll have to log in again.") }}',
                         icon: 'warning',
                         width: getSwalWidth(),
                         showCancelButton: true,
-                        confirmButtonColor: '#ef4444', // red-500
-                        cancelButtonColor: '#64748b', // slate-500
+                        confirmButtonColor: '#ef4444',
+                        cancelButtonColor: '#64748b',
                         confirmButtonText: '{{ __("Yes, disconnect") }}',
                         cancelButtonText: '{{ __("Cancel") }}',
                         customClass: { popup: document.documentElement.classList.contains('dark') ? 'dark' : '' }
@@ -443,29 +469,27 @@
                                     "Accept": "application/json"
                                 }
                             })
-                            .then(response => response.json())
+                            .then(r => r.json())
                             .then(data => {
                                 if (data.success) {
-                                    Toast.fire({
-                                        icon: 'success',
-                                        title: data.success || '{{ __("Disconnected successfully") }}'
-                                    }).then(() => window.location.reload());
+                                    Toast.fire({ icon: 'success', title: data.success || '{{ __("Disconnected successfully") }}' })
+                                        .then(() => window.location.reload());
                                 } else {
                                     Swal.fire({
-                                        title:'{{ __("Error") }}',
+                                        title: '{{ __("Error") }}',
                                         text: data.error || '{{ __("Could not disconnect account.") }}',
-                                        icon:'error',
+                                        icon: 'error',
                                         customClass: { popup: document.documentElement.classList.contains('dark') ? 'dark' : '' }
                                     });
                                 }
                             })
-                            .catch(error => {
-                                console.error("Disconnect Error:", error);
+                            .catch(err => {
+                                console.error("Disconnect Error:", err);
                                 Swal.fire({
-                                     title:'{{ __("Error") }}',
-                                     text:'{{ __("Unable to complete the action. Check console for details.") }}',
-                                     icon:'error',
-                                     customClass: { popup: document.documentElement.classList.contains('dark') ? 'dark' : '' }
+                                    title: '{{ __("Error") }}',
+                                    text: '{{ __("Unable to complete the action. Check console for details.") }}',
+                                    icon: 'error',
+                                    customClass: { popup: document.documentElement.classList.contains('dark') ? 'dark' : '' }
                                 });
                             });
                         }
