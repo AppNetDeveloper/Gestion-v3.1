@@ -282,8 +282,11 @@ Route::post('/auto-response-whatsapp', [AutoProcessController::class, 'updateWha
 Route::post('/auto-response-telegram', [AutoProcessController::class, 'updateTelegram'])->name('auto-response-telegram.update');
 Route::get('/auto-response-telegram-get', [AutoProcessController::class, 'getTelegram'])->middleware('auth');
 
+Route::get('/whatsapp/messages/json/{phone}', [WhatsappController::class, 'getMessagesJson'])->name('whatsapp.messages.json')->middleware('auth');
+Route::get('/whatsapp/contacts/json', [WhatsappController::class, 'getContactsJson'])->name('whatsapp.contacts.json')->middleware('auth');
+Route::get('/auto-response-whatsapp-get', [AutoProcessController::class, 'getWhatsapp'])->name('auto-response-whatsapp.get')->middleware('auth');
 
-    //OLAMA
+//OLAMA
     Route::post('/ollama/process', [OllamaController::class, 'processPrompt'])->name('ollama.process');
 
     //TASKERLINKEDIN

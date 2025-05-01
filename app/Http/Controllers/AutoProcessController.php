@@ -8,6 +8,36 @@ use Illuminate\Support\Facades\Auth;
 
 class AutoProcessController extends Controller
 {
+        /**
+     * Get WhatsApp auto-response settings for the authenticated user.
+     * (NEW METHOD)
+     */
+    public function getWhatsapp(Request $request)
+    {
+        $user = Auth::user();
+         // Find the record or return a default structure if not found
+        $autoProcess = AutoProcess::where('user_id', $user->id)->firstOr(function () use ($user) {
+             // Return a default object/array so the JS doesn't break if no record exists
+             return [
+                'user_id' => $user->id,
+                'whatsapp' => 0, // Default to disabled
+                'whatsapp_prompt' => null
+             ];
+             // Or if AutoProcess model has fillable defaults:
+             // return new AutoProcess(['user_id' => $user->id]);
+        });
+
+        // If using firstOr(), convert potential model instance to array if needed by JS
+        if ($autoProcess instanceof AutoProcess) {
+             $autoProcess = $autoProcess->toArray();
+        }
+
+
+        return response()->json([
+            'success' => true,
+            'data'    => $autoProcess // Send data (even if it's default)
+        ]);
+    }
     public function updateWhatsapp(Request $request)
     {
         // Validación: se requiere que 'whatsapp' tenga un valor de 0,1,2 o 3 y si es mayor que 0, 'whatsapp_prompt' es obligatorio.
