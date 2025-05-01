@@ -365,32 +365,62 @@
             let currentMessageRequest = null;
             const userId = "{{ auth()->id() }}";
 
-            // --- SweetAlert2 Dark Mode Configuration ---
-            const Toast = Swal.mixin({
-                toast: true, position: 'top-end', showConfirmButton: false, timer: 3500, timerProgressBar: true,
-                didOpen: (toast) => {
-                    toast.addEventListener('mouseenter', Swal.stopTimer)
-                    toast.addEventListener('mouseleave', Swal.resumeTimer)
-                    if (document.documentElement.classList.contains('dark')) { toast.classList.add('dark'); }
-                },
-                customClass: { popup: document.documentElement.classList.contains('dark') ? 'dark swal2-toast-dark' : 'swal2-toast-light' }
-            });
+            /* ───────────────────────────────────────────────
+            *  SweetAlert2 Toast sin parámetros incompatibles
+            * ─────────────────────────────────────────────── */
+            function buildToast () {                            // NUEVO
+                const isDark = document.documentElement.classList.contains('dark');
 
-            const swalObserver = new MutationObserver(mutations => {
-                mutations.forEach(mutation => {
-                    if (mutation.attributeName === 'class') {
-                        const isDark = document.documentElement.classList.contains('dark');
-                        document.querySelectorAll('.swal2-popup').forEach(popup => popup.classList.toggle('dark', isDark));
-                        document.querySelectorAll('.swal2-toast').forEach(toast => {
-                            toast.classList.toggle('dark', isDark);
-                            toast.classList.toggle('swal2-toast-dark', isDark);
-                            toast.classList.toggle('swal2-toast-light', !isDark);
-                        });
-                        Toast.update({ customClass: { popup: isDark ? 'dark swal2-toast-dark' : 'swal2-toast-light' } });
+                return Swal.mixin({
+                    toast: true,
+                    position: 'top-end',
+                    showConfirmButton: false,
+                    timer: 3500,
+                    timerProgressBar: true,
+
+                    /* Anular opciones que no acepta un toast */
+                    backdrop: false,
+                    heightAuto: false,
+                    allowOutsideClick: false,
+                    allowEnterKey: false,
+                    returnFocus: false,
+                    focusConfirm: false,
+                    focusCancel: false,
+                    focusDeny: false,
+                    draggable: false,
+                    keydownListenerCapture: false,
+
+                    customClass: {
+                        popup: isDark ? 'dark swal2-toast-dark' : 'swal2-toast-light'
+                    },
+                    didOpen: toast => {
+                        toast.addEventListener('mouseenter', Swal.stopTimer);
+                        toast.addEventListener('mouseleave', Swal.resumeTimer);
                     }
                 });
+            }
+
+            let Toast = buildToast();                           // NUEVO
+
+            const swalObserver = new MutationObserver(() => {   // REEMPLAZA TU OBSERVER
+                const isDark = document.documentElement.classList.contains('dark');
+
+                /* si hay alertas abiertas, ajusta su clase */
+                document.querySelectorAll('.swal2-popup')
+                        .forEach(p => p.classList.toggle('dark', isDark));
+                document.querySelectorAll('.swal2-toast')
+                        .forEach(t => {
+                            t.classList.toggle('dark', isDark);
+                            t.classList.toggle('swal2-toast-dark', isDark);
+                            t.classList.toggle('swal2-toast-light', !isDark);
+                        });
+
+                /* recrea el mixin para siguientes Toast */
+                Toast = buildToast();
             });
+
             swalObserver.observe(document.documentElement, { attributes: true });
+
 
             // --- Funciones de Utilidad ---
             function scrollChatToBottom(force = false) {

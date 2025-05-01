@@ -84,6 +84,7 @@
                 <div class="mt-10 pt-6 border-t border-slate-200 dark:border-slate-700">
                     <h2 class="text-xl font-semibold mb-5 text-slate-900 dark:text-slate-100">{{ __('My Scheduled Tasks') }}</h2>
                     <div class="overflow-x-auto -mx-6 px-6">
+                        {{-- Ensure table ID matches the one used in JavaScript --}}
                         <table id="tasksTable" class="w-full min-w-[800px] dataTable">
                             <thead class="bg-slate-100 dark:bg-slate-700 text-xs uppercase text-slate-500 dark:text-slate-400">
                                 <tr>
@@ -203,7 +204,7 @@
              #tasksTable .action-icon.viewDetails:hover {
                  color: #10b981; /* emerald-500 */
             }
-            #tasksTable .action-icon.repeatTask:hover {
+             #tasksTable .action-icon.repeatTask:hover {
                  color: #f59e0b; /* amber-500 */
             }
 
@@ -380,11 +381,11 @@
             $(document).ready(function() {
 
                 /* ──────────────────────────────────────────────────────────────
-                *  TOAST SweetAlert2 sin parámetros incompatibles
-                *  ────────────────────────────────────────────────────────────── */
+                * TOAST SweetAlert2 sin parámetros incompatibles
+                * ────────────────────────────────────────────────────────────── */
 
                 // 1) Generador del mixin limpio
-                function buildToast () {                        // ⬅️ CAMBIO
+                function buildToast () {
                     const isDark = document.documentElement.classList.contains('dark');
 
                     return Swal.mixin({
@@ -393,8 +394,6 @@
                         showConfirmButton: false,
                         timer: 3000,
                         timerProgressBar: true,
-
-                        /* Anulamos todas las opciones NO válidas para toast */
                         backdrop: false,
                         heightAuto: false,
                         allowOutsideClick: false,
@@ -405,9 +404,7 @@
                         focusDeny: false,
                         draggable: false,
                         keydownListenerCapture: false,
-
                         customClass: { popup: isDark ? 'dark' : '' },
-
                         didOpen: (toast) => {
                             toast.addEventListener('mouseenter', Swal.stopTimer);
                             toast.addEventListener('mouseleave', Swal.resumeTimer);
@@ -416,11 +413,11 @@
                 }
 
                 // 2) Instancia inicial
-                let Toast = buildToast();                       // ⬅️ CAMBIO
+                let Toast = buildToast();
 
                 /* ──────────────────────────────────────────────────────────────
-                *  Utilidades comunes
-                *  ────────────────────────────────────────────────────────────── */
+                * Utilidades comunes
+                * ────────────────────────────────────────────────────────────── */
 
                 function getSwalWidth () {
                     return window.innerWidth < 768
@@ -429,21 +426,17 @@
                 }
 
                 /* Observamos el cambio de tema sin usar Toast.update() */
-                const observer = new MutationObserver(() => {  // ⬅️ CAMBIO
+                const observer = new MutationObserver(() => {
                     const isDark = document.documentElement.classList.contains('dark');
-
-                    // Ajustamos las alertas abiertas (opcional)
                     document.querySelectorAll('.swal2-popup')
                             .forEach(p => p.classList.toggle('dark', isDark));
-
-                    // Creamos una nueva instancia del mixin
-                    Toast = buildToast();                      // ⬅️ CAMBIO
+                    Toast = buildToast();
                 });
                 observer.observe(document.documentElement, { attributes: true });
 
 
                 /* ──────────────────────────────────────────────────────────────
-                *  RESTO DE TU CÓDIGO                                    (igual)
+                * RESTO DE TU CÓDIGO
                 * ────────────────────────────────────────────────────────────── */
 
                 // --- Disconnect ---
@@ -506,7 +499,6 @@
                         return;
                     }
 
-                    // Show loading state
                     const originalButtonText = $(this).html();
                     $(this).prop('disabled', true).html(`<iconify-icon icon="line-md:loading-loop" class="mr-2 text-lg"></iconify-icon> {{ __('Processing...') }}`);
 
@@ -532,10 +524,9 @@
                      })
                     .then(data => {
                         if (data.text) {
-                            textarea.value = data.text; // Update textarea
+                            textarea.value = data.text;
                             Toast.fire({ icon: 'success', title: '{{ __("Text processed successfully!") }}' });
                         } else {
-                            // Display specific error from backend if available
                             const errorMessage = data.error || '{{ __("An error occurred while processing the text.") }}';
                             Swal.fire({ title: '{{ __("Error") }}', text: errorMessage, icon: 'error', customClass: { popup: document.documentElement.classList.contains('dark') ? 'dark' : '' } });
                         }
@@ -545,7 +536,6 @@
                         Swal.fire({ title: '{{ __("Request Error") }}', text: `{{ __("Could not connect to the AI service.") }} ${error.message}`, icon: 'error', customClass: { popup: document.documentElement.classList.contains('dark') ? 'dark' : '' } });
                     })
                     .finally(() => {
-                        // Restore button state
                          $(this).prop('disabled', false).html(originalButtonText);
                     });
                 });
@@ -571,7 +561,6 @@
                         cancelButtonText: '{{ __("Cancel") }}',
                         customClass: { popup: document.documentElement.classList.contains('dark') ? 'dark' : '' },
                         didOpen: () => {
-                             // Set min date to now
                             const now = new Date();
                             const year = now.getFullYear();
                             const month = (now.getMonth() + 1).toString().padStart(2, '0');
@@ -586,9 +575,8 @@
                             const task_prompt = document.getElementById('task_prompt').value;
                             if (!publish_date) {
                                 Swal.showValidationMessage('{{ __("Please select a date and time") }}');
-                                return false; // Prevent closing
+                                return false;
                             }
-                            // Optional: Validate date is in the future
                             if (new Date(publish_date) <= new Date()) {
                                 Swal.showValidationMessage('{{ __("Please select a future date and time") }}');
                                 return false;
@@ -598,7 +586,6 @@
                     }).then((result) => {
                         if (result.isConfirmed) {
                             const data = result.value;
-                            // Use textarea content if Swal prompt is empty
                             const promptValue = data.task_prompt.trim() || document.getElementById('content').value.trim();
 
                             if (!promptValue) {
@@ -625,7 +612,10 @@
                                         icon: 'success',
                                         title: resp.success || '{{ __("Task scheduled successfully!") }}'
                                     });
-                                    $('#tasksTable').DataTable().ajax.reload(); // Reload DataTable
+                                    // Check if DataTable instance exists before reloading
+                                    if ($.fn.DataTable.isDataTable('#tasksTable')) {
+                                        $('#tasksTable').DataTable().ajax.reload();
+                                    }
                                 } else {
                                     Swal.fire({ title: '{{ __("Error") }}', text: resp.error || '{{ __("An error occurred while scheduling") }}', icon: 'error', customClass: { popup: document.documentElement.classList.contains('dark') ? 'dark' : '' } });
                                 }
@@ -639,133 +629,139 @@
                 });
 
                 // --- Initialize DataTable ---
-                const tasksTable = $('#tasksTable').DataTable({
-                    processing: true, // Show processing indicator
-                    serverSide: false, // Assuming client-side processing based on 'dataSrc'
-                    ajax: {
-                        url: '{{ url("tasker-linkedin/data") }}', // Use url() helper
-                        dataSrc: 'data', // Correct path to data array in JSON response
-                        error: function (xhr, error, thrown) {
-                             console.error("DataTables Error:", error, thrown);
-                             // Optionally display an error message to the user in the table
-                             $('#tasksTable tbody').html(
-                                 '<tr><td colspan="8" class="text-center text-red-500 py-4">{{ __("Could not load scheduled tasks.") }}</td></tr>'
-                             );
-                        }
-                    },
-                    columns: [
-                        { data: 'id', className: 'text-center w-12' }, // Center ID, fixed width
-                        {
-                            data: 'prompt',
-                            className: 'max-w-xs truncate', // Limit width and truncate
-                            render: function(data, type, row) {
-                                // Show tooltip or full text on hover/focus if needed
-                                const safeData = data ? $('<div>').text(data).html() : 'N/A'; // Basic XSS protection
-                                return type === 'display' && safeData.length > 50
-                                    ? `<span title="${safeData}">${safeData.substring(0, 50)}...</span>`
-                                    : safeData;
+                // Check if the table element exists before initializing
+                if ($('#tasksTable').length) {
+                    const tasksTable = $('#tasksTable').DataTable({
+                        processing: true,
+                        serverSide: false, // Keep client-side if data is small/manageable
+                        ajax: {
+                            url: '{{ url("tasker-linkedin/data") }}',
+                            dataSrc: 'data',
+                            error: function (xhr, error, thrown) {
+                                 console.error("DataTables Error:", error, thrown);
+                                 $('#tasksTable tbody').html(
+                                     '<tr><td colspan="8" class="text-center text-red-500 py-4">{{ __("Could not load scheduled tasks.") }}</td></tr>'
+                                 );
                             }
                         },
-                        {
-                            data: 'response',
-                            className: 'max-w-xs truncate',
-                            render: function(data, type, row) {
-                                const safeData = data ? $('<div>').text(data).html() : 'N/A';
-                                return type === 'display' && safeData.length > 50
-                                     ? `<span title="${safeData}">${safeData.substring(0, 50)}...</span>`
-                                     : safeData;
-                            }
-                        },
-                        {
-                            data: 'status',
-                            className: 'text-center',
-                            render: function(data, type, row) {
-                                // Example: Add badges based on status
-                                let badgeClass = 'bg-slate-200 text-slate-700';
-                                if (data === 'completed') badgeClass = 'bg-green-100 text-green-700';
-                                if (data === 'failed') badgeClass = 'bg-red-100 text-red-700';
-                                if (data === 'pending') badgeClass = 'bg-yellow-100 text-yellow-700';
-                                return `<span class="inline-block px-2 py-0.5 rounded-full text-xs font-medium ${badgeClass}">${data || 'N/A'}</span>`;
-                            }
-                         },
-                        {
-                            data: 'error',
-                            className: 'max-w-xs truncate',
-                            render: function(data, type, row) {
-                                const safeData = data ? $('<div>').text(data).html() : 'N/A';
-                                return type === 'display' && safeData.length > 50
-                                     ? `<span title="${safeData}">${safeData.substring(0, 50)}...</span>`
-                                     : safeData;
-                            }
-                        },
-                        {
-                            data: 'publish_date',
-                            render: function(data, type, row) {
-                                // Format date nicely
-                                return data ? new Date(data).toLocaleString() : 'N/A';
-                            }
-                         },
-                        {
-                            data: 'created_at',
-                            render: function(data, type, row) {
-                                return data ? new Date(data).toLocaleString() : 'N/A';
-                            }
-                        },
-                        {
-                            data: null, // Action column
-                            orderable: false,
-                            searchable: false,
-                            className: 'text-center w-40', // Fixed width for actions
-                            render: function(data, type, row) {
-                                // Use encodeURIComponent for data attributes
-                                const safePrompt = encodeURIComponent(row.prompt || '');
-                                const safeResponse = encodeURIComponent(row.response || '');
-                                const safePublishDate = row.publish_date || '';
+                        columns: [
+                            { data: 'id', className: 'text-center w-12' },
+                            {
+                                data: 'prompt',
+                                className: 'max-w-xs truncate',
+                                render: function(data, type, row) {
+                                    const safeData = data ? $('<div>').text(data).html() : 'N/A';
+                                    return type === 'display' && safeData.length > 50
+                                        ? `<span title="${safeData}">${safeData.substring(0, 50)}...</span>`
+                                        : safeData;
+                                }
+                            },
+                            {
+                                data: 'response',
+                                className: 'max-w-xs truncate',
+                                render: function(data, type, row) {
+                                    const safeData = data ? $('<div>').text(data).html() : 'N/A';
+                                    return type === 'display' && safeData.length > 50
+                                         ? `<span title="${safeData}">${safeData.substring(0, 50)}...</span>`
+                                         : safeData;
+                                }
+                            },
+                            {
+                                data: 'status',
+                                className: 'text-center',
+                                render: function(data, type, row) {
+                                    let badgeClass = 'bg-slate-200 text-slate-700';
+                                    if (data === 'completed') badgeClass = 'bg-green-100 text-green-700';
+                                    if (data === 'failed') badgeClass = 'bg-red-100 text-red-700';
+                                    if (data === 'pending') badgeClass = 'bg-yellow-100 text-yellow-700';
+                                    return `<span class="inline-block px-2 py-0.5 rounded-full text-xs font-medium ${badgeClass}">${data || 'N/A'}</span>`;
+                                }
+                             },
+                            {
+                                data: 'error',
+                                className: 'max-w-xs truncate',
+                                render: function(data, type, row) {
+                                    const safeData = data ? $('<div>').text(data).html() : 'N/A';
+                                    return type === 'display' && safeData.length > 50
+                                         ? `<span title="${safeData}">${safeData.substring(0, 50)}...</span>`
+                                         : safeData;
+                                }
+                            },
+                            {
+                                data: 'publish_date',
+                                render: function(data, type, row) {
+                                    return data ? new Date(data).toLocaleString() : 'N/A';
+                                }
+                             },
+                            {
+                                data: 'created_at',
+                                render: function(data, type, row) {
+                                    return data ? new Date(data).toLocaleString() : 'N/A';
+                                }
+                            },
+                            {
+                                data: null,
+                                orderable: false,
+                                searchable: false,
+                                className: 'text-center w-40',
+                                render: function(data, type, row) {
+                                    const safePrompt = encodeURIComponent(row.prompt || '');
+                                    const safeResponse = encodeURIComponent(row.response || '');
+                                    const safePublishDate = row.publish_date || '';
 
-                                // Wrapper for actions
-                                return `
-                                    <div class="actions-wrapper">
-                                        <span class="action-icon editTask"
-                                            data-id="${row.id}"
-                                            data-prompt="${safePrompt}"
-                                            data-publish-date="${safePublishDate}"
-                                            data-response="${safeResponse}"
-                                            title="{{ __('Edit Task') }}">
-                                            <iconify-icon icon="heroicons:pencil-square"></iconify-icon>
-                                        </span>
-                                        <span class="action-icon viewDetails"
-                                            data-prompt="${safePrompt}"
-                                            data-response="${safeResponse}"
-                                            data-status="${row.status || ''}"
-                                            data-error="${encodeURIComponent(row.error || '')}"
-                                            title="{{ __('View Details') }}">
-                                            <iconify-icon icon="heroicons:eye"></iconify-icon>
-                                        </span>
-                                        <span class="action-icon deleteTask"
-                                            data-id="${row.id}" title="{{ __('Delete Task') }}">
-                                            <iconify-icon icon="heroicons:trash"></iconify-icon>
-                                        </span>
-                                        <span class="action-icon repeatTask"
-                                            data-prompt="${safePrompt}"
-                                            title="{{ __('Repeat Task') }}">
-                                            <iconify-icon icon="material-symbols:replay-circle-filled-outline"></iconify-icon>
-                                        </span>
-                                    </div>
-                                `;
+                                    return `
+                                        <div class="actions-wrapper">
+                                            <span class="action-icon editTask"
+                                                data-id="${row.id}"
+                                                data-prompt="${safePrompt}"
+                                                data-publish-date="${safePublishDate}"
+                                                data-response="${safeResponse}"
+                                                title="{{ __('Edit Task') }}">
+                                                <iconify-icon icon="heroicons:pencil-square"></iconify-icon>
+                                            </span>
+                                            <span class="action-icon viewDetails"
+                                                data-prompt="${safePrompt}"
+                                                data-response="${safeResponse}"
+                                                data-status="${row.status || ''}"
+                                                data-error="${encodeURIComponent(row.error || '')}"
+                                                title="{{ __('View Details') }}">
+                                                <iconify-icon icon="heroicons:eye"></iconify-icon>
+                                            </span>
+                                            <span class="action-icon deleteTask"
+                                                data-id="${row.id}" title="{{ __('Delete Task') }}">
+                                                <iconify-icon icon="heroicons:trash"></iconify-icon>
+                                            </span>
+                                            <span class="action-icon repeatTask"
+                                                data-prompt="${safePrompt}"
+                                                title="{{ __('Repeat Task') }}">
+                                                <iconify-icon icon="material-symbols:replay-circle-filled-outline"></iconify-icon>
+                                            </span>
+                                        </div>
+                                    `;
+                                }
                             }
+                        ],
+                        order: [[0, "desc"]],
+                        responsive: true,
+                        autoWidth: false,
+                        language: {
+                            url: "//cdn.datatables.net/plug-ins/1.13.4/i18n/es-ES.json"
+                        },
+                        pagingType: 'simple_numbers',
+                    });
+
+                    // --- DataTable Auto Refresh ---
+                    // Set an interval to reload the DataTable data every 10 seconds (10000 ms)
+                    // The first argument 'null' keeps the current paging position
+                    // The second argument 'false' prevents resetting the sort/filter
+                    setInterval(function () {
+                        if ($.fn.DataTable.isDataTable('#tasksTable')) { // Ensure table is still initialized
+                            console.log('Reloading DataTable data...'); // Optional: for debugging
+                            tasksTable.ajax.reload(null, false);
                         }
-                    ],
-                    order: [[0, "desc"]], // Default sort by ID descending
-                    responsive: true, // Enable responsive extension
-                    autoWidth: false, // Disable auto width calculation
-                    language: {
-                        url: "//cdn.datatables.net/plug-ins/1.13.4/i18n/es-ES.json" // Spanish translation
-                        // You might need to adjust the URL based on the exact version
-                    },
-                    // Layout definition (using Tailwind classes via adapter)
-                    // dom: '<"flex flex-col sm:flex-row justify-between mb-4"lf>rt<"flex flex-col sm:flex-row justify-between mt-4"ip>',
-                    pagingType: 'simple_numbers', // Or 'full_numbers'
-                });
+                    }, 10000); // Refresh every 10 seconds
+
+                } // End if ($('#tasksTable').length)
 
                 // --- DataTable Action Handlers ---
 
@@ -776,7 +772,6 @@
                     const status = $(this).data('status') || 'N/A';
                     const error = decodeURIComponent($(this).data('error') || '');
 
-                    // Basic HTML structure for details
                     let htmlContent = `
                         <div class="text-left space-y-4">
                             <div>
@@ -800,7 +795,7 @@
                             </div>
                          `;
                     }
-                    htmlContent += `</div>`; // Close text-left
+                    htmlContent += `</div>`;
 
                     Swal.fire({
                         title: '{{ __("Task Details") }}',
@@ -821,8 +816,8 @@
                         showCancelButton: true,
                         confirmButtonText: '{{ __("Delete") }}',
                         cancelButtonText: '{{ __("Cancel") }}',
-                        confirmButtonColor: '#ef4444', // red-500
-                        cancelButtonColor: '#64748b', // slate-500
+                        confirmButtonColor: '#ef4444',
+                        cancelButtonColor: '#64748b',
                         customClass: { popup: document.documentElement.classList.contains('dark') ? 'dark' : '' }
                     }).then((result) => {
                         if (result.isConfirmed) {
@@ -841,7 +836,10 @@
                                         icon: 'success',
                                         title: data.success || '{{ __("Task deleted successfully!") }}'
                                     });
-                                    tasksTable.ajax.reload(); // Use the table instance
+                                    // Check if DataTable instance exists before reloading
+                                    if ($.fn.DataTable.isDataTable('#tasksTable')) {
+                                        $('#tasksTable').DataTable().ajax.reload(null, false); // Reload without resetting page
+                                    }
                                 } else {
                                     Swal.fire({ title: '{{ __("Error") }}', text: data.error || '{{ __("An error occurred") }}', icon: 'error', customClass: { popup: document.documentElement.classList.contains('dark') ? 'dark' : '' } });
                                 }
@@ -861,11 +859,10 @@
                     const publishDate = $(this).data('publish-date');
                     const responseText = decodeURIComponent($(this).data('response') || '');
 
-                    // Format date for datetime-local input: YYYY-MM-DDTHH:mm
                     let formattedDate = '';
                     if (publishDate) {
                         try {
-                            const dateObj = new Date(publishDate.replace(' ', 'T')); // Handle space separator if present
+                            const dateObj = new Date(publishDate.replace(' ', 'T'));
                             if (!isNaN(dateObj)) {
                                 const year = dateObj.getFullYear();
                                 const month = (dateObj.getMonth() + 1).toString().padStart(2, '0');
@@ -904,7 +901,6 @@
                         cancelButtonText: '{{ __("Cancel") }}',
                         customClass: { popup: document.documentElement.classList.contains('dark') ? 'dark' : '' },
                         didOpen: () => {
-                             // Set min date to now for editing as well
                             const now = new Date();
                             const year = now.getFullYear();
                             const month = (now.getMonth() + 1).toString().padStart(2, '0');
@@ -917,7 +913,6 @@
                         preConfirm: () => {
                             const publish_date = document.getElementById('edit_publish_date').value;
                             const task_prompt = document.getElementById('edit_task_prompt').value.trim();
-                            // Response is read-only, no need to get its value for update
 
                             if (!publish_date) {
                                 Swal.showValidationMessage('{{ __("Please select a date and time") }}');
@@ -931,13 +926,15 @@
                                 Swal.showValidationMessage('{{ __("Please enter a prompt") }}');
                                 return false;
                             }
-                            return { publish_date, task_prompt }; // Only send editable fields
+                            return { publish_date, task_prompt };
                         }
                     }).then((result) => {
                         if (result.isConfirmed) {
                             const data = result.value;
-                            fetch(`{{ url('linkedin') }}/${taskId}`, { // Assuming PUT route is /linkedin/{id} - ADJUST IF NEEDED
-                                method: 'PUT',
+                            // *** IMPORTANT: Adjust the URL to your actual update route ***
+                            // Example: fetch(`{{ url('tasker-linkedin') }}/${taskId}`, {
+                            fetch(`{{ url('tasker-linkedin') }}/${taskId}`, { // ADJUST ROUTE IF NEEDED
+                                method: 'PUT', // Or PATCH
                                 headers: {
                                     'Content-Type': 'application/json',
                                     'X-CSRF-TOKEN': '{{ csrf_token() }}',
@@ -946,7 +943,6 @@
                                 body: JSON.stringify({
                                     prompt: data.task_prompt,
                                     publish_date: data.publish_date,
-                                    // Do not send 'response' if it's not meant to be updated
                                 })
                             })
                             .then(response => response.json())
@@ -956,7 +952,10 @@
                                         icon: 'success',
                                         title: resp.success || '{{ __("Task updated successfully!") }}'
                                     });
-                                    tasksTable.ajax.reload();
+                                    // Check if DataTable instance exists before reloading
+                                    if ($.fn.DataTable.isDataTable('#tasksTable')) {
+                                        $('#tasksTable').DataTable().ajax.reload(null, false);
+                                    }
                                 } else {
                                     Swal.fire({ title: '{{ __("Error") }}', text: resp.error || '{{ __("An error occurred while updating") }}', icon: 'error', customClass: { popup: document.documentElement.classList.contains('dark') ? 'dark' : '' } });
                                 }
@@ -993,7 +992,6 @@
                         cancelButtonText: '{{ __("Cancel") }}',
                         customClass: { popup: document.documentElement.classList.contains('dark') ? 'dark' : '' },
                          didOpen: () => {
-                             // Set min date to now
                             const now = new Date();
                             const year = now.getFullYear();
                             const month = (now.getMonth() + 1).toString().padStart(2, '0');
@@ -1023,7 +1021,6 @@
                     }).then((result) => {
                         if (result.isConfirmed) {
                             const data = result.value;
-                            // Use the same store endpoint as scheduling a new task
                             fetch('{{ url("tasker-linkedin/store") }}', {
                                 method: 'POST',
                                 headers: {
@@ -1043,7 +1040,10 @@
                                         icon: 'success',
                                         title: resp.success || '{{ __("Task rescheduled successfully!") }}'
                                     });
-                                    tasksTable.ajax.reload();
+                                    // Check if DataTable instance exists before reloading
+                                    if ($.fn.DataTable.isDataTable('#tasksTable')) {
+                                         $('#tasksTable').DataTable().ajax.reload(null, false);
+                                    }
                                 } else {
                                     Swal.fire({ title: '{{ __("Error") }}', text: resp.error || '{{ __("An error occurred") }}', icon: 'error', customClass: { popup: document.documentElement.classList.contains('dark') ? 'dark' : '' } });
                                 }
