@@ -19,10 +19,6 @@ class TelegramController extends Controller
     }
 
 
-    /*===========================
-      Authentication Endpoints
-    ===========================*/
-
     /**
      * POST /request-code/{userId}
      * Solicita el código de verificación para autenticación en Telegram.
@@ -143,10 +139,6 @@ class TelegramController extends Controller
     }
 
 
-
-    /*===========================
-      Chats Endpoints
-    ===========================*/
 
     /**
      * GET /get-chat/{userId}
