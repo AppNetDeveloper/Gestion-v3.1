@@ -9,55 +9,67 @@ from duckduckgo_search import DDGS # Usar solo DDGS síncrono
 from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeoutError
 import requests, re, random, time, warnings, urllib.parse
 import shutil
-import httpx
+import httpx # Para llamadas async y callbacks
 from bs4 import BeautifulSoup
 from pathlib import Path
 import uvicorn
 import asyncio
+import uuid # Para generar task_id únicos
+
+# Importar configuración
+try:
+    import config
+except ImportError:
+    print("ERROR: No se pudo importar el archivo 'config.py'. Asegúrate de que existe en el mismo directorio.")
+    # Definir valores por defecto si falla la importación para evitar más errores
+    class ConfigFallback:
+        BASE_EMPRESITE = "https://empresite.eleconomista.es"
+        BASE_PAGINAS_AMARILLAS = "https://www.paginasamarillas.es"
+        UA_LIST = ["Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"]
+        HTTP_TIMEOUT = 20
+        DDG_TIMEOUT = 20
+        PLAYWRIGHT_GOTO_TIMEOUT = 90000
+        PLAYWRIGHT_SELECTOR_TIMEOUT_P1 = 60000
+        PLAYWRIGHT_SELECTOR_TIMEOUT_PN = 75000
+        PLAYWRIGHT_SHORT_TIMEOUT = 7000
+        CALLBACK_TIMEOUT = 30.0
+        SCREENSHOT_PA_DIR_NAME = "screenshots_pa"
+        MAX_CONCURRENT_URL_FETCHES = 10
+    config = ConfigFallback()
+
 
 # Suprimir advertencias de InsecureRequestWarning al usar verify=False
 from requests.packages.urllib3.exceptions import InsecureRequestWarning
 warnings.simplefilter('ignore', InsecureRequestWarning)
 
-# Directorio para capturas de P. Amarillas
-SCREENSHOT_PA_DIR = Path("screenshots_pa")
-
-# --- Constantes Base URL ---
-BASE_EMPRESITE = "https://empresite.eleconomista.es"
-BASE_PAGINAS_AMARILLAS = "https://www.paginasamarillas.es"
+# Directorio para capturas de P. Amarillas desde config
+SCREENSHOT_PA_DIR = Path(config.SCREENSHOT_PA_DIR_NAME)
 
 
 app = FastAPI(
-    title="Buscador Multi-Fuente Asíncrono (Google, DDG, Empresite, P. Amarillas)",
-    description="Extrae correos, teléfonos y nombres. Soporta procesamiento síncrono o asíncrono con callback URL.",
-    version="3.3.4" # Versión incrementada
+    title="Buscador Multi-Fuente Asíncrono v3.4 (Callbacks, Concurrencia, Config)",
+    description="Extrae datos de Google, DDG, Empresite, P. Amarillas. Soporta callbacks y procesamiento concurrente.",
+    version="3.4.0"
 )
 
 # ---------------- Modelos (con callback_url) ----------------
 class KeywordRequest(BaseModel):
     keyword: str
     results: int = 10
-    callback_url: Optional[str] = None # URL opcional para recibir resultados
+    callback_url: Optional[str] = None
 
 class DirectoryRequest(BaseModel):
     actividad: str
     provincia: str
     paginas: int = 1
-    callback_url: Optional[str] = None # URL opcional para recibir resultados
+    callback_url: Optional[str] = None
 
 # --------- Utilidades comunes ----------
-UA_LIST = [
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15",
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:125.0) Gecko/20100101 Firefox/125.0",
-    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36",
-    "Mozilla/5.0 (iPhone; CPU iPhone OS 17_4_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4.1 Mobile/15E148 Safari/604.1"
-]
 
 def random_headers() -> dict:
-    """Genera cabeceras HTTP aleatorias."""
+    """Genera cabeceras HTTP aleatorias usando UA_LIST de config."""
     return {
-        "User-Agent": random.choice(UA_LIST),
+        "User-Agent": random.choice(config.UA_LIST),
         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
         "Accept-Language": "es-ES,es;q=0.9,en;q=0.8",
         "Referer": "https://www.google.com/",
@@ -76,35 +88,31 @@ def _filter_emails(emails: List[str]) -> List[str]:
     cleaned = []
     ignore_extensions = ('.jpg', '.jpeg', '.png', '.gif', '.svg', '.webp', '.bmp', '.tif', '.tiff')
     ignore_domains = ('@w3.org', '@sentry.io', '@example.com', '@domain.com', '@yourdomain.com')
-
     for e in emails:
         lower_e = e.lower()
-        if any(lower_e.endswith(ext) for ext in ignore_extensions):
-            continue
-        if any(domain in lower_e for domain in ignore_domains):
-            continue
-        # Validar formato básico y evitar duplicados insensibles a mayúsculas/minúsculas
+        if any(lower_e.endswith(ext) for ext in ignore_extensions): continue
+        if any(domain in lower_e for domain in ignore_domains): continue
         if re.match(r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$", e):
-            if lower_e not in [c.lower() for c in cleaned]:
-                cleaned.append(e)
+            if lower_e not in [c.lower() for c in cleaned]: cleaned.append(e)
     return cleaned
 
+# --- Extracción de Datos (Versiones Sync y Async) ---
+
 def extract_data_from_url(url: str) -> Dict[str, Optional[str] | List[str]]:
-    """Extrae nombre (del título), correos y teléfono de una URL usando requests."""
-    # (Sin cambios)
+    """Extrae nombre, correos y teléfono de una URL usando requests (SÍNCRONO)."""
     data = {"nombre": None, "correos": [], "telefono": None}
     if not url.startswith(('http://', 'https://')):
-        print(f"Ignorando URL relativa o inválida: {url}")
+        print(f"[Sync Extract] Ignorando URL inválida: {url}")
         return data
 
     try:
-        r = requests.get(url, headers=random_headers(), timeout=20, allow_redirects=True, verify=False)
+        r = requests.get(url, headers=random_headers(), timeout=config.HTTP_TIMEOUT, allow_redirects=True, verify=False)
         r.raise_for_status()
         content = r.text
         content_type = r.headers.get("content-type", "").lower()
 
         if 'html' not in content_type:
-             print(f"Contenido no es HTML en {url}, tipo: {content_type}. Saltando extracción de nombre.")
+             print(f"[Sync Extract] Contenido no es HTML en {url}, tipo: {content_type}.")
              data["nombre"] = "No aplicable (No HTML)"
         else:
             soup = BeautifulSoup(content, 'html.parser')
@@ -133,22 +141,71 @@ def extract_data_from_url(url: str) -> Dict[str, Optional[str] | List[str]]:
             data["telefono"] = "No encontrado"
         return data
     except requests.exceptions.RequestException as e:
-        print(f"Error de red/SSL al acceder a {url}: {e}")
+        print(f"[Sync Extract] Error de red/SSL al acceder a {url}: {e}")
         return data
     except Exception as e:
-        print(f"Error inesperado procesando {url}: {e}")
+        print(f"[Sync Extract] Error inesperado procesando {url}: {e}")
         return data
+
+async def extract_data_from_url_async(url: str, client: httpx.AsyncClient) -> Dict[str, Optional[str] | List[str]]:
+    """Extrae nombre, correos y teléfono de una URL usando httpx (ASÍNCRONO)."""
+    data = {"nombre": None, "correos": [], "telefono": None}
+    if not url.startswith(('http://', 'https://')):
+        print(f"[Async Extract] Ignorando URL inválida: {url}")
+        return data
+
+    try:
+        response = await client.get(url, headers=random_headers(), timeout=config.HTTP_TIMEOUT, follow_redirects=True)
+        response.raise_for_status()
+        content = response.text
+        content_type = response.headers.get("content-type", "").lower()
+
+        if 'html' not in content_type:
+             print(f"[Async Extract] Contenido no es HTML en {url}, tipo: {content_type}.")
+             data["nombre"] = "No aplicable (No HTML)"
+        else:
+            soup = await run_in_threadpool(BeautifulSoup, content, 'html.parser')
+            title_tag = soup.find('title')
+            if title_tag and title_tag.string:
+                nombre_bruto = title_tag.string.strip()
+                partes_a_quitar = ["|", "-", "Inicio", "Homepage", "Página principal", "Contacto", "Empresa"]
+                try:
+                    domain = url.split('/')[2].replace('www.', '')
+                    partes_a_quitar.append(domain)
+                except: pass
+                for parte in partes_a_quitar:
+                     nombre_bruto = re.sub(re.escape(parte), '', nombre_bruto, flags=re.IGNORECASE)
+                data["nombre"] = " ".join(nombre_bruto.split())
+                if not data["nombre"]: data["nombre"] = title_tag.string.strip()
+            else:
+                data["nombre"] = "No encontrado"
+
+        mails = re.findall(r'\b[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}\b', content)
+        data["correos"] = _filter_emails(list(set(mails)))
+
+        telefonos = re.findall(r'\b[6-9]\d{2}\s?\d{3}\s?\d{3}\b|\b[6-9]\d{8}\b', content)
+        if telefonos:
+            data["telefono"] = re.sub(r'\s+', '', telefonos[0])
+        else:
+            data["telefono"] = "No encontrado"
+        return data
+    except httpx.RequestError as e:
+        print(f"[Async Extract] Error de red/SSL al acceder a {url}: {e}")
+        return data
+    except Exception as e:
+        print(f"[Async Extract] Error inesperado procesando {url}: {e}")
+        return data
+
 
 # ------- Búsquedas en DuckDuckGo (Solo versión Síncrona) -------
 
 def duckduckgo_search_sync(q: str, n: int) -> List[str]:
     """Realiza una búsqueda SÍNCRONA en DuckDuckGo y devuelve URLs."""
-    # (Sin cambios)
     results = []
     print(f"[DDG Sync] Buscando: '{q}'")
     try:
         headers = random_headers()
-        with DDGS(headers=headers, timeout=20) as ddgs:
+        with DDGS(headers=headers, timeout=config.DDG_TIMEOUT) as ddgs:
             sync_results = ddgs.text(q, max_results=n)
             for r in sync_results:
                 if "href" in r:
@@ -162,193 +219,286 @@ def duckduckgo_search_sync(q: str, n: int) -> List[str]:
 
 async def send_callback(callback_url: str, payload: Dict[str, Any]):
     """Función auxiliar para enviar el resultado al callback_url."""
-    # (Sin cambios)
     if not callback_url: return
-    async with httpx.AsyncClient(timeout=30.0) as client:
+    payload["timestamp_completion"] = time.strftime("%Y-%m-%d %H:%M:%S %Z")
+    async with httpx.AsyncClient(timeout=config.CALLBACK_TIMEOUT) as client:
         try:
             response = await client.post(callback_url, json=payload)
             response.raise_for_status()
-            print(f"Callback enviado exitosamente a {callback_url}, Status: {response.status_code}")
-        except httpx.RequestError as e: print(f"Error al enviar callback a {callback_url}: {e}")
-        except Exception as e: print(f"Error inesperado durante el envío del callback a {callback_url}: {e}")
+            print(f"Callback enviado exitosamente a {callback_url} (Task ID: {payload.get('task_id', 'N/A')}), Status: {response.status_code}")
+        except httpx.RequestError as e:
+            print(f"Error al enviar callback a {callback_url} (Task ID: {payload.get('task_id', 'N/A')}): {e}")
+        except Exception as e:
+            print(f"Error inesperado durante el envío del callback a {callback_url} (Task ID: {payload.get('task_id', 'N/A')}): {e}")
 
-async def run_google_ddg_task(keyword: str, results_num: int, callback_url: str):
+async def run_google_ddg_task(keyword: str, results_num: int, callback_url: str, task_id: str):
     """Tarea de fondo para buscar en Google/DDG y enviar callback."""
-    # (Sin cambios)
-    print(f"[BG Task Google/DDG] Iniciando para keyword: '{keyword}'")
-    google_urls = []
-    try:
-        google_urls = await run_in_threadpool(list, google_search(keyword, num_results=results_num, lang='es'))
-    except Exception as e: print(f"[BG Task Google/DDG] Error en búsqueda de Google: {e}")
-    ddg_urls = await run_in_threadpool(duckduckgo_search_sync, keyword, results_num)
-    urls = list(set(google_urls + ddg_urls))
-    print(f"[BG Task Google/DDG] Encontradas {len(urls)} URLs únicas para '{keyword}'")
+    print(f"[BG Task Google/DDG - {task_id}] Iniciando para keyword: '{keyword}'")
+    start_time = time.time()
+    error_message = None
     resultados_finales = {}
     processed_urls_count = 0
     urls_con_datos = 0
-    for url in urls:
-        processed_urls_count += 1
-        print(f"[BG Task Google/DDG] Procesando URL {processed_urls_count}/{len(urls)}: {url}")
-        extracted_data = await run_in_threadpool(extract_data_from_url, url)
-        if extracted_data.get("correos") or (extracted_data.get("telefono") and extracted_data.get("telefono") != "No encontrado"):
-            urls_con_datos += 1
-            resultados_finales[url] = {
-                "nombre": extracted_data.get("nombre", "No encontrado"),
-                "correos": extracted_data.get("correos", []),
-                "telefono": extracted_data.get("telefono", "No encontrado")
-            }
-            print(f"  -> Datos encontrados")
-        else: print("  -> No se encontraron datos útiles.")
+
+    try:
+        google_urls = []
+        try:
+            google_urls = await run_in_threadpool(list, google_search(keyword, num_results=results_num, lang='es'))
+        except Exception as e: print(f"[BG Task Google/DDG - {task_id}] Error en búsqueda de Google: {e}")
+
+        ddg_urls = await run_in_threadpool(duckduckgo_search_sync, keyword, results_num)
+        urls = list(set(google_urls + ddg_urls))
+        print(f"[BG Task Google/DDG - {task_id}] Encontradas {len(urls)} URLs únicas para '{keyword}'")
+
+        async with httpx.AsyncClient(verify=False) as client:
+            tasks = []
+            for url in urls:
+                 tasks.append(extract_data_from_url_async(url, client))
+
+            chunk_size = config.MAX_CONCURRENT_URL_FETCHES
+            all_extracted_data = []
+            for i in range(0, len(tasks), chunk_size):
+                chunk = tasks[i:i + chunk_size]
+                print(f"[BG Task Google/DDG - {task_id}] Procesando chunk de {len(chunk)} URLs...")
+                results_chunk = await asyncio.gather(*chunk, return_exceptions=True)
+                all_extracted_data.extend(results_chunk)
+                await asyncio.sleep(0.5)
+
+        processed_urls_count = len(urls)
+        for i, result in enumerate(all_extracted_data):
+            url = urls[i]
+            if isinstance(result, Exception):
+                print(f"[BG Task Google/DDG - {task_id}] Error procesando URL {url}: {result}")
+            elif isinstance(result, dict):
+                if result.get("correos") or (result.get("telefono") and result.get("telefono") != "No encontrado"):
+                    urls_con_datos += 1
+                    resultados_finales[url] = {
+                        "nombre": result.get("nombre", "No encontrado"),
+                        "correos": result.get("correos", []),
+                        "telefono": result.get("telefono", "No encontrado")
+                    }
+            else:
+                 print(f"[BG Task Google/DDG - {task_id}] Resultado inesperado para URL {url}: {type(result)}")
+
+    except Exception as e:
+        print(f"[BG Task Google/DDG - {task_id}] Error general en la tarea: {e}")
+        error_message = f"Error general en la tarea: {e}"
+
+    end_time = time.time()
+    duration = round(end_time - start_time, 2)
+    print(f"[BG Task Google/DDG - {task_id}] Tarea completada en {duration} segundos.")
+
     callback_payload = {
-        "status": "completed", "keyword": keyword, "urls_procesadas": processed_urls_count,
-        "urls_con_datos_encontrados": urls_con_datos, "resultados": resultados_finales
+        "task_id": task_id,
+        "status": "failed" if error_message else "completed",
+        "error_message": error_message,
+        "duration_seconds": duration,
+        "keyword": keyword,
+        "urls_procesadas": processed_urls_count,
+        "urls_con_datos_encontrados": urls_con_datos,
+        "resultados": resultados_finales
     }
     await send_callback(callback_url, callback_payload)
-    print(f"[BG Task Google/DDG] Tarea completada para keyword: '{keyword}'")
 
 
-async def run_google_ddg_limpio_task(keyword: str, results_num: int, callback_url: str):
+async def run_google_ddg_limpio_task(keyword: str, results_num: int, callback_url: str, task_id: str):
     """Tarea de fondo para buscar en Google/DDG (formato limpio) y enviar callback."""
-    # (Sin cambios)
-    print(f"[BG Task Google/DDG Limpio] Iniciando para keyword: '{keyword}'")
-    google_urls = []
-    try:
-        google_urls = await run_in_threadpool(list, google_search(keyword, num_results=results_num, lang='es'))
-    except Exception as e: print(f"[BG Task Google/DDG Limpio] Error en búsqueda de Google: {e}")
-    ddg_urls = await run_in_threadpool(duckduckgo_search_sync, keyword, results_num)
-    urls = list(set(google_urls + ddg_urls))
-    print(f"[BG Task Google/DDG Limpio] Encontradas {len(urls)} URLs únicas para '{keyword}'")
+    print(f"[BG Task Google/DDG Limpio - {task_id}] Iniciando para keyword: '{keyword}'")
+    start_time = time.time()
+    error_message = None
     flat_results = []
     processed_urls_count = 0
-    for url in urls:
-        processed_urls_count += 1
-        print(f"[BG Task Google/DDG Limpio] Procesando URL {processed_urls_count}/{len(urls)}: {url}")
-        extracted_data = await run_in_threadpool(extract_data_from_url, url)
-        nombre = extracted_data.get("nombre", "No encontrado")
-        telefono = extracted_data.get("telefono", "No encontrado")
-        correos = extracted_data.get("correos", [])
-        if correos:
-            for mail in correos: flat_results.append({"url": url, "nombre": nombre, "correo": mail, "telefono": telefono})
-            print(f"  -> {len(correos)} correos encontrados.")
-        elif telefono != "No encontrado":
-             flat_results.append({"url": url, "nombre": nombre, "correo": "No encontrado", "telefono": telefono})
-             print(f"  -> Teléfono encontrado ({telefono}), sin correos.")
-        else: print(f"  -> No se encontraron datos útiles.")
+
+    try:
+        google_urls = []
+        try:
+            google_urls = await run_in_threadpool(list, google_search(keyword, num_results=results_num, lang='es'))
+        except Exception as e: print(f"[BG Task Google/DDG Limpio - {task_id}] Error en búsqueda de Google: {e}")
+
+        ddg_urls = await run_in_threadpool(duckduckgo_search_sync, keyword, results_num)
+        urls = list(set(google_urls + ddg_urls))
+        print(f"[BG Task Google/DDG Limpio - {task_id}] Encontradas {len(urls)} URLs únicas para '{keyword}'")
+
+        async with httpx.AsyncClient(verify=False) as client:
+            tasks = [extract_data_from_url_async(url, client) for url in urls]
+            chunk_size = config.MAX_CONCURRENT_URL_FETCHES
+            all_extracted_data = []
+            for i in range(0, len(tasks), chunk_size):
+                chunk = tasks[i:i + chunk_size]
+                print(f"[BG Task Google/DDG Limpio - {task_id}] Procesando chunk de {len(chunk)} URLs...")
+                results_chunk = await asyncio.gather(*chunk, return_exceptions=True)
+                all_extracted_data.extend(results_chunk)
+                await asyncio.sleep(0.5)
+
+        processed_urls_count = len(urls)
+        for i, result in enumerate(all_extracted_data):
+            url = urls[i]
+            if isinstance(result, Exception):
+                print(f"[BG Task Google/DDG Limpio - {task_id}] Error procesando URL {url}: {result}")
+            elif isinstance(result, dict):
+                nombre = result.get("nombre", "No encontrado")
+                telefono = result.get("telefono", "No encontrado")
+                correos = result.get("correos", [])
+                if correos:
+                    for mail in correos: flat_results.append({"url": url, "nombre": nombre, "correo": mail, "telefono": telefono})
+                elif telefono != "No encontrado":
+                     flat_results.append({"url": url, "nombre": nombre, "correo": "No encontrado", "telefono": telefono})
+            else:
+                 print(f"[BG Task Google/DDG Limpio - {task_id}] Resultado inesperado para URL {url}: {type(result)}")
+
+    except Exception as e:
+        print(f"[BG Task Google/DDG Limpio - {task_id}] Error general en la tarea: {e}")
+        error_message = f"Error general en la tarea: {e}"
+
+    end_time = time.time()
+    duration = round(end_time - start_time, 2)
+    print(f"[BG Task Google/DDG Limpio - {task_id}] Tarea completada en {duration} segundos.")
+
     callback_payload = {
-        "status": "completed", "keyword": keyword, "urls_procesadas": processed_urls_count,
-        "total_entradas_generadas": len(flat_results), "datos": flat_results
+        "task_id": task_id,
+        "status": "failed" if error_message else "completed",
+        "error_message": error_message,
+        "duration_seconds": duration,
+        "keyword": keyword,
+        "urls_procesadas": processed_urls_count,
+        "total_entradas_generadas": len(flat_results),
+        "datos": flat_results
     }
     await send_callback(callback_url, callback_payload)
-    print(f"[BG Task Google/DDG Limpio] Tarea completada para keyword: '{keyword}'")
 
 
-async def run_empresite_task(actividad: str, provincia: str, paginas: int, callback_url: str):
+async def run_empresite_task(actividad: str, provincia: str, paginas: int, callback_url: str, task_id: str):
     """Tarea de fondo para buscar en Empresite y enviar callback."""
-    # (Sin cambios)
-    print(f"[BG Task Empresite] Iniciando para {actividad} en {provincia}")
-    data = await run_in_threadpool(scrape_empresite_sync, actividad, provincia, paginas)
+    print(f"[BG Task Empresite - {task_id}] Iniciando para {actividad} en {provincia}")
+    start_time = time.time()
+    error_message = None
+    data = []
+    try:
+        # *** Pasar BASE_EMPRESITE a la función ejecutada en el threadpool ***
+        data = await run_in_threadpool(scrape_empresite_sync, actividad, provincia, paginas, config.BASE_EMPRESITE)
+    except Exception as e:
+        print(f"[BG Task Empresite - {task_id}] Error general en la tarea: {e}")
+        error_message = f"Error general en la tarea: {e}"
+
+    end_time = time.time()
+    duration = round(end_time - start_time, 2)
+    print(f"[BG Task Empresite - {task_id}] Tarea completada en {duration} segundos.")
+
     callback_payload = {
-        "status": "completed", "fuente": "Empresite", "actividad": actividad, "provincia": provincia,
-        "paginas_procesadas": paginas, "total_empresas_encontradas": len(data), "empresas": data
+        "task_id": task_id,
+        "status": "failed" if error_message else "completed",
+        "error_message": error_message,
+        "duration_seconds": duration,
+        "fuente": "Empresite",
+        "actividad": actividad,
+        "provincia": provincia,
+        "paginas_procesadas": paginas,
+        "total_empresas_encontradas": len(data),
+        "empresas": data
     }
     await send_callback(callback_url, callback_payload)
-    print(f"[BG Task Empresite] Tarea completada para {actividad} en {provincia}")
 
 
-async def run_paginas_amarillas_task(actividad: str, provincia: str, paginas: int, callback_url: str):
+async def run_paginas_amarillas_task(actividad: str, provincia: str, paginas_solicitadas: int, callback_url: str, task_id: str):
     """Tarea de fondo para buscar en Páginas Amarillas y enviar callback."""
-    print(f"[BG Task P. Amarillas] Iniciando para {actividad} en {provincia}")
-    # *** Pasar BASE_PAGINAS_AMARILLAS a la función ejecutada en el threadpool ***
-    data = await run_in_threadpool(scrape_paginas_amarillas_sync, actividad, provincia, paginas, BASE_PAGINAS_AMARILLAS)
+    print(f"[BG Task P. Amarillas - {task_id}] Iniciando para {actividad} en {provincia}")
+    start_time = time.time()
+    error_message = None
+    data = []
+    paginas_procesadas = 1 # Siempre procesamos solo 1
+    try:
+        # *** Pasar BASE_PAGINAS_AMARILLAS a la función ejecutada en el threadpool ***
+        data = await run_in_threadpool(scrape_paginas_amarillas_sync, actividad, provincia, paginas_procesadas, config.BASE_PAGINAS_AMARILLAS)
+    except Exception as e:
+        print(f"[BG Task P. Amarillas - {task_id}] Error general en la tarea: {e}")
+        error_message = f"Error general en la tarea: {e}"
+
+    end_time = time.time()
+    duration = round(end_time - start_time, 2)
+    print(f"[BG Task P. Amarillas - {task_id}] Tarea completada en {duration} segundos.")
+
     callback_payload = {
-        "status": "completed", "fuente": "Paginas Amarillas", "actividad": actividad, "provincia": provincia,
-        "paginas_solicitadas": paginas, "paginas_procesadas": 1,
-        "total_empresas_encontradas": len(data), "empresas": data
+        "task_id": task_id,
+        "status": "failed" if error_message else "completed",
+        "error_message": error_message,
+        "duration_seconds": duration,
+        "fuente": "Paginas Amarillas",
+        "actividad": actividad,
+        "provincia": provincia,
+        "paginas_solicitadas": paginas_solicitadas,
+        "paginas_procesadas": paginas_procesadas,
+        "total_empresas_encontradas": len(data),
+        "empresas": data
     }
     await send_callback(callback_url, callback_payload)
-    print(f"[BG Task P. Amarillas] Tarea completada para {actividad} en {provincia}")
 
 # ------- Endpoints -------
-# (Sin cambios en los endpoints)
 
 @app.post("/buscar-google-ddg")
 async def buscador_google_ddg(d: KeywordRequest, background_tasks: BackgroundTasks) -> Dict[str, Any]:
     """Busca URLs en Google/DDG. Síncrono o asíncrono con callback."""
+    # *** Condición de callback actualizada ***
     if d.callback_url and d.callback_url.strip().lower() != "false":
-        print(f"Recibida solicitud ASÍNCRONA para Google/DDG (keyword: {d.keyword}) -> {d.callback_url}")
-        background_tasks.add_task(run_google_ddg_task, d.keyword, d.results, d.callback_url)
-        return {"status": "accepted", "message": "Proceso de búsqueda en Google/DDG iniciado. Resultados se enviarán a la callback URL."}
+        task_id = str(uuid.uuid4())
+        print(f"Recibida solicitud ASÍNCRONA para Google/DDG (keyword: {d.keyword}) -> {d.callback_url} [Task ID: {task_id}]")
+        background_tasks.add_task(run_google_ddg_task, d.keyword, d.results, d.callback_url, task_id)
+        return {"status": "accepted", "task_id": task_id, "message": "Proceso de búsqueda en Google/DDG iniciado."}
     else:
+        # ... (lógica síncrona sin cambios) ...
         print(f"Recibida solicitud SÍNCRONA para Google/DDG (keyword: {d.keyword})")
         google_urls = []
-        try:
-            google_urls = list(google_search(d.keyword, num_results=d.results, lang='es'))
+        try: google_urls = list(google_search(d.keyword, num_results=d.results, lang='es'))
         except Exception as e: print(f"Error en búsqueda de Google: {e}")
         ddg_urls = duckduckgo_search_sync(d.keyword, d.results)
         urls = list(set(google_urls + ddg_urls))
         print(f"Encontradas {len(urls)} URLs únicas para '{d.keyword}'")
         resultados_finales = {}
-        processed_urls_count = 0
-        urls_con_datos = 0
+        processed_urls_count = 0; urls_con_datos = 0
         for url in urls:
             processed_urls_count += 1
             print(f"Procesando URL {processed_urls_count}/{len(urls)}: {url}")
             extracted_data = extract_data_from_url(url)
             if extracted_data.get("correos") or (extracted_data.get("telefono") and extracted_data.get("telefono") != "No encontrado"):
                 urls_con_datos += 1
-                resultados_finales[url] = {
-                    "nombre": extracted_data.get("nombre", "No encontrado"),
-                    "correos": extracted_data.get("correos", []),
-                    "telefono": extracted_data.get("telefono", "No encontrado")
-                }
+                resultados_finales[url] = {"nombre": extracted_data.get("nombre", "No encontrado"), "correos": extracted_data.get("correos", []), "telefono": extracted_data.get("telefono", "No encontrado")}
                 print(f"  -> Datos encontrados")
             else: print("  -> No se encontraron datos útiles.")
-        return {
-            "keyword": d.keyword,
-            "urls_procesadas": processed_urls_count,
-            "urls_con_datos_encontrados": urls_con_datos,
-            "resultados": resultados_finales
-        }
+        return {"keyword": d.keyword, "urls_procesadas": processed_urls_count, "urls_con_datos_encontrados": urls_con_datos, "resultados": resultados_finales}
+
 
 @app.post("/buscar-google-ddg-limpio")
 async def buscador_google_ddg_limpio(d: KeywordRequest, background_tasks: BackgroundTasks) -> Dict[str, Any]:
     """Busca URLs en Google/DDG (formato limpio). Síncrono o asíncrono con callback."""
+     # *** Condición de callback actualizada ***
     if d.callback_url and d.callback_url.strip().lower() != "false":
-        print(f"Recibida solicitud ASÍNCRONA para Google/DDG Limpio (keyword: {d.keyword}) -> {d.callback_url}")
-        background_tasks.add_task(run_google_ddg_limpio_task, d.keyword, d.results, d.callback_url)
-        return {"status": "accepted", "message": "Proceso de búsqueda Google/DDG (limpio) iniciado. Resultados se enviarán a la callback URL."}
+        task_id = str(uuid.uuid4())
+        print(f"Recibida solicitud ASÍNCRONA para Google/DDG Limpio (keyword: {d.keyword}) -> {d.callback_url} [Task ID: {task_id}]")
+        background_tasks.add_task(run_google_ddg_limpio_task, d.keyword, d.results, d.callback_url, task_id)
+        return {"status": "accepted", "task_id": task_id, "message": "Proceso de búsqueda Google/DDG (limpio) iniciado."}
     else:
+        # ... (lógica síncrona sin cambios) ...
         print(f"Recibida solicitud SÍNCRONA para Google/DDG Limpio (keyword: {d.keyword})")
         google_urls = []
-        try:
-            google_urls = list(google_search(d.keyword, num_results=d.results, lang='es'))
+        try: google_urls = list(google_search(d.keyword, num_results=d.results, lang='es'))
         except Exception as e: print(f"Error en búsqueda de Google: {e}")
         ddg_urls = duckduckgo_search_sync(d.keyword, d.results)
         urls = list(set(google_urls + ddg_urls))
         print(f"Encontradas {len(urls)} URLs únicas para '{d.keyword}'")
-        flat_results = []
-        processed_urls_count = 0
+        flat_results = []; processed_urls_count = 0
         for url in urls:
             processed_urls_count += 1
             print(f"Procesando URL {processed_urls_count}/{len(urls)}: {url}")
             extracted_data = extract_data_from_url(url)
-            nombre = extracted_data.get("nombre", "No encontrado")
-            telefono = extracted_data.get("telefono", "No encontrado")
-            correos = extracted_data.get("correos", [])
+            nombre = extracted_data.get("nombre", "No encontrado"); telefono = extracted_data.get("telefono", "No encontrado"); correos = extracted_data.get("correos", [])
             if correos:
-                for mail in correos:
-                    flat_results.append({"url": url, "nombre": nombre, "correo": mail, "telefono": telefono})
+                for mail in correos: flat_results.append({"url": url, "nombre": nombre, "correo": mail, "telefono": telefono})
                 print(f"  -> {len(correos)} correos encontrados.")
             elif telefono != "No encontrado":
                  flat_results.append({"url": url, "nombre": nombre, "correo": "No encontrado", "telefono": telefono})
                  print(f"  -> Teléfono encontrado ({telefono}), sin correos.")
             else: print(f"  -> No se encontraron datos útiles.")
-        return {
-            "keyword": d.keyword,
-            "urls_procesadas": processed_urls_count,
-            "total_entradas_generadas": len(flat_results),
-            "datos": flat_results
-        }
+        return {"keyword": d.keyword, "urls_procesadas": processed_urls_count, "total_entradas_generadas": len(flat_results), "datos": flat_results}
+
 
 @app.post("/buscar-empresite")
 async def buscador_empresite(d: DirectoryRequest, background_tasks: BackgroundTasks) -> Dict[str, Any]:
@@ -358,13 +508,16 @@ async def buscador_empresite(d: DirectoryRequest, background_tasks: BackgroundTa
     pages = max(1, d.paginas)
     if not act or not prov: return {"error": "Actividad y provincia son requeridas."}
 
+    # *** Condición de callback actualizada ***
     if d.callback_url and d.callback_url.strip().lower() != "false":
-        print(f"Recibida solicitud ASÍNCRONA para Empresite ({act} en {prov}) -> {d.callback_url}")
-        background_tasks.add_task(run_empresite_task, act, prov, pages, d.callback_url)
-        return {"status": "accepted", "message": "Proceso de búsqueda en Empresite iniciado. Resultados se enviarán a la callback URL."}
+        task_id = str(uuid.uuid4())
+        print(f"Recibida solicitud ASÍNCRONA para Empresite ({act} en {prov}) -> {d.callback_url} [Task ID: {task_id}]")
+        background_tasks.add_task(run_empresite_task, act, prov, pages, d.callback_url, task_id)
+        return {"status": "accepted", "task_id": task_id, "message": "Proceso de búsqueda en Empresite iniciado."}
     else:
         print(f"Recibida solicitud SÍNCRONA para Empresite ({act} en {prov})")
-        data = await run_in_threadpool(scrape_empresite_sync, act, prov, pages)
+        # *** Pasar BASE_EMPRESITE a la llamada síncrona ***
+        data = await run_in_threadpool(scrape_empresite_sync, act, prov, pages, config.BASE_EMPRESITE)
         return {
             "fuente": "Empresite", "actividad": act, "provincia": prov,
             "paginas_solicitadas": pages, "total_empresas_encontradas": len(data), "empresas": data
@@ -380,15 +533,17 @@ async def buscador_paginas_amarillas(d: DirectoryRequest, background_tasks: Back
     if not act or not prov: return {"error": "Actividad y provincia son requeridas."}
     if re.search(r'[<>:"/\\|?*]', prov): return {"error": "Provincia contiene caracteres inválidos."}
 
+    # *** Condición de callback actualizada ***
     if d.callback_url and d.callback_url.strip().lower() != "false":
-        print(f"Recibida solicitud ASÍNCRONA para P. Amarillas ({act} en {prov}) -> {d.callback_url}")
+        task_id = str(uuid.uuid4())
+        print(f"Recibida solicitud ASÍNCRONA para P. Amarillas ({act} en {prov}) -> {d.callback_url} [Task ID: {task_id}]")
         # *** Pasar BASE_PAGINAS_AMARILLAS a la tarea de fondo ***
-        background_tasks.add_task(run_paginas_amarillas_task, act, prov, d.paginas, d.callback_url)
-        return {"status": "accepted", "message": "Proceso de búsqueda en Páginas Amarillas (pág 1) iniciado. Resultados se enviarán a la callback URL."}
+        background_tasks.add_task(run_paginas_amarillas_task, act, prov, d.paginas, d.callback_url, task_id) # Pasamos d.paginas original
+        return {"status": "accepted", "task_id": task_id, "message": "Proceso de búsqueda en Páginas Amarillas (pág 1) iniciado."}
     else:
         print(f"Recibida solicitud SÍNCRONA para P. Amarillas ({act} en {prov})")
         # *** Pasar BASE_PAGINAS_AMARILLAS a la llamada síncrona ***
-        data = await run_in_threadpool(scrape_paginas_amarillas_sync, act, prov, pages, BASE_PAGINAS_AMARILLAS)
+        data = await run_in_threadpool(scrape_paginas_amarillas_sync, act, prov, pages, config.BASE_PAGINAS_AMARILLAS)
         return {
             "fuente": "Paginas Amarillas", "actividad": act, "provincia": prov,
             "paginas_solicitadas": d.paginas, "paginas_procesadas": pages,
@@ -398,7 +553,8 @@ async def buscador_paginas_amarillas(d: DirectoryRequest, background_tasks: Back
 
 # --- Funciones de Scraping Síncronas ---
 
-def scrape_empresite_sync(act: str, prov: str, pages: int) -> List[Dict[str,str]]:
+# *** Modificar scrape_empresite_sync para aceptar base_url ***
+def scrape_empresite_sync(act: str, prov: str, pages: int, base_url: str) -> List[Dict[str,str]]:
     """Scrapea Empresite usando Playwright, extrayendo email y teléfono."""
     # (Código idéntico a la versión anterior)
     resultados = []
@@ -409,19 +565,19 @@ def scrape_empresite_sync(act: str, prov: str, pages: int) -> List[Dict[str,str]
         except Exception as e:
             print(f"[Empresite] Error al iniciar el navegador Playwright: {e}")
             return []
-        context = browser.new_context(user_agent=random.choice(UA_LIST), locale="es-ES", viewport={"width": 1920, "height": 1080}, java_script_enabled=True, ignore_https_errors=True)
+        context = browser.new_context(user_agent=random.choice(config.UA_LIST), locale="es-ES", viewport={"width": 1920, "height": 1080}, java_script_enabled=True, ignore_https_errors=True)
         page = context.new_page()
         for p in range(1, pages + 1):
-            if p == 1: url = f"{BASE_EMPRESITE}/Actividad/{act}/provincia/{prov}/"
-            else: url = f"{BASE_EMPRESITE}/Actividad/{act}/provincia/{prov}/PgNum-{p}/"
+            if p == 1: url = f"{base_url}/Actividad/{act}/provincia/{prov}/"
+            else: url = f"{base_url}/Actividad/{act}/provincia/{prov}/PgNum-{p}/"
             print(f"[Empresite] Accediendo a página {p}: {url}")
             try:
-                page.goto(url, wait_until="domcontentloaded", timeout=90000)
+                page.goto(url, wait_until="domcontentloaded", timeout=config.PLAYWRIGHT_GOTO_TIMEOUT)
                 page.wait_for_selector('body', state='visible', timeout=30000)
                 print(f"[Empresite] Body cargado en página {p}.")
                 try:
                     accept_button_selector = "#onetrust-accept-btn-handler, button[aria-label*='Aceptar'], button:has-text('Aceptar')"
-                    page.wait_for_selector(accept_button_selector, timeout=7000)
+                    page.wait_for_selector(accept_button_selector, timeout=config.PLAYWRIGHT_SHORT_TIMEOUT)
                     page.click(accept_button_selector)
                     print("[Empresite] Banner de cookies aceptado.")
                     page.wait_for_timeout(1500)
@@ -429,7 +585,7 @@ def scrape_empresite_sync(act: str, prov: str, pages: int) -> List[Dict[str,str]
                 except Exception as e_cookie: print(f"[Empresite] Error al intentar aceptar cookies: {e_cookie}")
                 main_selector = "div.cardCompanyBox[itemprop='itemListElement']"
                 print(f"[Empresite] Esperando por el selector principal: '{main_selector}'")
-                selector_timeout = 60000 if p > 1 else 45000
+                selector_timeout = config.PLAYWRIGHT_SELECTOR_TIMEOUT_PN if p > 1 else config.PLAYWRIGHT_SELECTOR_TIMEOUT_P1
                 page.wait_for_selector(main_selector, state="visible", timeout=selector_timeout)
                 print(f"[Empresite] Selector principal '{main_selector}' encontrado en página {p}.")
                 list_items_check = page.query_selector_all(main_selector)
@@ -456,7 +612,7 @@ def scrape_empresite_sync(act: str, prov: str, pages: int) -> List[Dict[str,str]
             except Exception as e: print(f"[Empresite] Error extrayendo enlaces en página {p}: {e}")
             if not hrefs: print(f"[Empresite] No se extrajeron enlaces en la página {p}, deteniendo paginación."); break
             for href in set(hrefs):
-                ficha_url = href if href.startswith("http") else BASE_EMPRESITE + href
+                ficha_url = href if href.startswith("http") else base_url + href
                 print(f"[Empresite]   Procesando ficha: {ficha_url}")
                 try:
                     page.goto(ficha_url, wait_until="domcontentloaded", timeout=60000)
@@ -486,9 +642,9 @@ def scrape_empresite_sync(act: str, prov: str, pages: int) -> List[Dict[str,str]
     print(f"[Empresite] Scraping finalizado. Total de empresas con datos encontrados: {len(resultados)}")
     return resultados
 
-# *** Modificar scrape_paginas_amarillas_sync para aceptar base_url ***
 def scrape_paginas_amarillas_sync(act: str, prov: str, pages: int, base_url: str) -> List[Dict[str, str]]:
     """Scrapea Páginas Amarillas usando Playwright, extrayendo nombre y teléfono."""
+    # (Código idéntico a la versión anterior, incluyendo limpieza de screenshots)
     resultados = []
     print(f"[P. Amarillas] Iniciando scraping para '{act}' en '{prov}' ({pages} páginas)")
     if SCREENSHOT_PA_DIR.exists():
@@ -502,9 +658,8 @@ def scrape_paginas_amarillas_sync(act: str, prov: str, pages: int, base_url: str
         try:
             browser = pw.chromium.launch(headless=True, args=["--disable-blink-features=AutomationControlled", "--no-sandbox", "--disable-dev-shm-usage"])
         except Exception as e: print(f"[P. Amarillas] Error al iniciar el navegador Playwright: {e}"); return []
-        context = browser.new_context(user_agent=random.choice(UA_LIST), locale="es-ES", viewport={"width": 1920, "height": 1080}, java_script_enabled=True, ignore_https_errors=True)
+        context = browser.new_context(user_agent=random.choice(config.UA_LIST), locale="es-ES", viewport={"width": 1920, "height": 1080}, java_script_enabled=True, ignore_https_errors=True)
         page = context.new_page()
-        # *** Usar el argumento base_url ***
         for p in range(1, pages + 1): # Aunque 'pages' sea > 1, el endpoint lo limita a 1
             base_search_url = f"{base_url}/search/{act_encoded}/all-ma/{prov_encoded}/all-is/{prov_encoded}/all-ba/all-pu/all-nc"
             query_params = f"?what={act_encoded}&where={prov_encoded}"
@@ -513,24 +668,24 @@ def scrape_paginas_amarillas_sync(act: str, prov: str, pages: int, base_url: str
             print(f"[P. Amarillas] Accediendo a página {p}: {url}")
             try:
                 wait_condition = "networkidle" if p > 1 else "domcontentloaded"
-                page.goto(url, wait_until=wait_condition, timeout=90000)
+                page.goto(url, wait_until=wait_condition, timeout=config.PLAYWRIGHT_GOTO_TIMEOUT)
                 page.wait_for_selector('body', state='visible', timeout=30000)
                 print(f"[P. Amarillas] Body cargado en página {p} (wait_until={wait_condition}).")
                 if p > 1: print(f"[P. Amarillas] Pausando 5 segundos extra para página {p}..."); page.wait_for_timeout(5000)
                 else: page.wait_for_timeout(2000)
                 try:
                     pa_cookie_selector = "button#onetrust-accept-btn-handler, button.optanon-allow-all, button[data-id='accept']"
-                    page.click(pa_cookie_selector, timeout=5000)
+                    page.click(pa_cookie_selector, timeout=config.PLAYWRIGHT_SHORT_TIMEOUT)
                     print("[P. Amarillas] Banner de cookies aceptado."); page.wait_for_timeout(1000)
                 except PlaywrightTimeoutError: print("[P. Amarillas] No se encontró banner de cookies o ya estaba aceptado (timeout corto).")
                 except Exception as e_cookie: print(f"[P. Amarillas] Error al intentar aceptar cookies: {e_cookie}")
                 list_container_selector = "div.central"
                 print(f"[P. Amarillas] Esperando por el contenedor de la lista: '{list_container_selector}'")
-                page.wait_for_selector(list_container_selector, state="visible", timeout=45000)
+                page.wait_for_selector(list_container_selector, state="visible", timeout=config.PLAYWRIGHT_SELECTOR_TIMEOUT_P1)
                 print(f"[P. Amarillas] Contenedor '{list_container_selector}' encontrado.")
                 main_selector = "div.listado-item"
                 print(f"[P. Amarillas] Esperando por los items: '{main_selector}'")
-                selector_timeout = 75000 if p > 1 else 60000
+                selector_timeout = config.PLAYWRIGHT_SELECTOR_TIMEOUT_PN if p > 1 else config.PLAYWRIGHT_SELECTOR_TIMEOUT_P1
                 page.wait_for_selector(f"{list_container_selector} {main_selector}", state="visible", timeout=selector_timeout)
                 print(f"[P. Amarillas] Items '{main_selector}' encontrados en página {p}.")
                 list_items_check = page.query_selector_all(f"{list_container_selector} {main_selector}")
@@ -559,7 +714,6 @@ def scrape_paginas_amarillas_sync(act: str, prov: str, pages: int, base_url: str
                          elif link_element: nombre = link_element.inner_text().strip()
                          if link_element:
                              url_ficha = link_element.get_attribute('href')
-                             # *** Usar el argumento base_url para completar URL relativa ***
                              if url_ficha and not url_ficha.startswith('http'): url_ficha = base_url + url_ficha
                     except Exception as e_name: print(f"[P. Amarillas]   Error extrayendo nombre: {e_name}")
                     try:
@@ -585,4 +739,5 @@ def scrape_paginas_amarillas_sync(act: str, prov: str, pages: int, base_url: str
 # --- Para ejecutar localmente ---
 if __name__ == "__main__":
     print("Iniciando servidor FastAPI en http://0.0.0.0:9000")
-    uvicorn.run(app, host="0.0.0.0", port=9000, reload=False)
+    # Asegúrate de tener 'config.py' en el mismo directorio o ajusta la importación
+    uvicorn.run("scraping:app", host="0.0.0.0", port=9000, reload=False) # Especificar app como string para uvicorn
