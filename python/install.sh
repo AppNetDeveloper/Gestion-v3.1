@@ -33,3 +33,4 @@ playwright install chromium
 pip install fastapi uvicorn googlesearch-python duckduckgo-search playwright --break-system-packages
 playwright install chromium
 pip install pathlib --break-system-packages
+ pip install httpx --break-system-packages
