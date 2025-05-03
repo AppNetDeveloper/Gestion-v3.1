@@ -395,7 +395,9 @@ class TelegramController extends Controller
         $phone = $request->query('phone');
         $name  = $request->query('name');
 
-        $response = Http::get("$telegramUrl/search-contact/{$userId}", [
+        $response = Http::timeout(90)           // hasta 90 segundos para recibir datos
+        ->connectTimeout(100)    // hasta 100 segundos para conectar
+        ->get("$telegramUrl/search-contact/{$userId}", [
             'phone' => $phone,
             'name'  => $name,
         ]);
