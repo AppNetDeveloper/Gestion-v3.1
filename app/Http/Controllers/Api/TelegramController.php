@@ -59,9 +59,13 @@ class TelegramController extends Controller
         // Buscar en la tabla de contactos si ya existe un registro para este peer.
         // Se normaliza el teléfono quitando el signo "+"
         $peer = $data['peer'];
-         // Si no se encuentra en la base, se realiza la llamada a la API externa para buscar el contacto.
-         $externalUrl = env('TELEGRAM_URL') . '/search-contact/' . $data['user_id'] . '?peer=' . urlencode($peer);
-         $externalResponse = Http::get($externalUrl);
+        // Si no se encuentra en la base, se realiza la llamada a la API externa para buscar el contacto.
+        $externalUrl = env('TELEGRAM_URL') . '/search-contact/' . $data['user_id'] . '?peer=' . urlencode($peer);
+
+        $externalResponse = Http::timeout(90)           // hasta 60 segundos para recibir datos
+                                ->connectTimeout(100)    // hasta 10 segundos para conectar
+                                ->get($externalUrl);
+
 
          $externalData = $externalResponse->json();
 

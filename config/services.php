@@ -76,4 +76,8 @@ return [
         'key' => env('API_OPENROUTE'),
     ],
 
+    'scraping' => [
+        'url' => env('SCRAPING_SERVER_URL', 'http://localhost:9000'), // Valor por defecto opcional
+    ],
+
 ];
