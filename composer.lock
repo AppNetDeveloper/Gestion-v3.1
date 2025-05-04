@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "74094271f44d7b744a8b82b40b9bf1eb",
+    "content-hash": "2f11b1fb2e2daf5bde6d49d91f8f1d72",
     "packages": [
         {
             "name": "barryvdh/laravel-translation-manager",
