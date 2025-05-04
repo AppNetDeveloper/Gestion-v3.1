@@ -154,7 +154,7 @@ Route::group(['middleware' => ['auth', 'verified']], function () {
     Route::post('/labor-calendar/save-non-working', [LaborCalendarController::class, 'saveNonWorking'])->name('labor-calendar.saveNonWorking');
     Route::post('/labor-calendar/store', [LaborCalendarController::class, 'store'])->name('labor-calendar.store');
     Route::post('/labor-calendar/update/{id}', [LaborCalendarController::class, 'update'])->name('labor-calendar.update');
-    Route::post('/labor-calendar/destroy/{id}', [LaborCalendarController::class, 'destroy'])->name('labor-calendar.destroy');
+   // Route::post('/labor-calendar/destroy/{id}', [LaborCalendarController::class, 'destroy'])->name('labor-calendar.destroy');
     Route::delete('/labor-calendar/destroy/{id}', [LaborCalendarController::class, 'destroy'])->name('labor-calendar.destroy');
 
     //ShiftDay
