@@ -70,6 +70,13 @@ class RoleSeeder extends Seeder
             'company update',
             'company delete',
             'company show',
+            'scrapingtasks index',
+            'scrapingtasks create',
+            'scrapingtasks store',
+            'scrapingtasks update',
+            'scrapingtasks delete',
+            'scrapingtasks show_contacts',
+            'menu scrapingtasks',
         ]);
 
         // Asignación de permisos al rol 'employee'
@@ -93,6 +100,13 @@ class RoleSeeder extends Seeder
             'calendarindividual delete',
             'calendarindividual show',
             'calendarindividual index',
+            'scrapingtasks index',
+            'scrapingtasks create',
+            'scrapingtasks store',
+            'scrapingtasks update',
+            'scrapingtasks delete',
+            'scrapingtasks show_contacts',
+            'menu scrapingtasks',
         ]);
 
 
