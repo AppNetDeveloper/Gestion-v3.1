@@ -23,7 +23,7 @@ npm install node-cache
 npm install pino
 npm install express
 npm install node-cron
-
+npm install mime-types
 
 
 npm update
