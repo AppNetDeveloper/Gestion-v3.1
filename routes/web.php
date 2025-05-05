@@ -402,24 +402,13 @@ Route::get('/api/history/user/{userId}/date/{date}', [MapController::class, 'get
     ->name('api.history.user.day');
 
 // --- Grupo de rutas para Scraping Tasks ---
-Route::prefix('scraping-tasks')->name('scraping.tasks.')->group(function () {
-    // Muestra la vista principal con el formulario y la tabla
-    Route::get('/', [ScrapingTaskController::class, 'index'])->name('index');
-
-    // Guarda una nueva tarea creada desde el formulario
-    Route::post('/', [ScrapingTaskController::class, 'store'])->name('store');
-
-    // Proporciona los datos para la DataTable (llamada por AJAX)
-    Route::get('/data', [ScrapingTaskController::class, 'data'])->name('data');
-
-    // Actualiza una tarea existente (llamada por AJAX desde el modal de edición)
-    Route::put('/{task}', [ScrapingTaskController::class, 'update'])->name('update');
-
-    // Elimina una tarea existente (llamada por AJAX desde el botón de borrar)
-    Route::delete('/{task}', [ScrapingTaskController::class, 'destroy'])->name('destroy');
-
-    // *** NUEVA RUTA para ver contactos de una tarea ***
-    Route::get('/{task}/contacts', [ScrapingTaskController::class, 'showContacts'])->name('contacts');
+Route::middleware(['auth'])->prefix('scraping-tasks')->name('scraping.tasks.')->group(function () {
+    Route::get('/', [ScrapingTaskController::class, 'index'])->name('index')->middleware('can:scrapingtasks index');
+    Route::post('/', [ScrapingTaskController::class, 'store'])->name('store')->middleware('can:scrapingtasks store');
+    Route::get('/data', [ScrapingTaskController::class, 'data'])->name('data')->middleware('can:scrapingtasks index'); // Mismo permiso que index
+    Route::put('/{task}', [ScrapingTaskController::class, 'update'])->name('update')->middleware('can:scrapingtasks update');
+    Route::delete('/{task}', [ScrapingTaskController::class, 'destroy'])->name('destroy')->middleware('can:scrapingtasks delete');
+    Route::get('/{task}/contacts', [ScrapingTaskController::class, 'showContacts'])->name('contacts')->middleware('can:scrapingtasks show_contacts');
 });
 
 // Grupo de rutas públicas

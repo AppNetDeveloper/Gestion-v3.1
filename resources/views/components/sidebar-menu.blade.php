@@ -97,6 +97,19 @@
                     </span>
                 </a>
             </li>
+
+            @can('menu scrapingtasks') {{-- Verifica el permiso --}}
+            {{-- La clase 'active' se aplica si la ruta actual empieza con 'scraping.tasks.' --}}
+            <li class="{{ request()->routeIs('scraping.tasks.*') ? 'active' : '' }}">
+                <a href="{{ route('scraping.tasks.index') }}" class="navItem">
+                    <span class="flex items-center">
+                        <iconify-icon class="nav-icon" icon="carbon:data-enrichment"></iconify-icon>
+                        <span>{{ __('Scraping Tasks') }}</span>
+                    </span>
+                </a>
+            </li>
+            @endcan
+
             @can('servermonitor show')
                 <li>
                     <a href="{{ route('servermonitor.index') }}"
