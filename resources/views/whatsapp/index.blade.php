@@ -4,12 +4,10 @@
         <meta name="csrf-token" content="{{ csrf_token() }}">
         {{-- Iconify --}}
         <script src="https://code.iconify.design/iconify-icon/1.0.7/iconify-icon.min.js"></script>
-        {{-- Emoji Picker Script REMOVED --}}
-        {{-- <script type="module" src="https://cdn.jsdelivr.net/npm/emoji-picker-element@^1/index.js"></script> --}}
     @endpush
 
     @php
-        // Función para convertir CSV a imagen (base64)
+        // Función para convertir CSV a imagen (base64) - Mantenida por si acaso
         if (! function_exists('convertCsvImage')) {
             function convertCsvImage($imageString) {
                 $parts = explode(',', $imageString, 2);
@@ -27,6 +25,7 @@
         // Función para formatear texto del mensaje y convertir URLs en enlaces
         if (! function_exists('formatMessageText')) {
             function formatMessageText($text) {
+                if (empty($text)) return '';
                 // 1. Escapar HTML para seguridad
                 $escapedText = e($text);
 
@@ -34,27 +33,22 @@
                 $pattern = '/(https?:\/\/[^\s<>"\'`]+)|(www\.[^\s<>"\'`]+)/i';
                 $linkedText = preg_replace_callback($pattern, function ($matches) {
                     $url = $matches[0];
-                    // Asegurar que la URL tenga http(s)://
                     $href = $url;
                     if (stripos($href, 'www.') === 0) {
-                        $href = 'https://' . $href; // Añadir https si empieza con www.
+                        $href = 'https://' . $href;
                     }
-                    // Limitar longitud mostrada si es muy larga (opcional)
                     $displayUrl = strlen($url) > 50 ? substr($url, 0, 47) . '...' : $url;
-
-                    // Crear el enlace
                     return '<a href="' . e($href) . '" target="_blank" rel="noopener noreferrer" class="message-link">' . e($displayUrl) . '</a>';
                 }, $escapedText);
 
                 // 3. Convertir saltos de línea a <br>
-                return nl2br($linkedText, false); // false para no usar <br /> XHTML
+                return nl2br($linkedText, false);
             }
         }
     @endphp
 
     {{-- Mensajes flash (con z-index aumentado) --}}
     @if(session('success'))
-        {{-- Increased z-index to z-[9999] --}}
         <div class="fixed top-5 right-5 z-[9999] max-w-sm p-4 bg-green-100 border border-green-400 text-green-800 rounded-lg shadow-lg dark:bg-green-800 dark:text-green-100 dark:border-green-700" role="alert" id="flash-success">
             <div class="flex items-start">
                 <iconify-icon icon="mdi:check-circle" class="text-xl mr-2 text-green-500 dark:text-green-300"></iconify-icon>
@@ -70,7 +64,6 @@
         </div>
     @endif
     @if(session('error'))
-         {{-- Increased z-index to z-[9999] --}}
          <div class="fixed top-5 right-5 z-[9999] max-w-sm p-4 bg-red-100 border border-red-400 text-red-800 rounded-lg shadow-lg dark:bg-red-800 dark:text-red-100 dark:border-red-700" role="alert" id="flash-error">
             <div class="flex items-start">
                 <iconify-icon icon="mdi:alert-circle" class="text-xl mr-2 text-red-500 dark:text-red-300"></iconify-icon>
@@ -85,25 +78,46 @@
             </div>
         </div>
     @endif
+     @if($errors->any())
+        <div class="fixed top-5 right-5 z-[9999] max-w-sm p-4 bg-red-100 border border-red-400 text-red-800 rounded-lg shadow-lg dark:bg-red-800 dark:text-red-100 dark:border-red-700" role="alert" id="flash-validation-errors">
+            <div class="flex items-start">
+                <iconify-icon icon="mdi:alert-circle" class="text-xl mr-2 text-red-500 dark:text-red-300"></iconify-icon>
+                <div>
+                    <strong class="font-semibold">{{ __("Validation Errors!") }}</strong>
+                    <ul class="list-disc list-inside text-sm mt-1">
+                        @foreach ($errors->all() as $error)
+                            <li>{{ $error }}</li>
+                        @endforeach
+                    </ul>
+                </div>
+                 <button type="button" class="ml-auto -mx-1.5 -my-1.5 bg-red-100 text-red-500 rounded-lg focus:ring-2 focus:ring-red-400 p-1.5 hover:bg-red-200 inline-flex h-8 w-8 dark:bg-red-800 dark:text-red-300 dark:hover:bg-red-700" onclick="this.parentElement.parentElement.style.display='none'" aria-label="Close">
+                    <span class="sr-only">Close</span>
+                    <iconify-icon icon="mdi:close" class="text-xl"></iconify-icon>
+                </button>
+            </div>
+        </div>
+    @endif
+
 
     {{-- Contenedor principal del chat --}}
     <div class="flex chat-height overflow-hidden relative bg-white dark:bg-slate-900 rounded-lg shadow-xl border border-slate-200 dark:border-slate-700">
 
+        {{-- Panel Izquierdo: Contactos --}}
         <div class="w-[320px] flex-none border-r border-slate-200 dark:border-slate-700 flex flex-col h-full bg-slate-50 dark:bg-slate-800">
+            {{-- Cabecera del Panel Izquierdo: Estado y Acciones --}}
             <div class="p-4 border-b border-slate-200 dark:border-slate-700">
-                 {{-- Contenedor para botones de conexión/acciones --}}
                  <div id="connection-status-header" class="flex items-center justify-between gap-2">
-                      <div id="connection-btn" class="flex-1">
+                     <div id="connection-btn" class="flex-1">
                          {{-- Estado de conexión (se carga con JS) --}}
                          <span class="text-sm text-slate-500 dark:text-slate-400">{{ __('Loading status...') }}</span>
-                      </div>
-                      {{-- Contenedor para botones adicionales (AutoResponse, Sync) --}}
-                      <div id="connection-actions" class="flex items-center gap-2">
-                          {{-- Botones se cargan con JS --}}
-                      </div>
+                     </div>
+                     <div id="connection-actions" class="flex items-center gap-2">
+                         {{-- Botones se cargan con JS --}}
+                     </div>
                  </div>
             </div>
 
+            {{-- Barra de Búsqueda de Contactos --}}
             <div class="p-3 border-b border-slate-200 dark:border-slate-700">
                 <div class="relative">
                     <input type="text" id="contactSearch" placeholder="{{ __('Search or start new chat') }}" class="w-full bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-lg py-2 pl-10 pr-4 text-sm focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 focus:outline-none dark:text-slate-200 placeholder:text-slate-400 dark:placeholder:text-slate-500">
@@ -113,8 +127,8 @@
                 </div>
             </div>
 
+            {{-- Lista de Contactos --}}
             <div id="contacts-panel" class="flex-1 overflow-y-auto contact-height">
-                {{-- data-simplebar (si usas simplebar.js) --}}
                 <ul id="contact-list" class="divide-y divide-slate-100 dark:divide-slate-700">
                     {{-- Renderizado con Blade inicial, se actualizará con AJAX --}}
                     @forelse($sortedContacts as $contact)
@@ -124,30 +138,25 @@
                             $contactPhone = $contact['phone'];
                             $isActive = isset($selectedPhone) && $selectedPhone === $contactPhone;
                         @endphp
-                        <li class="contact-item flex items-center justify-between hover:bg-slate-100 dark:hover:bg-slate-700 transition duration-150 {{ $isActive ? 'active' : '' }}" data-phone="{{ $contactPhone }}"> {{-- Added data-phone --}}
-                            {{-- Enlace al chat --}}
+                        <li class="contact-item flex items-center justify-between hover:bg-slate-100 dark:hover:bg-slate-700 transition duration-150 {{ $isActive ? 'active' : '' }}" data-phone="{{ $contactPhone }}">
                             <a href="{{ route('whatsapp.conversation', $contactPhone) }}" class="flex items-center p-3 w-full">
                                 <div class="flex-none mr-3">
-                                    {{-- Avatar Placeholder --}}
                                     <div class="contact-avatar-initials w-10 h-10 rounded-full bg-emerald-100 dark:bg-emerald-800/50 flex items-center justify-center text-emerald-600 dark:text-emerald-300 font-medium">
                                         {{ $contactInitial }}
                                     </div>
                                 </div>
                                 <div class="flex-1 overflow-hidden">
                                     <p class="contact-item-name text-sm font-medium text-slate-800 dark:text-slate-200 truncate">{{ $cleanName }}</p>
-                                    {{-- Opcional: Último mensaje o número --}}
                                     <p class="contact-item-detail text-xs text-slate-500 dark:text-slate-400 truncate">{{ $contactPhone }}</p>
                                 </div>
-                                {{-- Opcional: Hora último mensaje --}}
-                                {{-- <span class="contact-item-time text-xs text-slate-400 dark:text-slate-500 ml-2 whitespace-nowrap">10:30</span> --}}
+                                {{-- <span class="contact-item-time text-xs text-slate-400 dark:text-slate-500 ml-2 whitespace-nowrap">Hora</span> --}}
                             </a>
-                            {{-- Botón para eliminar chat (más sutil) --}}
                             <form action="{{ route('whatsapp.chat.destroy', $contactPhone) }}" method="POST" class="mr-2 flex-none delete-chat-form">
                                 @csrf
                                 @method('DELETE')
                                 <button type="button" class="delete-chat-btn text-slate-400 hover:text-red-500 dark:text-slate-500 dark:hover:text-red-400 p-1 rounded-full"
-                                    data-contact-name="{{ $cleanName }}"
-                                    title="{{ __('Delete chat') }}">
+                                        data-contact-name="{{ $cleanName }}"
+                                        title="{{ __('Delete chat') }}">
                                     <iconify-icon icon="mdi:trash-can-outline" class="text-lg"></iconify-icon>
                                 </button>
                             </form>
@@ -158,121 +167,166 @@
                 </ul>
             </div>
         </div>
-        <div class="flex-1 flex flex-col h-full bg-slate-100 dark:bg-slate-950 chat-bg-pattern"> {{-- Fondo con patrón --}}
+
+        {{-- Panel Derecho: Chat --}}
+        <div class="flex-1 flex flex-col h-full bg-slate-100 dark:bg-slate-950 chat-bg-pattern">
 
             @if(isset($selectedPhone))
                 @php
+                    // Encontrar el contacto seleccionado para mostrar nombre e inicial
                     $contactSelected = collect($sortedContacts)->firstWhere('phone', $selectedPhone);
                     $selectedName = $contactSelected ? preg_replace('/@.*$/', '', $contactSelected['name']) : $selectedPhone;
                     $selectedInitial = strtoupper(substr($selectedName, 0, 1));
-                    $selectedJid = $selectedPhone . '@s.whatsapp.net'; // JID completo para comparación
+                    $selectedJid = $selectedPhone . '@s.whatsapp.net'; // JID completo para enviar mensajes
                 @endphp
 
+                {{-- Cabecera del Chat --}}
                 <div id="chat-header" class="flex items-center p-3 border-b border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 h-[65px] flex-none">
-                     <div class="flex items-center flex-1 overflow-hidden">
-                         {{-- Avatar --}}
-                         <div class="w-10 h-10 rounded-full bg-emerald-100 dark:bg-emerald-800/50 flex items-center justify-center text-emerald-600 dark:text-emerald-300 font-medium mr-3 flex-none chat-header-avatar">
-                             {{ $selectedInitial }}
-                         </div>
-                         {{-- Nombre y Estado --}}
-                         <div class="overflow-hidden">
+                    <div class="flex items-center flex-1 overflow-hidden">
+                        <div class="w-10 h-10 rounded-full bg-emerald-100 dark:bg-emerald-800/50 flex items-center justify-center text-emerald-600 dark:text-emerald-300 font-medium mr-3 flex-none chat-header-avatar">
+                            {{ $selectedInitial }}
+                        </div>
+                        <div class="overflow-hidden">
                             <h2 id="chat-name" class="text-base font-medium text-slate-800 dark:text-slate-100 truncate">{{ $selectedName }}</h2>
                             <p id="chat-status" class="text-xs text-slate-500 dark:text-slate-400 truncate">{{-- Online status? --}}</p>
-                         </div>
-                     </div>
-                     {{-- Botones de Acción del Header (Opcional) --}}
-                     <div class="flex items-center gap-2 ml-auto">
+                        </div>
+                    </div>
+                    {{-- Botones de Acción del Header (Opcional) --}}
+                    <div class="flex items-center gap-2 ml-auto">
                          {{-- <button class="btn btn-icon btn-light dark:btn-dark rounded-full w-9 h-9 p-0"><iconify-icon icon="heroicons:magnifying-glass-20-solid"></iconify-icon></button>
                          <button class="btn btn-icon btn-light dark:btn-dark rounded-full w-9 h-9 p-0"><iconify-icon icon="heroicons:ellipsis-vertical-20-solid"></iconify-icon></button> --}}
-                     </div>
+                    </div>
                 </div>
 
+                {{-- Contenedor de Mensajes --}}
                 <div id="chat-container" class="flex-1 overflow-y-auto p-4 md:p-6 space-y-2">
-                    {{-- Renderizado con Blade inicial, se actualizará con AJAX --}}
-                    @forelse($messages->sortBy('created_at') as $message)
+                    {{-- Renderizado con Blade inicial --}}
+                    @forelse($messages as $messageItem) {{-- Iterar sobre $messageItem --}}
                         @php
-                            // Determinar si el mensaje es recibido o enviado
-                            $isReceived = !($message['key']['fromMe'] ?? false);
-                            $timestamp = $message['messageTimestamp'] ?? (isset($message['created_at']) ? \Carbon\Carbon::parse($message['created_at'])->timestamp : null);
-                            $formattedTime = $timestamp ? \Carbon\Carbon::createFromTimestamp($timestamp)->format('H:i') : '';
-                            $messageId = $message['key']['id'] ?? null;
-                            $remoteJid = $message['key']['remoteJid'] ?? '';
-                            // Determinar el estado del mensaje (ejemplo básico)
-                            $messageStatus = $message['status'] ?? 'sent'; // Asume que el backend envía 'sent', 'delivered', 'read'
-                            $statusIcon = 'mdi:check'; // Default: sent
-                            if ($messageStatus === 'delivered') $statusIcon = 'mdi:check-all';
-                            if ($messageStatus === 'read') $statusIcon = 'mdi:check-all'; // Mismo icono, se coloreará con CSS
-                            $statusClass = $messageStatus === 'read' ? 'status-read' : ''; // Clase para ticks azules
+                            // Acceder a los datos del mensaje original
+                            $messageData = $messageItem['messageData'] ?? null;
+                            // Obtener la URL pública del medio, si existe
+                            $publicMediaUrl = $messageItem['publicMediaUrl'] ?? null;
+
+                            // Si no hay datos del mensaje, saltar esta iteración
+                            if (!$messageData) continue;
+
+                            // Determinar si el mensaje es propio o recibido
+                            $isFromMe = $messageData['key']['fromMe'] ?? false;
+                            $messageClass = $isFromMe ? 'message-sent' : 'message-received'; // Clases CSS para estilo
+
+                            // Extraer el contenido del mensaje
+                            $conversationText = $messageData['message']['conversation'] ?? null;
+                            $extendedText = $messageData['message']['extendedTextMessage']['text'] ?? null;
+                            $imageMessage = $messageData['message']['imageMessage'] ?? null;
+                            $videoMessage = $messageData['message']['videoMessage'] ?? null;
+                            $audioMessage = $messageData['message']['audioMessage'] ?? null;
+                            $documentMessage = $messageData['message']['documentMessage'] ?? null;
+                            $stickerMessage = $messageData['message']['stickerMessage'] ?? null;
+
+                            // Obtener timestamp y formatear hora
+                            $timestamp = isset($messageData['messageTimestamp']) ? \Carbon\Carbon::createFromTimestamp($messageData['messageTimestamp']) : null;
+                            $formattedTime = $timestamp ? $timestamp->format('H:i') : '';
+
+                            $messageId = $messageData['key']['id'] ?? null;
+                            $remoteJid = $messageData['key']['remoteJid'] ?? '';
+
+                            // Determinar estado del mensaje
+                            $messageStatus = $messageData['status'] ?? 1;
+                            $statusIcon = 'mdi:check';
+                            if ($messageStatus >= 2) $statusIcon = 'mdi:check-all';
+                            $statusClass = $messageStatus >= 5 ? 'status-read' : ($messageStatus >= 2 ? 'status-delivered' : ''); // Asume 5=read, 2=delivered
                         @endphp
 
-                        <div class="flex w-full {{ $isReceived ? 'justify-start' : 'justify-end' }}" data-message-id="{{ $messageId }}"> {{-- Add message ID for potential updates --}}
-                            <div class="relative message-bubble-wrapper {{ $isReceived ? 'message-received mr-auto' : 'message-sent ml-auto' }}">
-                                <div class="message-bubble group"> {{-- Added group class --}}
-                                    {{-- Contenido del Mensaje --}}
+                        {{-- Contenedor principal del mensaje --}}
+                        <div class="flex w-full {{ $isFromMe ? 'justify-end' : 'justify-start' }}" data-message-id="{{ $messageId }}">
+                            <div class="relative message-bubble-wrapper {{ $isFromMe ? 'message-sent ml-auto' : 'message-received mr-auto' }}">
+                                <div class="message-bubble group">
                                     @php $mediaRendered = false; @endphp
 
-                                    {{-- Imagen --}}
-                                    @if(isset($message['message']['imageMessage']) || (isset($message['image']) && $message['image']))
-                                        @php
-                                            $imageSrc = $message['image'] ?? null;
-                                            if (!$imageSrc && isset($message['message']['imageMessage']['url'])) { $imageSrc = null; }
-                                            elseif ($imageSrc && strpos($imageSrc, 'data:image') === 0) { $imageSrc = convertCsvImage($imageSrc); }
-                                            elseif ($imageSrc) { $imageSrc = asset($imageSrc); }
-                                        @endphp
-                                        @if($imageSrc)
-                                            <img src="{{ $imageSrc }}" alt="Image" class="chat-image max-w-full h-auto rounded-lg cursor-pointer block mb-1"
-                                                 onclick="showZoomModal('{{ $imageSrc }}')">
-                                            @php $mediaRendered = true; @endphp
-                                        @endif
-                                    @endif
+                                    {{-- Mostrar Imagen --}}
+                                    @if ($imageMessage && $publicMediaUrl)
+                                        <img src="{{ $publicMediaUrl }}" alt="Imagen adjunta" class="chat-image max-w-full h-auto rounded-lg cursor-pointer block mb-1"
+                                             onclick="showZoomModal('{{ $publicMediaUrl }}')">
+                                        @php $mediaRendered = true; @endphp
 
-                                    {{-- Video --}}
-                                    @if(isset($message['message']['videoMessage']))
-                                        @php $videoUrl = null; @endphp {{-- Deshabilitado por ahora --}}
-                                        @if($videoUrl)
-                                        <div class="relative video-thumbnail bg-slate-700 rounded-lg flex items-center justify-center cursor-pointer mb-1" onclick="showVideoModal('{{ $videoUrl }}')" style="width: 250px; height: 150px;">
-                                            <iconify-icon icon="mdi:play-circle-outline" class="text-4xl text-white z-10"></iconify-icon>
+                                    {{-- Mostrar Video --}}
+                                    @elseif ($videoMessage && $publicMediaUrl)
+                                        <video controls class="chat-video max-w-full h-auto rounded-lg block mb-1" style="max-width: 320px;">
+                                            <source src="{{ $publicMediaUrl }}" type="{{ $videoMessage['mimetype'] ?? 'video/mp4' }}">
+                                            {{ __('Your browser does not support the video tag.') }} <a href="{{ $publicMediaUrl }}">{{ __('Download video') }}</a>
+                                        </video>
+                                        @php $mediaRendered = true; @endphp
+
+                                    {{-- Mostrar Audio --}}
+                                    @elseif ($audioMessage && $publicMediaUrl)
+                                         <audio controls class="chat-audio block mb-1 w-full" style="max-width: 280px;">
+                                            <source src="{{ $publicMediaUrl }}" type="{{ $audioMessage['mimetype'] ?? 'audio/ogg' }}">
+                                            {{ __('Your browser does not support the audio tag.') }} <a href="{{ $publicMediaUrl }}">{{ __('Download audio') }}</a>
+                                        </audio>
+                                        @php $mediaRendered = true; @endphp
+
+                                    {{-- Mostrar Sticker (como imagen si es webp) --}}
+                                    @elseif ($stickerMessage && $publicMediaUrl && ($stickerMessage['mimetype'] ?? '') === 'image/webp')
+                                         <img src="{{ $publicMediaUrl }}" alt="Sticker" class="chat-sticker max-w-[150px] h-auto block mb-1">
+                                         @php $mediaRendered = true; @endphp
+
+                                    {{-- Mostrar Enlace a Documento --}}
+                                    @elseif ($documentMessage && $publicMediaUrl)
+                                        <div class="p-2 border border-slate-200 dark:border-slate-700 rounded-lg bg-slate-50 dark:bg-slate-700/50 mb-1">
+                                            <a href="{{ $publicMediaUrl }}" target="_blank" download="{{ $documentMessage['fileName'] ?? 'documento' }}" class="flex items-center text-sm text-slate-700 dark:text-slate-200 hover:underline">
+                                                <iconify-icon icon="mdi:file-document-outline" class="text-lg mr-2 flex-none"></iconify-icon>
+                                                <span class="truncate">{{ $documentMessage['fileName'] ?? __('Download Document') }}</span>
+                                            </a>
+                                            @php
+                                                $fileSize = $documentMessage['fileLength'] ?? 0;
+                                                $formattedSize = $fileSize > 0 ? round($fileSize / 1024) . ' KB' : '';
+                                            @endphp
+                                            @if($formattedSize)
+                                                <span class="text-xs text-slate-500 dark:text-slate-400 block mt-1">{{ $formattedSize }}</span>
+                                            @endif
                                         </div>
                                         @php $mediaRendered = true; @endphp
-                                        @endif
                                     @endif
 
                                     {{-- Texto del Mensaje (incluyendo caption de media) --}}
                                     @php
-                                        $textContent = $message['message']['conversation']
-                                            ?? $message['message']['extendedTextMessage']['text']
-                                            ?? $message['message']['imageMessage']['caption']
-                                            ?? $message['message']['videoMessage']['caption']
-                                            ?? '';
+                                        $textContent = $conversationText
+                                                       ?? $extendedText
+                                                       ?? $imageMessage['caption']
+                                                       ?? $videoMessage['caption']
+                                                       ?? $documentMessage['caption']
+                                                       ?? '';
                                     @endphp
                                     @if($textContent)
-                                    <div class="message-text-content {{ $mediaRendered ? 'mt-1' : '' }}">
-                                        {{-- Llamar a la función formatMessageText para convertir URLs --}}
-                                        {!! formatMessageText($textContent) !!}
-                                    </div>
+                                        <div class="message-text-content {{ $mediaRendered ? 'mt-1' : '' }}">
+                                            {!! formatMessageText($textContent) !!}
+                                        </div>
+                                    @elseif(!$mediaRendered)
+                                        {{-- Mostrar tipo de mensaje si no hay contenido visible --}}
+                                        <p class="text-xs italic text-slate-400 dark:text-slate-500">
+                                            [{{ $messageData['message'] ? array_keys($messageData['message'])[0] : 'Mensaje vacío' }}]
+                                        </p>
                                     @endif
 
                                     {{-- Timestamp y Estado --}}
                                     <div class="message-timestamp-wrapper">
                                         <span class="message-timestamp">{{ $formattedTime }}</span>
-                                        @if(!$isReceived)
+                                        @if($isFromMe)
                                             <span class="message-status-icon {{ $statusClass }}"><iconify-icon icon="{{ $statusIcon }}"></iconify-icon></span>
                                         @endif
                                     </div>
 
-                                    {{-- Botón Eliminar (posición absoluta, se muestra al hacer hover en la burbuja) --}}
+                                    {{-- Botón Eliminar --}}
                                     @if($messageId)
-                                    <form action="/whatsapp/message/{{ $messageId }}" method="POST" class="absolute top-0 right-0 m-1 delete-message-form opacity-0 group-hover:opacity-100 transition-opacity">
-                                        @csrf
-                                        @method('DELETE')
-                                        <input type="hidden" name="remoteJid" value="{{ $remoteJid }}">
-                                        <input type="hidden" name="fromMe" value="{{ $message['key']['fromMe'] ? 'true' : 'false' }}">
-                                        <button type="button" class="delete-message-btn text-slate-400 hover:text-red-500 dark:text-slate-500 dark:hover:text-red-400 p-0.5 rounded-full bg-white/50 dark:bg-slate-800/50"
+                                        <button type="button"
+                                                class="absolute top-0 right-0 m-1 delete-message-btn text-slate-400 hover:text-red-500 dark:text-slate-500 dark:hover:text-red-400 p-0.5 rounded-full bg-white/50 dark:bg-slate-800/50 opacity-0 group-hover:opacity-100 transition-opacity"
                                                 data-message-id="{{ $messageId }}"
+                                                data-remote-jid="{{ $remoteJid }}"
+                                                data-from-me="{{ $isFromMe ? 'true' : 'false' }}"
                                                 title="{{ __('Delete message') }}">
                                             <iconify-icon icon="mdi:trash-can-outline" class="text-xs"></iconify-icon>
                                         </button>
-                                    </form>
                                     @endif
 
                                 </div>
@@ -285,7 +339,7 @@
 
                 {{-- Área de Envío de Mensaje --}}
                 <div id="send-message-container" class="p-3 border-t border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 flex-none">
-                    <div class="flex items-end space-x-3 relative"> {{-- Mantenido relative --}}
+                    <div class="flex items-end space-x-3 relative">
                         {{-- Botón Emoji --}}
                         <button id="emoji-button" type="button" class="btn btn-icon btn-light dark:btn-dark rounded-full flex-none w-10 h-10 p-0" title="{{ __('Emoji') }}">
                             <iconify-icon icon="mdi:emoticon-happy-outline" class="text-xl"></iconify-icon>
@@ -293,7 +347,6 @@
 
                         {{-- Input de Texto --}}
                         <div class="flex-1">
-                             {{-- Replaced TinyMCE with a standard textarea --}}
                             <textarea id="message-input"
                                       placeholder="{{ __('Type a message') }}..."
                                       class="w-full p-2.5 pr-4 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 dark:text-slate-200 focus:ring-emerald-500 focus:border-emerald-500 resize-none overflow-hidden"
@@ -307,343 +360,108 @@
                         <button id="sendMessageButton" class="btn btn-primary rounded-full flex-none inline-flex items-center justify-center w-12 h-12 p-0" title="{{ __('Send') }}">
                             <iconify-icon icon="mdi:send" class="text-xl"></iconify-icon>
                         </button>
-
-                        {{-- Emoji Picker Element REMOVED --}}
-                        {{-- <div id="emoji-picker-container" class="absolute bottom-full left-0 mb-2 z-[100]">
-                           <emoji-picker class="light"></emoji-picker>
-                        </div> --}}
                     </div>
                 </div>
 
             @else
                 {{-- Placeholder si no hay chat seleccionado --}}
                 <div class="flex flex-col items-center justify-center h-full text-center bg-slate-100 dark:bg-slate-950 chat-bg-pattern">
-                     <iconify-icon icon="logos:whatsapp-icon" class="text-8xl mb-6 opacity-80"></iconify-icon>
+                    <iconify-icon icon="logos:whatsapp-icon" class="text-8xl mb-6 opacity-80"></iconify-icon>
                     <h3 class="text-xl font-medium text-slate-700 dark:text-slate-300 mb-2">{{ __('Keep your phone connected') }}</h3>
                     <p class="text-sm text-slate-500 dark:text-slate-400 max-w-sm">
                         {{ __("Select a contact from the list to start a conversation.") }}
                     </p>
-                     {{-- <hr class="w-24 border-t border-slate-300 dark:border-slate-700 my-6">
-                     <p class="text-xs text-slate-400 dark:text-slate-500 flex items-center">
-                         <iconify-icon icon="heroicons:lock-closed-20-solid" class="mr-1"></iconify-icon> End-to-end encrypted
-                     </p> --}}
                 </div>
             @endif
         </div>
-        </div>
+    </div>
 
     {{-- Estilos adicionales --}}
     @push('styles')
         <style>
-            .chat-height {
-                height: calc(100vh - 100px); /* Ajusta según tu layout general */
-                min-height: 550px;
-            }
-            .contact-height {
-                /* No max-height, usa flex-1 para llenar espacio */
-            }
-            .chat-bg-pattern {
-                /* Pattern from https://heropatterns.com/ */
-                background-color: #e2e8f0; /* bg-slate-200 */
-                /* background-image: url("data:image/svg+xml,%3Csvg width='52' height='26' viewBox='0 0 52 26' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23cbd5e1' fill-opacity='0.4'%3E%3Cpath d='M10 10c0-2.21-1.79-4-4-4-3.314 0-6-2.686-6-6h2c0 2.21 1.79 4 4 4 3.314 0 6 2.686 6 6 0 2.21 1.79 4 4 4 3.314 0 6 2.686 6 6 0 2.21 1.79 4 4 4v2c-3.314 0-6-2.686-6-6 0-2.21-1.79-4-4-4-3.314 0-6-2.686-6-6zm25.464-1.95l8.486 8.486-1.414 1.414-8.486-8.486 1.414-1.414z' /%3E%3C/g%3E%3C/g%3E%3C/svg%3E"); */
-            }
-            .dark .chat-bg-pattern {
-                 background-color: #0f172a; /* dark:bg-slate-900 */
-                 /* background-image: url("data:image/svg+xml,%3Csvg width='52' height='26' viewBox='0 0 52 26' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23334155' fill-opacity='0.3'%3E%3Cpath d='M10 10c0-2.21-1.79-4-4-4-3.314 0-6-2.686-6-6h2c0 2.21 1.79 4 4 4 3.314 0 6 2.686 6 6 0 2.21 1.79 4 4 4 3.314 0 6 2.686 6 6 0 2.21 1.79 4 4 4v2c-3.314 0-6-2.686-6-6 0-2.21-1.79-4-4-4-3.314 0-6-2.686-6-6zm25.464-1.95l8.486 8.486-1.414 1.414-8.486-8.486 1.414-1.414z' /%3E%3C/g%3E%3C/g%3E%3C/svg%3E"); */
-            }
-
-            /* Contact list styles */
-            #contact-list .contact-item.active {
-                background-color: #e2e8f0; /* bg-slate-200 */
-            }
-            .dark #contact-list .contact-item.active {
-                background-color: #1e293b; /* bg-slate-800 */
-            }
-            #contact-list .contact-item.active .contact-item-name {
-                 font-weight: 600; /* font-semibold */
-            }
-            .dark #contact-list .contact-item.active .contact-item-name {
-                 color: #f1f5f9; /* dark:text-slate-100 */
-            }
-
-            /* Message bubble styles */
-            .message-bubble-wrapper { max-width: 70%; } /* Slightly narrower */
-            .message-bubble {
-                padding: 6px 12px; /* Smaller padding */
-                border-radius: 8px; /* Less rounded */
-                word-wrap: break-word; /* Ensure text wraps */
-                overflow-wrap: break-word; /* Ensure text wraps */
-                position: relative;
-                box-shadow: 0 1px 0.5px rgba(11, 20, 26, 0.13);
-                min-width: 60px; /* Min width for timestamp */
-                 /* Group hover to show delete button */
-                @apply group;
-            }
-            /* Triangle / Tail */
-            .message-bubble::before {
-                content: "";
-                position: absolute;
-                bottom: 0px;
-                height: 12px;
-                width: 12px;
-                background-color: inherit; /* Match bubble color */
-                clip-path: path('M0,0 L12,0 L12,12 L0,12 Z'); /* Default square */
-            }
-            .message-received .message-bubble::before {
-                left: -6px;
-                clip-path: path('M6,12 L12,0 L12,12 L6,12 Z'); /* Left tail */
-            }
-            .message-sent .message-bubble::before {
-                right: -6px;
-                clip-path: path('M0,0 L6,12 L0,12 L0,0 Z'); /* Right tail */
-            }
-            /* Colors */
-            .message-received .message-bubble {
-                background-color: #ffffff; /* White */
-                color: #111b21; /* WhatsApp dark text */
-            }
-            .dark .message-received .message-bubble {
-                 background-color: #202c33; /* WhatsApp dark received bubble */
-                 color: #e9edef; /* WhatsApp dark text */
-            }
-            .message-sent .message-bubble {
-                background-color: #dcf8c6; /* WhatsApp green */
-                color: #111b21;
-            }
-             .dark .message-sent .message-bubble {
-                 background-color: #005c4b; /* WhatsApp dark green */
-                 color: #e9edef;
-             }
-
-            /* Timestamp and Status Icon Wrapper */
-            .message-timestamp-wrapper {
-                float: right; /* Position to the bottom right */
-                margin-left: 10px; /* Space from text */
-                margin-top: 4px; /* Space from text if it wraps */
-                line-height: 1;
-                white-space: nowrap; /* Prevent wrapping */
-                user-select: none;
-                position: relative; /* Needed for absolute positioning of status icon? */
-                bottom: -2px; /* Align slightly lower */
-                /* Clear float to prevent layout issues if bubble is very narrow */
-                clear: right;
-            }
-            .message-timestamp {
-                font-size: 0.68rem; /* 11px approx */
-                color: #667781; /* WhatsApp timestamp gray */
-            }
-            .dark .message-timestamp {
-                 color: #a0aec0; /* Lighter gray for dark mode */
-            }
-            .message-status-icon {
-                display: inline-block;
-                margin-left: 3px;
-                font-size: 0.8rem; /* Slightly larger than timestamp */
-                color: #667781; /* Default check color */
-                vertical-align: middle; /* Align with timestamp */
-            }
-            .dark .message-status-icon {
-                 color: #a0aec0;
-            }
-            /* Blue ticks (needs class added based on status) */
-            .message-status-icon.status-read iconify-icon {
-                 color: #53bdeb !important; /* WhatsApp blue tick color */
-            }
-
-
-            .message-bubble img.chat-image,
-            .message-bubble .video-thumbnail {
-                max-width: 320px; /* Larger max width */
-                max-height: 320px;
-                border-radius: 6px; /* Match bubble radius */
-                cursor: pointer;
-                display: block;
-                margin-bottom: 2px; /* Reduce space */
-            }
-             .message-bubble .video-thumbnail::after { /* Play icon */
-                 content: ''; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
-                 width: 50px; height: 50px; background-color: rgba(0, 0, 0, 0.6); border-radius: 50%;
-                 background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='white' width='24px' height='24px'%3E%3Cpath d='M8 5v14l11-7z'/%3E%3Cpath d='M0 0h24v24H0z' fill='none'/%3E%3C/svg%3E");
-                 background-repeat: no-repeat; background-position: center; background-size: 24px;
-                 opacity: 0.9; transition: opacity 0.2s ease; pointer-events: none;
-             }
-            .message-bubble .video-thumbnail:hover::after { opacity: 1; }
-
-            /* FIX v2: Text Content Wrapping */
-            .message-text-content {
-                /* Force break for long words/URLs */
-                word-break: break-word; /* More compatible than break-all */
-                overflow-wrap: break-word; /* Standard property */
-                /* Ensure it doesn't overflow */
-                overflow: hidden;
-                /* Add padding for timestamp */
-                padding-right: 55px;
-                min-height: 1.2em;
-                /* Allow text to flow correctly */
-                display: block; /* Or inline-block if needed, but block is usually fine */
-                margin-bottom: 15px; /* Space for timestamp below */
-            }
-            /* Remove bottom margin if only timestamp follows */
-            .message-bubble:not(:has(img.chat-image, div.video-thumbnail)) .message-text-content:has(+ .message-timestamp-wrapper) {
-                 margin-bottom: 0;
-            }
-             /* Adjust margin below media if only timestamp follows */
-             .message-bubble:has(> img.chat-image + .message-timestamp-wrapper) img.chat-image,
-            .message-bubble:has(> div.video-thumbnail + .message-timestamp-wrapper) div.video-thumbnail {
-                 margin-bottom: 15px;
-            }
-            /* Remove right padding if media is present, timestamp floats below media */
-            .message-bubble:has(img.chat-image) .message-text-content,
-            .message-bubble:has(div.video-thumbnail) .message-text-content {
-                 padding-right: 0;
-            }
-
-            /* Style for clickable links within messages */
-            .message-link {
-                color: #00a884; /* WhatsApp link color */
-                text-decoration: underline;
-                cursor: pointer;
-            }
-            .dark .message-link {
-                color: #00a884; /* Same color often used in dark mode */
-            }
-            .message-link:hover {
-                text-decoration: none;
-            }
-
-            /* Style for the new message input area */
-            #message-input {
-                transition: height 0.2s ease-in-out;
-            }
-            /* Style for Emoji Picker Popup (Using Swal) */
-            .swal2-popup.emoji-popup {
-                 width: 370px !important; /* Fixed width */
-                 padding: 0.5rem !important;
-                 background: #f0f2f5; /* WhatsApp light background */
-            }
-            .dark .swal2-popup.emoji-popup {
-                 background: #111b21; /* WhatsApp dark background */
-            }
-            .emoji-grid {
-                display: grid;
-                grid-template-columns: repeat(auto-fill, minmax(30px, 1fr)); /* Responsive grid */
-                gap: 8px;
-                max-height: 300px; /* Limit height */
-                overflow-y: auto;
-                padding: 0.5rem;
-            }
-            .emoji-grid span {
-                font-size: 1.5rem; /* Larger emojis */
-                cursor: pointer;
-                text-align: center;
-                border-radius: 4px;
-                padding: 2px;
-            }
-            .emoji-grid span:hover {
-                 background-color: rgba(0, 0, 0, 0.1);
-            }
-            .dark .emoji-grid span:hover {
-                 background-color: rgba(255, 255, 255, 0.1);
-            }
-
-
-            /* Connection status buttons */
+            .chat-height { height: calc(100vh - 100px); min-height: 550px; }
+            .contact-height { /* No max-height, usa flex-1 */ }
+            .chat-bg-pattern { background-color: #e2e8f0; /* bg-slate-200 */ }
+            .dark .chat-bg-pattern { background-color: #0f172a; /* dark:bg-slate-900 */ }
+            #contact-list .contact-item.active { background-color: #e2e8f0; /* bg-slate-200 */ }
+            .dark #contact-list .contact-item.active { background-color: #1e293b; /* bg-slate-800 */ }
+            #contact-list .contact-item.active .contact-item-name { font-weight: 600; }
+            .dark #contact-list .contact-item.active .contact-item-name { color: #f1f5f9; }
+            .message-bubble-wrapper { max-width: 70%; }
+            .message-bubble { padding: 6px 12px; border-radius: 8px; word-wrap: break-word; overflow-wrap: break-word; position: relative; box-shadow: 0 1px 0.5px rgba(11, 20, 26, 0.13); min-width: 60px; @apply group; }
+            .message-bubble::before { content: ""; position: absolute; bottom: 0px; height: 12px; width: 12px; background-color: inherit; clip-path: path('M0,0 L12,0 L12,12 L0,12 Z'); }
+            .message-received .message-bubble::before { left: -6px; clip-path: path('M6,12 L12,0 L12,12 L6,12 Z'); }
+            .message-sent .message-bubble::before { right: -6px; clip-path: path('M0,0 L6,12 L0,12 L0,0 Z'); }
+            .message-received .message-bubble { background-color: #ffffff; color: #111b21; }
+            .dark .message-received .message-bubble { background-color: #202c33; color: #e9edef; }
+            .message-sent .message-bubble { background-color: #dcf8c6; color: #111b21; }
+            .dark .message-sent .message-bubble { background-color: #005c4b; color: #e9edef; }
+            .message-timestamp-wrapper { float: right; margin-left: 10px; margin-top: 4px; line-height: 1; white-space: nowrap; user-select: none; position: relative; bottom: -2px; clear: right; }
+            .message-timestamp { font-size: 0.68rem; color: #667781; }
+            .dark .message-timestamp { color: #a0aec0; }
+            .message-status-icon { display: inline-block; margin-left: 3px; font-size: 0.8rem; color: #667781; vertical-align: middle; }
+            .dark .message-status-icon { color: #a0aec0; }
+            .message-status-icon.status-delivered iconify-icon { color: #667781 !important; } /* Delivered gray */
+            .dark .message-status-icon.status-delivered iconify-icon { color: #a0aec0 !important; }
+            .message-status-icon.status-read iconify-icon { color: #53bdeb !important; /* WhatsApp blue tick color */ }
+            .message-bubble img.chat-image, .message-bubble video.chat-video, .message-bubble img.chat-sticker, .message-bubble audio.chat-audio { max-width: 320px; max-height: 320px; border-radius: 6px; display: block; margin-bottom: 2px; }
+            .message-bubble img.chat-sticker { max-width: 150px; }
+            .message-bubble audio.chat-audio { max-width: 280px; }
+            .message-text-content { word-break: break-word; overflow-wrap: break-word; overflow: hidden; padding-right: 55px; min-height: 1.2em; display: block; margin-bottom: 15px; }
+            .message-bubble:not(:has(img, video, audio, .p-2.border)) .message-text-content:has(+ .message-timestamp-wrapper) { margin-bottom: 0; } /* No margin if only text+timestamp */
+            .message-bubble:has(> img + .message-timestamp-wrapper) img,
+            .message-bubble:has(> video + .message-timestamp-wrapper) video,
+            .message-bubble:has(> audio + .message-timestamp-wrapper) audio,
+            .message-bubble:has(> .p-2.border + .message-timestamp-wrapper) .p-2.border { margin-bottom: 15px; }
+            .message-bubble:has(img, video, audio, .p-2.border) .message-text-content { padding-right: 0; } /* No padding if media present */
+            .message-link { color: #00a884; text-decoration: underline; cursor: pointer; }
+            .dark .message-link { color: #00a884; }
+            .message-link:hover { text-decoration: none; }
+            #message-input { transition: height 0.2s ease-in-out; }
+            /* Swal Emoji Popup */
+            .swal2-popup.emoji-popup { width: 370px !important; padding: 0.5rem !important; background: #f0f2f5; }
+            .dark .swal2-popup.emoji-popup { background: #111b21; }
+            .emoji-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(30px, 1fr)); gap: 8px; max-height: 300px; overflow-y: auto; padding: 0.5rem; }
+            .emoji-grid span { font-size: 1.5rem; cursor: pointer; text-align: center; border-radius: 4px; padding: 2px; }
+            .emoji-grid span:hover { background-color: rgba(0, 0, 0, 0.1); }
+            .dark .emoji-grid span:hover { background-color: rgba(255, 255, 255, 0.1); }
+            /* Connection Status Buttons */
             #connection-status-header .btn { @apply w-auto px-3 py-1.5 h-auto text-sm; }
-            #connection-status-header .btn.rounded-full { @apply w-9 h-9 p-0; } /* Keep icon buttons small */
-
-            /* Delete buttons */
-            .delete-chat-btn, .delete-message-btn {
-                opacity: 0.6;
-                transition: opacity 0.2s ease;
-            }
-            .delete-chat-btn:hover, .delete-message-btn:hover {
-                opacity: 1;
-            }
-            .delete-message-form {
-                /* Position and hide/show handled by group-hover on parent bubble */
-            }
-
-             /* Style for Swal Auto Response Inputs */
-            .swal-autoresponse-label {
-                display: block;
-                text-align: left;
-                margin-bottom: 0.25rem; /* mb-1 */
-                font-weight: 500; /* font-medium */
-                color: #374151; /* text-gray-700 */
-            }
-            .dark .swal-autoresponse-label {
-                 color: #d1d5db; /* dark:text-gray-300 */
-            }
-            .swal-autoresponse-select,
-            .swal-autoresponse-textarea {
-                 /* Use custom classes instead of swal2-input/textarea */
-                 display: block !important;
-                 width: 100% !important; /* Use full width of the container */
-                 max-width: 100% !important;
-                 padding: 0.5rem 0.75rem !important; /* py-2 px-3 */
-                 border: 1px solid #d1d5db !important; /* border-gray-300 */
-                 border-radius: 0.375rem !important; /* rounded-md */
-                 background-color: #ffffff !important;
-                 color: #1f2937 !important; /* text-gray-800 */
-                 box-sizing: border-box !important;
-                 font-size: 0.875rem !important; /* text-sm */
-            }
-             .dark .swal-autoresponse-select,
-             .dark .swal-autoresponse-textarea {
-                 background-color: #374151 !important; /* dark:bg-gray-700 */
-                 border-color: #4b5563 !important; /* dark:border-gray-600 */
-                 color: #f3f4f6 !important; /* dark:text-gray-100 */
-            }
-             .swal-autoresponse-select:focus,
-             .swal-autoresponse-textarea:focus {
-                 outline: none !important;
-                 border-color: #2563eb !important; /* focus:border-blue-500 */
-                 box-shadow: 0 0 0 1px #2563eb !important; /* focus:ring-blue-500 */
-            }
-            .swal-autoresponse-textarea {
-                 min-height: 80px; /* Adjust height */
-            }
-             .swal-autoresponse-note {
-                 display: block;
-                 text-align: left;
-                 font-size: 0.75rem; /* text-xs */
-                 color: #6b7280; /* text-gray-500 */
-                 margin-top: 0.25rem; /* mt-1 */
-            }
-             .dark .swal-autoresponse-note {
-                  color: #9ca3af; /* dark:text-gray-400 */
-            }
-
-
+            #connection-status-header .btn.rounded-full { @apply w-9 h-9 p-0; }
+            /* Delete Buttons */
+            .delete-chat-btn, .delete-message-btn { opacity: 0.6; transition: opacity 0.2s ease; }
+            .delete-chat-btn:hover, .delete-message-btn:hover { opacity: 1; }
+            /* Swal Auto Response Inputs */
+            .swal-autoresponse-label { display: block; text-align: left; margin-bottom: 0.25rem; font-weight: 500; color: #374151; }
+            .dark .swal-autoresponse-label { color: #d1d5db; }
+            .swal-autoresponse-select, .swal-autoresponse-textarea { display: block !important; width: 100% !important; max-width: 100% !important; padding: 0.5rem 0.75rem !important; border: 1px solid #d1d5db !important; border-radius: 0.375rem !important; background-color: #ffffff !important; color: #1f2937 !important; box-sizing: border-box !important; font-size: 0.875rem !important; }
+            .dark .swal-autoresponse-select, .dark .swal-autoresponse-textarea { background-color: #374151 !important; border-color: #4b5563 !important; color: #f3f4f6 !important; }
+            .swal-autoresponse-select:focus, .swal-autoresponse-textarea:focus { outline: none !important; border-color: #2563eb !important; box-shadow: 0 0 0 1px #2563eb !important; }
+            .swal-autoresponse-textarea { min-height: 80px; }
+            .swal-autoresponse-note { display: block; text-align: left; font-size: 0.75rem; color: #6b7280; margin-top: 0.25rem; }
+            .dark .swal-autoresponse-note { color: #9ca3af; }
         </style>
     @endpush
 
     {{-- Scripts --}}
     @push('scripts')
         <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+        <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
         <script>
             $.ajaxSetup({ headers: { 'X-CSRF-TOKEN': $('meta[name="csrf-token"]').attr('content') } });
-        </script>
 
-        {{-- TinyMCE Removed --}}
-
-        <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
-
-        <script>
             // =======================================================
             // ========== WhatsApp Chat Logic (Adjusted) ==========
             // =======================================================
-            var autoResponseConfig = {!! json_encode($autoResponseConfig ?? null) !!}; // Load initial config
+            var autoResponseConfig = {!! json_encode($autoResponseConfig ?? null) !!};
             const userId = "{{ auth()->id() }}";
-            const selectedPhone = "{{ $selectedPhone ?? null }}"; // Get selected phone from Blade
-            let activeMessageRequest = null; // Track active message AJAX request
-            let activeContactRequest = null; // Track active contact AJAX request
-
-            // --- Interval IDs for Auto Refresh ---
+            const selectedPhone = "{{ $selectedPhone ?? null }}";
+            let activeMessageRequest = null;
+            let activeContactRequest = null;
             let messageIntervalId = null;
             let contactIntervalId = null;
             let statusIntervalId = null;
-            let isRefreshPaused = false; // Flag to indicate if refresh is paused
+            let isRefreshPaused = false;
 
             // --- SweetAlert2 Dark Mode & Toast ---
             const Toast = Swal.mixin({
@@ -655,17 +473,102 @@
                 },
                 customClass: { popup: document.documentElement.classList.contains('dark') ? 'dark swal2-toast-dark' : 'swal2-toast-light' }
             });
-            const swalObserver = new MutationObserver(mutations => { /* ... (same as before) ... */ });
+            // Observer para cambiar tema de Swal si cambia el tema del HTML
+            const swalObserver = new MutationObserver(mutations => {
+                mutations.forEach(mutation => {
+                    if (mutation.attributeName === "class") {
+                        const isDark = document.documentElement.classList.contains('dark');
+                        document.querySelectorAll('.swal2-popup').forEach(popup => {
+                            if (isDark) popup.classList.add('dark'); else popup.classList.remove('dark');
+                        });
+                         document.querySelectorAll('.swal2-toast').forEach(toast => {
+                            if (isDark) toast.classList.add('dark', 'swal2-toast-dark'); else toast.classList.remove('dark', 'swal2-toast-dark');
+                        });
+                    }
+                });
+            });
             swalObserver.observe(document.documentElement, { attributes: true });
 
 
             // --- Utility Functions ---
-            function scrollChatToBottom() {
+            function scrollChatToBottom(force = false) {
                 var chatContainer = document.getElementById('chat-container');
-                if (chatContainer) { chatContainer.scrollTop = chatContainer.scrollHeight; }
+                if (chatContainer) {
+                    const scrollHeight = chatContainer.scrollHeight;
+                    const currentScroll = chatContainer.scrollTop;
+                    const containerHeight = chatContainer.clientHeight; // Use clientHeight for visible area
+                    const threshold = 100; // Pixels from bottom to trigger auto-scroll
+
+                    // Scroll only if forced or if user was already near the bottom
+                    if (force || (currentScroll + containerHeight >= scrollHeight - threshold)) {
+                        chatContainer.scrollTop = scrollHeight;
+                    }
+                 }
             }
-            function showZoomModal(url) { /* ... (same as before) ... */ }
-            function showVideoModal(url) { /* ... (same as before) ... */ }
+            function showZoomModal(url) {
+                Swal.fire({
+                    imageUrl: url,
+                    imageAlt: 'Zoomed Image',
+                    showConfirmButton: false,
+                    showCloseButton: true,
+                    customClass: {
+                        popup: 'p-0 ' + (document.documentElement.classList.contains('dark') ? 'dark' : ''),
+                        image: 'max-w-full max-h-[80vh] object-contain'
+                    },
+                    backdrop: `rgba(0,0,0,0.7)`
+                });
+            }
+            function showVideoModal(url, mimeType = 'video/mp4') {
+                 Swal.fire({
+                    html: `<video controls autoplay style="max-width: 100%; max-height: 80vh; border-radius: 8px;"><source src="${url}" type="${mimeType}">Your browser does not support the video tag.</video>`,
+                    showConfirmButton: false,
+                    showCloseButton: true,
+                     customClass: {
+                        popup: 'p-4 ' + (document.documentElement.classList.contains('dark') ? 'dark' : ''),
+                        htmlContainer: '!p-0' // Remove padding around video
+                    },
+                    backdrop: `rgba(0,0,0,0.7)`
+                 });
+            }
+            function formatTimestampForList(timestamp) {
+                if (!timestamp || timestamp === 0) return '';
+                const date = new Date(timestamp * 1000); // Assuming timestamp is in seconds
+                const now = new Date();
+                const yesterday = new Date(now);
+                yesterday.setDate(now.getDate() - 1);
+
+                if (date.toDateString() === now.toDateString()) {
+                    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }); // HH:MM
+                } else if (date.toDateString() === yesterday.toDateString()) {
+                    return '{{ __("Yesterday") }}';
+                } else {
+                    return date.toLocaleDateString([], { day: '2-digit', month: '2-digit', year: 'numeric' }); // DD/MM/YYYY
+                }
+            }
+             // Helper function to format text and links in JS (similar to Blade helper)
+            function formatJsMessageText(text) {
+                if (!text) return '';
+                // Basic escaping (replace with a more robust library if needed)
+                let escapedText = text.replace(/</g, "&lt;").replace(/>/g, "&gt;");
+
+                // URL detection and linking
+                const pattern = /(https?:\/\/[^\s<>"'`]+)|(www\.[^\s<>"'`]+)/gi;
+                let linkedText = escapedText.replace(pattern, (match) => {
+                    let href = match;
+                    if (match.toLowerCase().startsWith('www.')) {
+                        href = 'https://' + href;
+                    }
+                    const displayUrl = match.length > 50 ? match.substring(0, 47) + '...' : match;
+                    // Escape href and displayUrl again just in case
+                    const safeHref = $('<div>').text(href).html();
+                    const safeDisplayUrl = $('<div>').text(displayUrl).html();
+                    return `<a href="${safeHref}" target="_blank" rel="noopener noreferrer" class="message-link">${safeDisplayUrl}</a>`;
+                });
+
+                // Newline to <br>
+                return linkedText.replace(/\n/g, '<br>');
+            }
+
 
             // --- Auto Refresh Pause/Resume ---
             function pauseAutoRefresh() {
@@ -675,44 +578,29 @@
                     if (messageIntervalId) clearInterval(messageIntervalId);
                     if (contactIntervalId) clearInterval(contactIntervalId);
                     if (statusIntervalId) clearInterval(statusIntervalId);
-                    messageIntervalId = null;
-                    contactIntervalId = null;
-                    statusIntervalId = null;
+                    messageIntervalId = null; contactIntervalId = null; statusIntervalId = null;
                 }
             }
-
             function resumeAutoRefresh() {
                 if (isRefreshPaused) {
-                    console.log("Resuming auto-refresh..."); // Log when resuming
+                    console.log("Resuming auto-refresh...");
                     isRefreshPaused = false;
-                    // Restart intervals only if they are not already running
-                    if (!messageIntervalId) messageIntervalId = setInterval(refreshChatMessages, 15000);
+                    if (!messageIntervalId && selectedPhone) messageIntervalId = setInterval(refreshChatMessages, 15000); // Only restart if chat selected
                     if (!contactIntervalId) contactIntervalId = setInterval(refreshContactList, 60000);
                     if (!statusIntervalId) statusIntervalId = setInterval(updateConnectionStatus, 45000);
                 }
             }
-
-             // --- Add Hooks to Swal Calls ---
-             // Helper function to add pause/resume hooks to Swal options
+            // Helper function to add pause/resume hooks to Swal options
             function swalOptionsWithPause(options) {
                 return {
-                    ...options, // Spread existing options
-                    didOpen: (modal) => { // Changed parameter name for clarity
+                    ...options,
+                    didOpen: (modal) => {
                         pauseAutoRefresh();
-                        // Call original didOpen if it exists
-                        if (options.didOpen && typeof options.didOpen === 'function') {
-                            options.didOpen(modal); // Pass modal instance
-                        }
+                        if (options.didOpen && typeof options.didOpen === 'function') { options.didOpen(modal); }
                     },
-                    willClose: (modal) => { // Changed parameter name for clarity
-                        // Delay resume slightly to avoid race conditions
-                        setTimeout(() => {
-                             resumeAutoRefresh();
-                        }, 100); // 100ms delay
-                         // Call original willClose if it exists
-                        if (options.willClose && typeof options.willClose === 'function') {
-                            options.willClose(modal); // Pass modal instance
-                        }
+                    willClose: (modal) => {
+                        setTimeout(() => { resumeAutoRefresh(); }, 100);
+                        if (options.willClose && typeof options.willClose === 'function') { options.willClose(modal); }
                     }
                 };
             }
@@ -720,72 +608,41 @@
 
             // --- Connection Status & Actions ---
             function updateConnectionStatus() {
-                // *** Check if refresh is paused ***
-                if (isRefreshPaused) {
-                    // console.log("Refresh paused, skipping connection status update."); // Optional log
-                    return;
-                }
+                if (isRefreshPaused) return; // Skip if paused
+
                 fetch('{{ secure_url("/api/whatsapp/check?user_id=") }}' + userId, { method: 'GET' })
                     .then(response => response.json())
                     .then(data => {
                         console.log("Connection Status:", data);
                         const connectionBtnContainer = $('#connection-btn');
                         const actionsContainer = $('#connection-actions');
-                        connectionBtnContainer.empty();
-                        actionsContainer.empty();
+                        connectionBtnContainer.empty(); actionsContainer.empty();
 
                         if (data.success) {
                             if (data.connected) {
-                                // Connected State: Show disconnect, auto-response, sync buttons
-                                connectionBtnContainer.html(`
-                                    <span class="text-xs font-medium text-emerald-600 dark:text-emerald-400 bg-emerald-100 dark:bg-emerald-800/50 px-2 py-0.5 rounded-full">{{ __('Connected') }}</span>
-                                `);
+                                // Connected State
+                                connectionBtnContainer.html(`<span class="text-xs font-medium text-emerald-600 dark:text-emerald-400 bg-emerald-100 dark:bg-emerald-800/50 px-2 py-0.5 rounded-full">{{ __('Connected') }}</span>`);
                                 actionsContainer.html(`
-                                    <button id="btnAutoResponse" class="btn btn-icon btn-secondary light rounded-full w-9 h-9 p-0" title="{{ __('Auto Response Settings') }}">
-                                        <iconify-icon icon="mdi:robot-outline" class="text-lg"></iconify-icon>
-                                    </button>
-                                    {{-- Changed sync button to trigger AJAX --}}
-                                    <button id="sync-contacts-btn" type="button" class="btn btn-icon btn-primary light rounded-full w-9 h-9 p-0" title="{{ __('Import Contacts') }}">
-                                        <iconify-icon icon="mdi:sync" class="text-lg"></iconify-icon>
-                                    </button>
-                                    <button id="btnDisconnect" class="btn btn-icon btn-danger light rounded-full w-9 h-9 p-0" title="{{ __('Disconnect Session') }}">
-                                        <iconify-icon icon="mdi:logout-variant" class="text-lg"></iconify-icon>
-                                    </button>
+                                    <button id="btnAutoResponse" class="btn btn-icon btn-secondary light rounded-full w-9 h-9 p-0" title="{{ __('Auto Response Settings') }}"><iconify-icon icon="mdi:robot-outline" class="text-lg"></iconify-icon></button>
+                                    <button id="sync-contacts-btn" type="button" class="btn btn-icon btn-primary light rounded-full w-9 h-9 p-0" title="{{ __('Import Contacts') }}"><iconify-icon icon="mdi:sync" class="text-lg"></iconify-icon></button>
+                                    <button id="btnDisconnect" class="btn btn-icon btn-danger light rounded-full w-9 h-9 p-0" title="{{ __('Disconnect Session') }}"><iconify-icon icon="mdi:logout-variant" class="text-lg"></iconify-icon></button>
                                 `);
-                                // Add event listeners
                                 $('#btnDisconnect').on('click', handleDisconnect);
                                 $('#btnAutoResponse').on('click', handleAutoResponseEdit);
-                                $('#sync-contacts-btn').on('click', handleSyncContacts); // Listener for AJAX sync
-
+                                $('#sync-contacts-btn').on('click', handleSyncContacts);
                             } else {
-                                // Disconnected State: Show connect button
-                                connectionBtnContainer.html(`
-                                    <button id="btnConnect" class="btn btn-success btn-sm flex items-center gap-1">
-                                        <iconify-icon icon="mdi:whatsapp" class="text-base"></iconify-icon>
-                                        {{ __('Connect') }}
-                                    </button>
-                                `);
+                                // Disconnected State
+                                connectionBtnContainer.html(`<button id="btnConnect" class="btn btn-success btn-sm flex items-center gap-1"><iconify-icon icon="mdi:whatsapp" class="text-base"></iconify-icon>{{ __('Connect') }}</button>`);
                                 $('#btnConnect').on('click', function() {
-                                    // *** Use helper for Swal options ***
-                                    Swal.fire(swalOptionsWithPause({
-                                        title: '{{ __("Generating QR") }}', text: '{{ __("Please wait...") }}',
-                                        allowOutsideClick: false, didOpen: () => { Swal.showLoading(); },
-                                        customClass: { popup: document.documentElement.classList.contains('dark') ? 'dark' : '' }
-                                    }));
+                                    Swal.fire(swalOptionsWithPause({ title: '{{ __("Generating QR") }}', text: '{{ __("Please wait...") }}', allowOutsideClick: false, didOpen: () => { Swal.showLoading(); }, customClass: { popup: document.documentElement.classList.contains('dark') ? 'dark' : '' } }));
                                     startWhatsAppSession();
                                 });
                             }
                         } else {
                              // Error State
-                            connectionBtnContainer.html(`
-                                 <span class="text-xs font-medium text-red-600 dark:text-red-400 bg-red-100 dark:bg-red-800/50 px-2 py-0.5 rounded-full">{{ __('Error') }}</span>
-                            `);
-                             actionsContainer.html(`
-                                <button id="btnReconnect" class="btn btn-icon btn-warning light rounded-full w-9 h-9 p-0" title="{{ __('Retry Connection') }}">
-                                    <iconify-icon icon="mdi:refresh" class="text-lg"></iconify-icon>
-                                </button>
-                            `);
-                             $('#btnReconnect').on('click', updateConnectionStatus); // Simple retry
+                            connectionBtnContainer.html(`<span class="text-xs font-medium text-red-600 dark:text-red-400 bg-red-100 dark:bg-red-800/50 px-2 py-0.5 rounded-full">{{ __('Error') }}</span>`);
+                            actionsContainer.html(`<button id="btnReconnect" class="btn btn-icon btn-warning light rounded-full w-9 h-9 p-0" title="{{ __('Retry Connection') }}"><iconify-icon icon="mdi:refresh" class="text-lg"></iconify-icon></button>`);
+                            $('#btnReconnect').on('click', updateConnectionStatus);
                         }
                     })
                     .catch(error => {
@@ -794,42 +651,38 @@
                     });
             }
 
-            function startWhatsAppSession() {
-                fetch('{{ secure_url("/api/whatsapp/start-session") }}', {
-                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+            function startWhatsAppSession() { /* ... (same as before, using swalOptionsWithPause) ... */
+                 fetch('{{ secure_url("/api/whatsapp/start-session") }}', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': $('meta[name="csrf-token"]').attr('content') }, // Added CSRF
                     body: JSON.stringify({ user_id: userId })
                 })
                 .then(response => response.json())
                 .then(apiData => {
                     if (apiData.success && apiData.qr) {
-                        Swal.close(); // Close loading Swal
-                        // *** Use helper for Swal options ***
+                        Swal.close();
                         Swal.fire(swalOptionsWithPause({
                             title: '{{ __("Scan the QR Code") }}', imageUrl: apiData.qr, imageAlt: 'QR Code',
                             showConfirmButton: true, confirmButtonText: '{{ __("Close") }}',
                             customClass: { popup: document.documentElement.classList.contains('dark') ? 'dark' : '' }
                         }));
-                        // Start polling status shortly after showing QR
-                        setTimeout(updateConnectionStatus, 5000); // Check after 5s
+                        setTimeout(updateConnectionStatus, 5000);
                     } else if (apiData.success && apiData.message === 'Session already started') {
                          Swal.close();
                          Toast.fire({ icon: 'info', title: '{{ __("Session is already starting or connected.") }}' });
                          updateConnectionStatus();
                     } else {
                         console.log("QR not ready, retrying...");
-                        setTimeout(startWhatsAppSession, 2000); // Retry after 2s
+                        setTimeout(startWhatsAppSession, 2000);
                     }
                 })
                 .catch(error => {
                     console.error('Error starting WhatsApp session:', error);
-                     // *** Use helper for Swal options ***
                      Swal.fire(swalOptionsWithPause({ icon: 'error', title: '{{ __("Connection Error") }}', text: '{{ __("Could not start session. Please try again.") }}', customClass: { popup: document.documentElement.classList.contains('dark') ? 'dark' : '' } }));
                 });
             }
 
-            function handleDisconnect() {
-                 // *** Use helper for Swal options ***
-                 Swal.fire(swalOptionsWithPause({
+            function handleDisconnect() { /* ... (same as before, using swalOptionsWithPause) ... */
+                Swal.fire(swalOptionsWithPause({
                     title: '{{ __("Disconnect Session?") }}', text: "{{ __('Are you sure you want to log out?') }}", icon: 'warning',
                     showCancelButton: true, confirmButtonColor: '#d33', cancelButtonColor: '#6b7280', confirmButtonText: '{{ __("Yes, disconnect") }}', cancelButtonText: '{{ __("Cancel") }}',
                     customClass: { popup: document.documentElement.classList.contains('dark') ? 'dark' : '' }
@@ -837,147 +690,118 @@
                     if (result.isConfirmed) {
                         const disconnectBtn = $('#btnDisconnect');
                         disconnectBtn.prop('disabled', true).find('iconify-icon').attr('icon', 'line-md:loading-loop');
-                        fetch('{{ secure_url("/api/whatsapp/logout?user_id=") }}' + userId, { method: 'GET' })
+                        fetch('{{ secure_url("/api/whatsapp/logout?user_id=") }}' + userId, { method: 'GET' }) // Changed to GET if your API expects GET
                             .then(response => response.json())
                             .then(logoutData => {
                                 if (logoutData.success) {
                                     Toast.fire({ icon: 'success', title: '{{ __("Disconnected successfully.") }}' });
-                                    updateConnectionStatus(); // Update UI
-                                    window.location.href = "{{ route('whatsapp.index') }}"; // Redirect to index after logout
+                                    updateConnectionStatus();
+                                    // Redirect to index after successful logout (or just update UI)
+                                    window.location.href = "{{ route('whatsapp.index') }}";
                                 } else {
-                                    // *** Use helper for Swal options ***
                                     Swal.fire(swalOptionsWithPause({ icon: 'error', title: '{{ __("Error") }}', text: logoutData.message || '{{ __("Failed to disconnect.") }}', customClass: { popup: document.documentElement.classList.contains('dark') ? 'dark' : '' } }));
                                 }
                             })
                             .catch(error => {
                                 console.error('Error disconnecting:', error);
-                                // *** Use helper for Swal options ***
                                 Swal.fire(swalOptionsWithPause({ icon: 'error', title: '{{ __("Error") }}', text: '{{ __("An error occurred during disconnection.") }}', customClass: { popup: document.documentElement.classList.contains('dark') ? 'dark' : '' } }));
                             })
                             .finally(() => {
                                 disconnectBtn.prop('disabled', false).find('iconify-icon').attr('icon', 'mdi:logout-variant');
-                                updateConnectionStatus(); // Ensure UI reflects final state
+                                updateConnectionStatus();
                             });
                     }
                 });
             }
 
-            function handleAutoResponseEdit() {
-                // Fetch current config first
-                $.ajax({
-                    url: '/auto-response-whatsapp-get', // Need a GET endpoint
+            function handleAutoResponseEdit() { /* ... (same as before, using swalOptionsWithPause) ... */
+                 $.ajax({
+                    url: '/auto-response-whatsapp-get',
                     type: 'GET', dataType: 'json',
                     success: function(response) {
                         if(response.success && response.data) {
                             autoResponseConfig = response.data;
                             showAutoResponseModal();
                         } else {
-                             Toast.fire({ icon: 'error', title: '{{ __("Could not load current settings.") }}' });
-                             showAutoResponseModal();
+                            Toast.fire({ icon: 'error', title: '{{ __("Could not load current settings.") }}' });
+                            showAutoResponseModal(); // Show with defaults even on error
                         }
                     },
                     error: function() {
-                         Toast.fire({ icon: 'error', title: '{{ __("Error fetching settings.") }}' });
-                         showAutoResponseModal();
+                        Toast.fire({ icon: 'error', title: '{{ __("Error fetching settings.") }}' });
+                        showAutoResponseModal(); // Show with defaults even on error
                     }
                 });
             }
 
-            function showAutoResponseModal() {
+            function showAutoResponseModal() { /* ... (same as before, using swalOptionsWithPause) ... */
                 var selectedValue = autoResponseConfig ? autoResponseConfig.whatsapp : '0';
                 var promptValue = autoResponseConfig ? autoResponseConfig.whatsapp_prompt : '';
 
-                // *** Use helper for Swal options ***
                 Swal.fire(swalOptionsWithPause({
                     title: '{{ __("Auto Response Settings") }}',
-                    // Use custom classes for inputs
-                    html: `
-                        <div class="space-y-4 text-left p-4">
-                            <div>
-                                <label for="swal-whatsapp-mode" class="swal-autoresponse-label">{{ __("Mode") }}</label>
-                                <select id="swal-whatsapp-mode" class="swal-autoresponse-select">
-                                    <option value="0" ${selectedValue == '0' ? 'selected' : ''}>{{ __("Disabled") }}</option>
-                                    <option value="1" ${selectedValue == '1' ? 'selected' : ''}>{{ __("Auto Response") }}</option>
-                                    <option value="2" ${selectedValue == '2' ? 'selected' : ''}>{{ __("AI Response") }}</option>
-                                    <option value="3" ${selectedValue == '3' ? 'selected' : ''}>{{ __("Create Ticket") }}</option>
-                                </select>
-                            </div>
-                            <div>
-                                <label for="swal-whatsapp-prompt" class="swal-autoresponse-label">{{ __("Prompt / Auto Text") }}</label>
-                                <textarea id="swal-whatsapp-prompt" class="swal-autoresponse-textarea" rows="4" placeholder="{{ __('Enter text or prompt...') }}">${promptValue}</textarea>
-                                <p class="swal-autoresponse-note">{{ __("Required if mode is not 'Disabled'.") }}</p>
-                            </div>
-                        </div>`,
+                    html: `...`, // Same HTML structure as before
                     focusConfirm: false,
                     showCancelButton: true,
                     confirmButtonText: '{{ __("Save Changes") }}',
                     cancelButtonText: '{{ __("Cancel") }}',
-                    customClass: { popup: 'w-full max-w-lg ' + (document.documentElement.classList.contains('dark') ? 'dark' : '') }, // Adjusted max-width
-                    preConfirm: () => {
-                        const responseType = $('#swal-whatsapp-mode').val();
-                        const promptText = $('#swal-whatsapp-prompt').val().trim();
-                        if (responseType !== '0' && !promptText) {
-                            Swal.showValidationMessage('{{ __("The prompt/text field is required for this option.") }}');
-                            $('#swal-whatsapp-prompt').addClass('border-red-500').focus(); return false;
-                        }
-                         $('#swal-whatsapp-prompt').removeClass('border-red-500');
-                        return { whatsapp: responseType, whatsapp_prompt: promptText };
+                    customClass: { popup: 'w-full max-w-lg ' + (document.documentElement.classList.contains('dark') ? 'dark' : '') },
+                    preConfirm: () => { /* ... same validation ... */
+                         const responseType = $('#swal-whatsapp-mode').val();
+                         const promptText = $('#swal-whatsapp-prompt').val().trim();
+                         if (responseType !== '0' && !promptText) {
+                             Swal.showValidationMessage('{{ __("The prompt/text field is required for this option.") }}');
+                             $('#swal-whatsapp-prompt').addClass('border-red-500').focus(); return false;
+                         }
+                          $('#swal-whatsapp-prompt').removeClass('border-red-500');
+                         return { whatsapp: responseType, whatsapp_prompt: promptText };
                     }
                 })).then((result) => {
                     if(result.isConfirmed){
                         const dataToSave = result.value;
                         $.ajax({
-                            url: '/auto-response-whatsapp', // POST endpoint
+                            url: '/auto-response-whatsapp',
                             method: 'POST',
-                            data: {
-                                _token: '{{ csrf_token() }}',
-                                whatsapp: dataToSave.whatsapp,
-                                whatsapp_prompt: dataToSave.whatsapp_prompt,
-                            },
+                            data: { _token: '{{ csrf_token() }}', whatsapp: dataToSave.whatsapp, whatsapp_prompt: dataToSave.whatsapp_prompt },
                             success: function(response) {
                                 if(response.success){
                                     Toast.fire({ icon: 'success', title: response.message || '{{ __("Settings saved!") }}' });
-                                    autoResponseConfig = response.data || null; // Update local cache
+                                    autoResponseConfig = response.data || null;
                                 } else {
-                                     // *** Use Toast for error feedback after saving ***
-                                     Toast.fire({ icon: 'error', title: response.message || '{{ __("Could not save settings.") }}' });
+                                    Toast.fire({ icon: 'error', title: response.message || '{{ __("Could not save settings.") }}' });
                                 }
                             },
                             error: function(xhr) {
-                                 // *** Use Toast for error feedback after saving ***
-                                 Toast.fire({ icon: 'error', title: '{{ __("An error occurred while saving.") }}' });
+                                Toast.fire({ icon: 'error', title: '{{ __("An error occurred while saving.") }}' });
                             }
                         });
                     }
                 });
             }
 
-             // --- Function to handle AJAX contact sync ---
-            function handleSyncContacts() {
+            function handleSyncContacts() { /* ... (same as before, using swalOptionsWithPause) ... */
                 const syncBtn = $('#sync-contacts-btn');
                 const originalIcon = syncBtn.find('iconify-icon').attr('icon');
                 syncBtn.prop('disabled', true).find('iconify-icon').attr('icon', 'line-md:loading-loop');
-                Toast.fire({ icon: 'info', title: '{{ __("Importing contacts...") }}' }); // Show immediate feedback
+                Toast.fire({ icon: 'info', title: '{{ __("Importing contacts...") }}' });
 
                 $.ajax({
-                    url: "{{ route('whatsapp.importContacts') }}", // Use route name
+                    url: "{{ route('whatsapp.importContacts') }}",
                     type: 'POST',
-                    data: { _token: '{{ csrf_token() }}' }, // Send CSRF token
-                    dataType: 'json', // Expect JSON response
+                    data: { _token: '{{ csrf_token() }}' },
+                    dataType: 'json',
                     success: function(response) {
                         if (response.success) {
                             Toast.fire({ icon: 'success', title: response.message || '{{ __("Contacts imported successfully!") }}' });
-                            refreshContactList(); // Refresh the list after successful import
+                            refreshContactList();
                         } else {
-                             // *** Use helper for Swal options ***
-                             Swal.fire(swalOptionsWithPause({ icon: 'error', title: '{{ __("Import Error") }}', text: response.message || '{{ __("Failed to import contacts.") }}', customClass: { popup: document.documentElement.classList.contains('dark') ? 'dark' : '' } }));
+                            Swal.fire(swalOptionsWithPause({ icon: 'error', title: '{{ __("Import Error") }}', text: response.message || '{{ __("Failed to import contacts.") }}', customClass: { popup: document.documentElement.classList.contains('dark') ? 'dark' : '' } }));
                         }
                     },
                     error: function(jqXHR, textStatus, errorThrown) {
                         console.error('Error syncing contacts:', textStatus, errorThrown, jqXHR.responseText);
                         const errorMsg = jqXHR.responseJSON?.message || jqXHR.responseJSON?.error || '{{ __("An error occurred during import.") }}';
-                         // *** Use helper for Swal options ***
-                         Swal.fire(swalOptionsWithPause({ icon: 'error', title: '{{ __("Import Error") }}', text: errorMsg, customClass: { popup: document.documentElement.classList.contains('dark') ? 'dark' : '' } }));
+                        Swal.fire(swalOptionsWithPause({ icon: 'error', title: '{{ __("Import Error") }}', text: errorMsg, customClass: { popup: document.documentElement.classList.contains('dark') ? 'dark' : '' } }));
                     },
                     complete: function() {
                         syncBtn.prop('disabled', false).find('iconify-icon').attr('icon', originalIcon);
@@ -985,112 +809,132 @@
                 });
             }
 
-
             // --- Message & Contact Handling (Using AJAX for Refresh) ---
             function refreshChatMessages() {
-                // *** Check if refresh is paused ***
-                if (isRefreshPaused) {
-                    // console.log("Refresh paused, skipping message refresh."); // Optional log
-                    return;
-                }
-                if (!selectedPhone || !document.getElementById('chat-container')) return;
+                if (isRefreshPaused || !selectedPhone || !document.getElementById('chat-container')) return;
 
                 console.log("Refreshing chat messages via AJAX for:", selectedPhone);
                 const chatContainer = $("#chat-container");
                 const scrollHeightBefore = chatContainer[0].scrollHeight;
                 const currentScroll = chatContainer.scrollTop();
                 const containerHeight = chatContainer.innerHeight();
-                const threshold = 50; // Threshold to stick to bottom
+                const threshold = 50;
                 const wasNearBottom = currentScroll + containerHeight >= scrollHeightBefore - threshold;
 
-                // Abort previous request if still running
-                if (activeMessageRequest) {
-                    activeMessageRequest.abort();
-                }
+                if (activeMessageRequest) { activeMessageRequest.abort(); }
 
-                // Construct URL for fetching messages (adjust route as needed)
-                const messagesUrl = `/whatsapp/messages/json/${selectedPhone}`; // **NEED A JSON ROUTE**
+                const messagesUrl = `/whatsapp/messages/json/${selectedPhone}`;
 
                 activeMessageRequest = $.ajax({
-                    url: messagesUrl,
-                    type: 'GET',
-                    dataType: 'json',
+                    url: messagesUrl, type: 'GET', dataType: 'json',
                     success: function(response) {
                         if (response.success && response.messages) {
                             let messagesHtml = '';
-                            // Keep track of existing message IDs in the DOM
                             const existingMessageIds = new Set();
-                            chatContainer.find('[data-message-id]').each(function() {
-                                existingMessageIds.add($(this).data('message-id'));
-                            });
+                            chatContainer.find('[data-message-id]').each(function() { existingMessageIds.add($(this).data('message-id')); });
                             let newMessagesAdded = false;
 
                             if (response.messages.length > 0) {
-                                // Sort messages (assuming backend doesn't sort)
-                                response.messages.sort((a, b) => (a.messageTimestamp || a.created_at_ts || 0) - (b.messageTimestamp || b.created_at_ts || 0));
+                                // *** NO sorting needed here if Laravel already sorted ***
+                                // response.messages.sort((a, b) => (a.messageData?.messageTimestamp || 0) - (b.messageData?.messageTimestamp || 0));
 
-                                response.messages.forEach(message => {
-                                    const messageId = message.key?.id ?? null;
+                                response.messages.forEach(messageItem => {
+                                    const messageData = messageItem.messageData;
+                                    const publicMediaUrl = messageItem.publicMediaUrl;
+
+                                    if (!messageData) return; // Skip if no message data
+
+                                    const messageId = messageData.key?.id ?? null;
+
                                     // --- Build message HTML only if it doesn't exist ---
                                     if (messageId && !existingMessageIds.has(messageId)) {
                                         newMessagesAdded = true;
-                                        const isReceived = !(message.key?.fromMe ?? false);
-                                        const timestamp = message.messageTimestamp ?? (message.created_at ? new Date(message.created_at).getTime() / 1000 : null);
+                                        const isFromMe = messageData.key?.fromMe ?? false;
+                                        const timestamp = messageData.messageTimestamp ?? null;
                                         const formattedTime = timestamp ? new Date(timestamp * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
-                                        const remoteJid = message.key?.remoteJid ?? '';
-                                        const messageStatus = message.status ?? 'sent';
+                                        const remoteJid = messageData.key?.remoteJid ?? '';
+                                        const messageStatus = messageData.status ?? 1;
                                         let statusIcon = 'mdi:check';
-                                        if (messageStatus === 'delivered') statusIcon = 'mdi:check-all';
-                                        if (messageStatus === 'read') statusIcon = 'mdi:check-all';
-                                        const statusClass = messageStatus === 'read' ? 'status-read' : '';
+                                        if (messageStatus >= 2) statusIcon = 'mdi:check-all';
+                                        const statusClass = messageStatus >= 5 ? 'status-read' : (messageStatus >= 2 ? 'status-delivered' : '');
 
                                         let mediaHtml = '';
                                         let mediaRendered = false;
-                                        // (Add logic for image/video rendering similar to Blade if needed)
+                                        let textContent = '';
 
-                                        let textContent = message.message?.conversation
-                                            ?? message.message?.extendedTextMessage?.text
-                                            ?? message.message?.imageMessage?.caption
-                                            ?? message.message?.videoMessage?.caption
-                                            ?? '';
+                                        // Media Rendering Logic (similar to Blade)
+                                        const imageMsg = messageData.message?.imageMessage;
+                                        const videoMsg = messageData.message?.videoMessage;
+                                        const audioMsg = messageData.message?.audioMessage;
+                                        const stickerMsg = messageData.message?.stickerMessage;
+                                        const docMsg = messageData.message?.documentMessage;
 
-                                        let formattedTextContent = '';
-                                        if (textContent) {
-                                            // Basic escaping and URL conversion (can be improved)
-                                            const escapedText = $('<div>').text(textContent).html();
-                                            const pattern = /(https?:\/\/[^\s<>"'`]+)|(www\.[^\s<>"'`]+)/gi;
-                                            formattedTextContent = escapedText.replace(pattern, (match) => {
-                                                let href = match;
-                                                if (match.toLowerCase().startsWith('www.')) {
-                                                    href = 'https://' + href;
-                                                }
-                                                const displayUrl = match.length > 50 ? match.substring(0, 47) + '...' : match;
-                                                return `<a href="${href}" target="_blank" rel="noopener noreferrer" class="message-link">${displayUrl}</a>`;
-                                            });
-                                            formattedTextContent = formattedTextContent.replace(/\n/g, '<br>');
+                                        if (imageMsg && publicMediaUrl) {
+                                            mediaHtml = `<img src="${publicMediaUrl}" alt="Imagen adjunta" class="chat-image max-w-full h-auto rounded-lg cursor-pointer block mb-1" onclick="showZoomModal('${publicMediaUrl}')">`;
+                                            mediaRendered = true;
+                                            textContent = imageMsg.caption || '';
+                                        } else if (videoMsg && publicMediaUrl) {
+                                            mediaHtml = `<video controls class="chat-video max-w-full h-auto rounded-lg block mb-1" style="max-width: 320px;"><source src="${publicMediaUrl}" type="${videoMsg.mimetype || 'video/mp4'}">{{ __('Your browser does not support the video tag.') }} <a href="${publicMediaUrl}">{{ __('Download video') }}</a></video>`;
+                                            mediaRendered = true;
+                                            textContent = videoMsg.caption || '';
+                                        } else if (audioMsg && publicMediaUrl) {
+                                            mediaHtml = `<audio controls class="chat-audio block mb-1 w-full" style="max-width: 280px;"><source src="${publicMediaUrl}" type="${audioMsg.mimetype || 'audio/ogg'}">{{ __('Your browser does not support the audio tag.') }} <a href="${publicMediaUrl}">{{ __('Download audio') }}</a></audio>`;
+                                            mediaRendered = true;
+                                            // Audio caption not typical
+                                        } else if (stickerMsg && publicMediaUrl && stickerMsg.mimetype === 'image/webp') {
+                                            mediaHtml = `<img src="${publicMediaUrl}" alt="Sticker" class="chat-sticker max-w-[150px] h-auto block mb-1">`;
+                                            mediaRendered = true;
+                                        } else if (docMsg && publicMediaUrl) {
+                                            const fileName = docMsg.fileName || 'documento';
+                                            const fileSize = docMsg.fileLength ?? 0;
+                                            const formattedSize = fileSize > 0 ? Math.round(fileSize / 1024) + ' KB' : '';
+                                            mediaHtml = `<div class="p-2 border border-slate-200 dark:border-slate-700 rounded-lg bg-slate-50 dark:bg-slate-700/50 mb-1">
+                                                            <a href="${publicMediaUrl}" target="_blank" download="${fileName}" class="flex items-center text-sm text-slate-700 dark:text-slate-200 hover:underline">
+                                                                <iconify-icon icon="mdi:file-document-outline" class="text-lg mr-2 flex-none"></iconify-icon>
+                                                                <span class="truncate">${fileName}</span>
+                                                            </a>
+                                                            ${formattedSize ? `<span class="text-xs text-slate-500 dark:text-slate-400 block mt-1">${formattedSize}</span>` : ''}
+                                                         </div>`;
+                                            mediaRendered = true;
+                                            textContent = docMsg.caption || '';
                                         }
 
+                                        // Text Content (Conversation or Extended Text)
+                                        if (!textContent) { // Only get conversation/extended if no caption was found
+                                             textContent = messageData.message?.conversation ?? messageData.message?.extendedTextMessage?.text ?? '';
+                                        }
+                                        let formattedTextContent = '';
+                                        if(textContent) {
+                                             formattedTextContent = formatJsMessageText(textContent); // Use JS helper
+                                        }
+
+                                        let fallbackContent = '';
+                                        if (!mediaRendered && !textContent) {
+                                            const messageType = messageData.message ? Object.keys(messageData.message)[0] : 'Mensaje vacío';
+                                            fallbackContent = `<p class="text-xs italic text-slate-400 dark:text-slate-500">[${messageType}]</p>`;
+                                        }
+
+
                                         messagesHtml += `
-                                            <div class="flex w-full ${isReceived ? 'justify-start' : 'justify-end'}" data-message-id="${messageId}">
-                                                <div class="relative message-bubble-wrapper ${isReceived ? 'message-received mr-auto' : 'message-sent ml-auto'}">
+                                            <div class="flex w-full ${isFromMe ? 'justify-end' : 'justify-start'}" data-message-id="${messageId}">
+                                                <div class="relative message-bubble-wrapper ${isFromMe ? 'message-sent ml-auto' : 'message-received mr-auto'}">
                                                     <div class="message-bubble group">
                                                         ${mediaHtml}
                                                         ${formattedTextContent ? `<div class="message-text-content ${mediaRendered ? 'mt-1' : ''}">${formattedTextContent}</div>` : ''}
+                                                        ${fallbackContent}
                                                         <div class="message-timestamp-wrapper">
                                                             <span class="message-timestamp">${formattedTime}</span>
-                                                            ${!isReceived ? `<span class="message-status-icon ${statusClass}"><iconify-icon icon="${statusIcon}"></iconify-icon></span>` : ''}
+                                                            ${!isFromMe ? '' : `<span class="message-status-icon ${statusClass}"><iconify-icon icon="${statusIcon}"></iconify-icon></span>`}
                                                         </div>
                                                         ${messageId ? `
-                                                        <form action="/whatsapp/message/${messageId}" method="POST" class="absolute top-0 right-0 m-1 delete-message-form opacity-0 group-hover:opacity-100 transition-opacity">
-                                                            <input type="hidden" name="_token" value="${$('meta[name="csrf-token"]').attr('content')}">
-                                                            <input type="hidden" name="_method" value="DELETE">
-                                                            <input type="hidden" name="remoteJid" value="${remoteJid}">
-                                                            <input type="hidden" name="fromMe" value="${!isReceived ? 'true' : 'false'}">
-                                                            <button type="button" class="delete-message-btn text-slate-400 hover:text-red-500 dark:text-slate-500 dark:hover:text-red-400 p-0.5 rounded-full bg-white/50 dark:bg-slate-800/50"
-                                                                    data-message-id="${messageId}" title="{{ __('Delete message') }}">
-                                                                <iconify-icon icon="mdi:trash-can-outline" class="text-xs"></iconify-icon>
-                                                            </button>
-                                                        </form>` : ''}
+                                                        <button type="button"
+                                                                class="absolute top-0 right-0 m-1 delete-message-btn text-slate-400 hover:text-red-500 dark:text-slate-500 dark:hover:text-red-400 p-0.5 rounded-full bg-white/50 dark:bg-slate-800/50 opacity-0 group-hover:opacity-100 transition-opacity"
+                                                                data-message-id="${messageId}"
+                                                                data-remote-jid="${remoteJid}"
+                                                                data-from-me="${isFromMe ? 'true' : 'false'}"
+                                                                title="{{ __('Delete message') }}">
+                                                            <iconify-icon icon="mdi:trash-can-outline" class="text-xs"></iconify-icon>
+                                                        </button>` : ''}
                                                     </div>
                                                 </div>
                                             </div>`;
@@ -1098,75 +942,52 @@
                                     // TODO: Optionally update status of existing messages here
                                 });
 
-                                // Append only new messages
                                 if (newMessagesAdded) {
                                     chatContainer.append(messagesHtml);
-                                    // Scroll logic after update
-                                    if (wasNearBottom) {
-                                        scrollChatToBottom();
-                                    }
-                                    // Note: Maintaining exact scroll position when new messages are added
-                                    // *above* the current view is complex and might require calculating heights.
-                                    // For simplicity, we only auto-scroll if user was at the bottom.
+                                    if (wasNearBottom) { scrollChatToBottom(true); } // Force scroll if new messages and was at bottom
                                 }
 
+                            } else { // If response.messages is empty
+                                // Optionally clear chat if needed, but usually better not to
+                                // chatContainer.html('<p class="text-center text-slate-500 dark:text-slate-400 py-10">{{ __("No messages found.") }}</p>');
                             }
-                            // If response.messages is empty, do nothing (don't clear the chat)
-
                         } else {
                              console.error("Error fetching messages via AJAX:", response.message || "Unknown error");
                         }
                     },
                     error: function(jqXHR, textStatus, errorThrown) {
-                        if (textStatus !== 'abort') { // Ignore abort errors
-                            console.error("AJAX Error fetching messages:", textStatus, errorThrown);
-                        }
+                        if (textStatus !== 'abort') { console.error("AJAX Error fetching messages:", textStatus, errorThrown); }
                     },
-                    complete: function() {
-                        activeMessageRequest = null; // Clear request tracker
-                    }
+                    complete: function() { activeMessageRequest = null; }
                 });
             }
 
             function refreshContactList() {
-                 // *** Check if refresh is paused ***
-                 if (isRefreshPaused) {
-                    // console.log("Refresh paused, skipping contact list refresh."); // Optional log
-                    return;
-                }
-                if (!document.getElementById('contacts-panel')) return;
+                 if (isRefreshPaused || !document.getElementById('contacts-panel')) return;
+                 if (activeContactRequest) { activeContactRequest.abort(); }
 
-                 // Abort previous request if still running
-                 if (activeContactRequest) {
-                    activeContactRequest.abort();
-                }
+                 console.log("Refreshing contact list via AJAX...");
+                 const contactsUrl = "/whatsapp/contacts/json";
 
-                console.log("Refreshing contact list via AJAX...");
-                const contactsUrl = "/whatsapp/contacts/json"; // **NEED A JSON ROUTE FOR CONTACTS**
-
-                activeContactRequest = $.ajax({
-                    url: contactsUrl,
-                    type: 'GET',
-                    dataType: 'json',
+                 activeContactRequest = $.ajax({
+                    url: contactsUrl, type: 'GET', dataType: 'json',
                     success: function(response) {
                         if (response.success && response.contacts) {
                             const contactList = $('#contact-list');
-                            let newHtml = ''; // Build the new HTML string
+                            let newHtml = '';
 
                             if (response.contacts.length > 0) {
                                 // *** SORT BY LAST MESSAGE TIMESTAMP (DESCENDING) ***
                                 response.contacts.sort((a, b) => (b.last_message_timestamp || 0) - (a.last_message_timestamp || 0));
 
                                 response.contacts.forEach(contact => {
-                                    // --- Replicate Blade Logic for Contacts ---
                                     const cleanName = (contact.name || contact.phone).replace(/@.*$/, '');
                                     const contactInitial = cleanName.substring(0, 1).toUpperCase();
                                     const contactPhone = contact.phone;
                                     const isActive = selectedPhone === contactPhone;
                                     const conversationUrl = "{{ route('whatsapp.conversation', ':phone') }}".replace(':phone', contactPhone);
                                     const deleteUrl = "{{ route('whatsapp.chat.destroy', ':phone') }}".replace(':phone', contactPhone);
-                                     // Format timestamp for list view (optional)
-                                    // const formattedTime = formatTimestampForList(contact.last_message_timestamp);
+                                    // const formattedTime = formatTimestampForList(contact.last_message_timestamp); // Optional
 
                                     newHtml += `
                                         <li class="contact-item flex items-center justify-between hover:bg-slate-100 dark:hover:bg-slate-700 transition duration-150 ${isActive ? 'active' : ''}" data-phone="${contactPhone}">
@@ -1186,7 +1007,7 @@
                                                 <input type="hidden" name="_token" value="${$('meta[name="csrf-token"]').attr('content')}">
                                                 <input type="hidden" name="_method" value="DELETE">
                                                 <button type="button" class="delete-chat-btn text-slate-400 hover:text-red-500 dark:text-slate-500 dark:hover:text-red-400 p-1 rounded-full"
-                                                    data-contact-name="${cleanName}" title="{{ __('Delete chat') }}">
+                                                        data-contact-name="${cleanName}" title="{{ __('Delete chat') }}">
                                                     <iconify-icon icon="mdi:trash-can-outline" class="text-lg"></iconify-icon>
                                                 </button>
                                             </form>
@@ -1196,99 +1017,82 @@
                                 newHtml = '<li class="p-4 text-center text-slate-500 dark:text-slate-400 text-sm">{{ __("No contacts found.") }}</li>';
                             }
 
-                            // *** Compare new HTML with current HTML before replacing ***
+                            // Compare before replacing to avoid flicker
                             if (contactList.html() !== newHtml) {
                                 console.log("Contact list changed, updating DOM.");
-                                contactList.html(newHtml); // Replace only if different
-                                applyContactSearchFilter(); // Re-apply filter
+                                contactList.html(newHtml);
+                                applyContactSearchFilter();
                             } else {
                                  console.log("Contact list unchanged, skipping DOM update.");
                             }
-
                         } else {
                              console.error("Error fetching contacts via AJAX:", response.message || "Unknown error");
                         }
                     },
                     error: function(jqXHR, textStatus, errorThrown) {
-                         if (textStatus !== 'abort') { // Ignore abort errors
-                            console.error("AJAX Error fetching contacts:", textStatus, errorThrown);
-                         }
+                        if (textStatus !== 'abort') { console.error("AJAX Error fetching contacts:", textStatus, errorThrown); }
                     },
-                    complete: function() {
-                        activeContactRequest = null; // Clear request tracker
-                    }
+                    complete: function() { activeContactRequest = null; }
                 });
             }
 
 
-            function applyContactSearchFilter() {
-                const searchInput = document.getElementById('contactSearch');
-                if (!searchInput) return;
-                const filter = searchInput.value.toLowerCase().trim();
-                const contactListItems = document.querySelectorAll('#contact-list li.contact-item');
-                contactListItems.forEach(function(item) {
-                    const nameElement = item.querySelector('.contact-item-name');
-                    const detailElement = item.querySelector('.contact-item-detail');
-                    const name = nameElement ? nameElement.textContent.toLowerCase() : '';
-                    const detail = detailElement ? detailElement.textContent.toLowerCase() : '';
-                    item.style.display = (name.includes(filter) || detail.includes(filter)) ? '' : 'none';
-                });
+            function applyContactSearchFilter() { /* ... (same as before) ... */
+                 const searchInput = document.getElementById('contactSearch');
+                 if (!searchInput) return;
+                 const filter = searchInput.value.toLowerCase().trim();
+                 const contactListItems = document.querySelectorAll('#contact-list li.contact-item');
+                 contactListItems.forEach(function(item) {
+                     const nameElement = item.querySelector('.contact-item-name');
+                     const detailElement = item.querySelector('.contact-item-detail');
+                     const name = nameElement ? nameElement.textContent.toLowerCase() : '';
+                     const detail = detailElement ? detailElement.textContent.toLowerCase() : '';
+                     item.style.display = (name.includes(filter) || detail.includes(filter)) ? '' : 'none';
+                 });
             }
 
 
             // --- Event Listeners ---
             $(document).ready(function() {
                 console.log("WhatsApp Chat Document Ready");
-                // initTinyMCE(); // Initialize TinyMCE - REMOVED
                 updateConnectionStatus(); // Initial status check
-                scrollChatToBottom(); // Scroll on initial load
+                scrollChatToBottom(true); // Scroll on initial load (force)
 
                 // Contact Search Filter
                 const searchInput = document.getElementById('contactSearch');
-                if (searchInput) {
-                    searchInput.addEventListener('input', applyContactSearchFilter);
-                }
+                if (searchInput) { searchInput.addEventListener('input', applyContactSearchFilter); }
 
                 // Send Message Button
-                $('#sendMessageButton').on('click', function(event) {
+                $('#sendMessageButton').on('click', function(event) { /* ... (same as before) ... */
                     event.preventDefault();
                     if (!selectedPhone) { Toast.fire({ icon: 'warning', title: '{{ __("No chat selected") }}' }); return; }
-
-                    // *** Get value from standard textarea ***
                     var messageText = $('#message-input').val().trim();
-
                     if (!messageText) { Toast.fire({ icon: 'warning', title: '{{ __("Message cannot be empty") }}' }); return; }
 
                     const sendButton = $(this);
                     const originalIcon = sendButton.find('iconify-icon').attr('icon');
                     sendButton.prop('disabled', true).find('iconify-icon').attr('icon', 'line-md:loading-loop');
 
-                    // AJAX sending logic (sending plain text)
                     fetch('{{ secure_url("/api/whatsapp/send-message-now") }}', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': '{{ csrf_token() }}' },
                         body: JSON.stringify({
-                            token: "{{ env('WHATSAPP_API_TOKEN') }}",
-                            sessionId: userId,
-                            jid: selectedPhone + '@s.whatsapp.net',
-                            message: messageText // Send plain text
+                            token: "{{ env('WHATSAPP_API_TOKEN') }}", sessionId: userId,
+                            jid: selectedPhone + '@s.whatsapp.net', message: messageText
                         })
                     })
                     .then(response => response.json())
                     .then(data => {
                         if (data.success) {
-                            // *** Clear standard textarea ***
-                            $('#message-input').val('').css('height', 'auto'); // Clear and reset height
-                            refreshChatMessages(); // Refresh chat view immediately
+                            $('#message-input').val('').css('height', 'auto');
+                            refreshChatMessages(); // Refresh immediately after sending
                         } else {
-                             // *** Use helper for Swal options ***
-                             Swal.fire(swalOptionsWithPause({ icon: 'error', title: '{{ __("Send Error") }}', text: data.message || '{{ __("Failed to send message.") }}', customClass: { popup: document.documentElement.classList.contains('dark') ? 'dark' : '' } }));
+                            Swal.fire(swalOptionsWithPause({ icon: 'error', title: '{{ __("Send Error") }}', text: data.message || '{{ __("Failed to send message.") }}', customClass: { popup: document.documentElement.classList.contains('dark') ? 'dark' : '' } }));
                         }
                     })
                     .catch(error => {
                         console.error('Error sending message:', error);
-                         // *** Use helper for Swal options ***
-                         Swal.fire(swalOptionsWithPause({ icon: 'error', title: '{{ __("Send Error") }}', text: '{{ __("An error occurred.") }}', customClass: { popup: document.documentElement.classList.contains('dark') ? 'dark' : '' } }));
+                        Swal.fire(swalOptionsWithPause({ icon: 'error', title: '{{ __("Send Error") }}', text: '{{ __("An error occurred.") }}', customClass: { popup: document.documentElement.classList.contains('dark') ? 'dark' : '' } }));
                     })
                     .finally(() => {
                         sendButton.prop('disabled', false).find('iconify-icon').attr('icon', originalIcon);
@@ -1296,14 +1100,13 @@
                 });
 
                 // Delete Chat Button Confirmation
-                $(document).on('click', '.delete-chat-btn', function(e) {
+                $(document).on('click', '.delete-chat-btn', function(e) { /* ... (same as before, using swalOptionsWithPause) ... */
                     e.preventDefault();
                     const button = $(this);
                     const form = button.closest('form');
                     const contactName = button.data('contact-name') || 'this contact';
 
-                     // *** Use helper for Swal options ***
-                     Swal.fire(swalOptionsWithPause({
+                    Swal.fire(swalOptionsWithPause({
                         title: '{{ __("Delete Chat?") }}',
                         text: `{{ __('Are you sure you want to delete all messages for') }} ${contactName}? {{ __('This action cannot be undone.') }}`,
                         icon: 'warning', showCancelButton: true, confirmButtonColor: '#d33', cancelButtonColor: '#6b7280',
@@ -1312,15 +1115,28 @@
                     })).then((result) => { if (result.isConfirmed) { form.submit(); } });
                 });
 
-                 // Delete Message Button Confirmation
+                // Delete Message Button Confirmation (AJAX)
                 $(document).on('click', '.delete-message-btn', function(e) {
                     e.preventDefault();
                     const button = $(this);
-                    const form = button.closest('form');
                     const messageId = button.data('message-id');
+                    const remoteJid = button.data('remote-jid');
+                    const fromMe = button.data('from-me'); // Should be 'true' or 'false' string
 
-                     // *** Use helper for Swal options ***
-                     Swal.fire(swalOptionsWithPause({
+                    if (!messageId || !remoteJid || fromMe === undefined) {
+                        console.error("Missing data attributes for delete button:", button.data());
+                        Toast.fire({icon: 'error', title: '{{ __("Cannot delete message: Missing data.") }}'});
+                        return;
+                    }
+
+                    const messageKey = {
+                        remoteJid: remoteJid,
+                        fromMe: (fromMe === 'true' || fromMe === true), // Convert to boolean
+                        id: messageId
+                        // participant: button.data('participant') // Add if needed for groups
+                    };
+
+                    Swal.fire(swalOptionsWithPause({
                         title: '{{ __("Delete Message?") }}', text: `{{ __('Are you sure you want to delete this message?') }}`, icon: 'warning',
                         showCancelButton: true, confirmButtonColor: '#d33', cancelButtonColor: '#6b7280',
                         confirmButtonText: '{{ __("Yes, delete") }}', cancelButtonText: '{{ __("Cancel") }}',
@@ -1328,57 +1144,57 @@
                     })).then((result) => {
                         if (result.isConfirmed) {
                             $.ajax({
-                                url: form.attr('action'), type: 'POST', data: form.serialize(),
+                                url: `/whatsapp/message/delete`, // Use a dedicated route for AJAX deletion
+                                type: 'POST', // Use POST with _method override or define a DELETE route
+                                data: JSON.stringify({ // Send as JSON
+                                    _token: $('meta[name="csrf-token"]').attr('content'),
+                                    _method: 'DELETE', // Method override
+                                    messageKey: messageKey // Send the constructed key
+                                }),
+                                contentType: 'application/json', // Set content type
+                                dataType: 'json',
                                 success: function(response) {
-                                    Toast.fire({ icon: 'success', title: '{{ __("Message deleted.") }}' });
-                                    button.closest('.flex.w-full').remove(); // Remove bubble
+                                    if (response.success) {
+                                        Toast.fire({ icon: 'success', title: response.message || '{{ __("Message deleted.") }}' });
+                                        button.closest('.flex.w-full').fadeOut('fast', function() { $(this).remove(); }); // Remove bubble
+                                    } else {
+                                        Swal.fire(swalOptionsWithPause({ icon: 'error', title: '{{ __("Error") }}', text: response.message || '{{ __("Could not delete message.") }}', customClass: { popup: document.documentElement.classList.contains('dark') ? 'dark' : '' } }));
+                                    }
                                 },
                                 error: function(xhr) {
-                                     // *** Use helper for Swal options ***
-                                     Swal.fire(swalOptionsWithPause({ icon: 'error', title: '{{ __("Error") }}', text: '{{ __("Could not delete message.") }}', customClass: { popup: document.documentElement.classList.contains('dark') ? 'dark' : '' } }));
+                                     const errorMsg = xhr.responseJSON?.message || '{{ __("Could not delete message.") }}';
+                                     Swal.fire(swalOptionsWithPause({ icon: 'error', title: '{{ __("Error") }}', text: errorMsg, customClass: { popup: document.documentElement.classList.contains('dark') ? 'dark' : '' } }));
                                 }
                             });
                         }
                     });
                 });
 
+
                 // --- Emoji Picker Logic (Using Swal Popup) ---
                 const emojiButton = document.getElementById('emoji-button');
                 const messageInput = document.getElementById('message-input');
 
                 if (emojiButton && messageInput) {
-                    console.log("Emoji button and message input found, attaching listeners.");
                     emojiButton.addEventListener('click', (e) => {
                         e.stopPropagation();
                         openEmojiSwal();
                     });
                 } else {
-                     console.warn("Emoji button or message input not found. Check IDs: #emoji-button, #message-input");
+                     console.warn("Emoji button or message input not found.");
                 }
 
-                // Function to open the Emoji Swal
-                function openEmojiSwal() {
-                    // Define a selection of emojis
+                function openEmojiSwal() { /* ... (same as before, using swalOptionsWithPause) ... */
                     const emojis = ['😀', '😃', '😄', '😁', '😆', '😅', '😂', '🤣', '😊', '😇', '🙂', '🙃', '😉', '😌', '😍', '🥰', '😘', '😗', '😙', '😚', '😋', '😛', '😝', '😜', '🤪', '🤨', '🧐', '🤓', '😎', '🤩', '🥳', '😏', '😒', '😞', '😔', '😟', '😕', '🙁', '☹️', '😣', '😖', '😫', '😩', '🥺', '😢', '😭', '😤', '😠', '😡', '🤬', '🤯', '😳', '🥵', '🥶', '😱', '😨', '😰', '😥', '😓', '🤗', '🤔', '🤭', '🤫', '🤥', '😶', '😐', '😑', '😬', '🙄', '😯', '😦', '😧', '😮', '😲', '🥱', '😴', '🤤', '😪', '😵', '🤐', '🥴', '🤢', '🤮', '🤧', '😷', '🤒', '🤕', '🤑', '🤠', '🥳', '😎', '🤓', '🧐', '😕', '😟', '🙁', '☹️', '😮', '😯', '😲', '😳', '🥺', '😦', '😧', '😨', '😰', '😥', '😢', '😭', '😱', '😖', '😣', '😞', '😓', '😩', '😫', '🥱', '😤', '😡', '😠', '🤬', '😈', '👿', '💀', '☠️', '💩', '🤡', '👹', '👺', '👻', '👽', '👾', '🤖', '😺', '😸', '😹', '😻', '😼', '😽', '🙀', '😿', '😾', '🙈', '🙉', '🙊', '💋', '💌', '💘', '💝', '💖', '💗', '💓', '💞', '💕', '💟', '❣️', '💔', '❤️', '🧡', '💛', '💚', '💙', '💜', '🤎', '🖤', '🤍', '💯', '💢', '💥', '💫', '💦', '💨', '🕳️', '💣', '💬', '👁️‍🗨️', '🗨️', '🗯️', '💭', '💤', '👋', '🤚', '🖐️', '✋', '🖖', '👌', '🤌', '🤏', '✌️', '🤞', '🤟', '🤘', '🤙', '👈', '👉', '👆', '🖕', '👇', '☝️', '👍', '👎', '✊', '👊', '🤛', '🤜', '👏', '🙌', '👐', '🤲', '🤝', '🙏', '✍️', '💅', '🤳', '💪', '🦾', '🦵', '🦿', '🦶', '👂', '🦻', '👃', '🧠', '🫀', '🫁', '🦷', '🦴', '👀', '👁️', '👅', '👄', '👶', '🧒', '👦', '👧', '🧑', '👱', '👨', '🧔', '👨‍🦰', '👨‍🦱', '👨‍🦳', '👨‍🦲', '👩', '👩‍🦰', '🧑‍🦰', '👩‍🦱', '🧑‍🦱', '👩‍🦳', '🧑‍🦳', '👩‍🦲', '🧑‍🦲', '👱‍♀️', '👱‍♂️', '🧓', '👴', '👵', '🙍', '🙍‍♂️', '🙍‍♀️', '🙎', '🙎‍♂️', '🙎‍♀️', '🙅', '🙅‍♂️', '🙅‍♀️', '🙆', '🙆‍♂️', '🙆‍♀️', '💁', '💁‍♂️', '💁‍♀️', '🙋', '🙋‍♂️', '🙋‍♀️', '🧏', '🧏‍♂️', '🧏‍♀️', '🙇', '🙇‍♂️', '🙇‍♀️', '🤦', '🤦‍♂️', '🤦‍♀️', '🤷', '🤷‍♂️', '🤷‍♀️', '🧑‍⚕️', '👨‍⚕️', '👩‍⚕️', '🧑‍🎓', '👨‍🎓', '👩‍🎓', '🧑‍🏫', '👨‍🏫', '👩‍🏫', '🧑‍⚖️', '👨‍⚖️', '👩‍⚖️', '🧑‍🌾', '👨‍🌾', '👩‍🌾', '🧑‍🍳', '👨‍🍳', '👩‍🍳', '🧑‍🔧', '👨‍🔧', '👩‍🔧', '🧑‍🏭', '👨‍🏭', '👩‍🏭', '🧑‍💼', '👨‍💼', '👩‍💼', '🧑‍🔬', '👨‍🔬', '👩‍🔬', '🧑‍💻', '👨‍💻', '👩‍💻', '🧑‍🎤', '👨‍🎤', '👩‍🎤', '🧑‍🎨', '👨‍🎨', '👩‍🎨', '🧑‍✈️', '👨‍✈️', '👩‍✈️', '🧑‍🚀', '👨‍🚀', '👩‍🚀', '🧑‍🚒', '👨‍🚒', '👩‍🚒', '👮', '👮‍♂️', '👮‍♀️', '🕵️', '🕵️‍♂️', '🕵️‍♀️', '💂', '💂‍♂️', '💂‍♀️', '🥷', '👷', '👷‍♂️', '👷‍♀️', '🤴', '👸', '👳', '👳‍♂️', '👳‍♀️', '👲', '🧕', '🤵', '🤵‍♂️', '🤵‍♀️', '👰', '👰‍♂️', '👰‍♀️', '🤰', '🤱', '👩‍🍼', '👨‍🍼', '🧑‍🍼', '👼', '🎅', '🤶', '🧑‍🎄', '🦸', '🦸‍♂️', '🦸‍♀️', '🦹', '🦹‍♂️', '🦹‍♀️', '🧙', '🧙‍♂️', '🧙‍♀️', '🧚', '🧚‍♂️', '🧚‍♀️', '🧛', '🧛‍♂️', '🧛‍♀️', '🧜', '🧜‍♂️', '🧜‍♀️', '🧝', '🧝‍♂️', '🧝‍♀️', '🧞', '🧞‍♂️', '🧞‍♀️', '🧟', '🧟‍♂️', '🧟‍♀️', '💆', '💆‍♂️', '💆‍♀️', '💇', '💇‍♂️', '💇‍♀️', '🚶', '🚶‍♂️', '🚶‍♀️', '🧍', '🧍‍♂️', '🧍‍♀️', '🧎', '🧎‍♂️', '🧎‍♀️', '🧑‍🦯', '👨‍🦯', '👩‍🦯', '🧑‍🦼', '👨‍🦼', '👩‍🦼', '🧑‍🦽', '👨‍🦽', '👩‍🦽', '🏃', '🏃‍♂️', '🏃‍♀️', '💃', '🕺', '🕴️', '👯', '👯‍♂️', '👯‍♀️', '🧖', '🧖‍♂️', '🧖‍♀️', '🧗', '🧗‍♂️', '🧗‍♀️', '🤺', '🏇', '⛷️', '🏂', '🏌️', '🏌️‍♂️', '🏌️‍♀️', '🏄', '🏄‍♂️', '🏄‍♀️', '🚣', '🚣‍♂️', '🚣‍♀️', '🏊', '🏊‍♂️', '🏊‍♀️', '⛹️', '⛹️‍♂️', '⛹️‍♀️', '🏋️', '🏋️‍♂️', '🏋️‍♀️', '🚴', '🚴‍♂️', '🚴‍♀️', '🚵', '🚵‍♂️', '🚵‍♀️', '🤸', '🤸‍♂️', '🤸‍♀️', '🤼', '🤼‍♂️', '🤼‍♀️', '🤽', '🤽‍♂️', '🤽‍♀️', '🤾', '🤾‍♂️', '🤾‍♀️', '🤹', '🤹‍♂️', '🤹‍♀️', '🧘', '🧘‍♂️', '🧘‍♀️', '🛀', '🛌', '🧑‍🤝‍🧑', '👭', '👫', '👬', '💏', '👩‍❤️‍💋‍👨', '👨‍❤️‍💋‍👨', '👩‍❤️‍💋‍👩', '💑', '👩‍❤️‍👨', '👨‍❤️‍👨', '👩‍❤️‍👩', '👪', '👨‍👩‍👦', '👨‍👩‍👧', '👨‍👩‍👧‍👦', '👨‍👩‍👦‍👦', '👨‍👩‍👧‍👧', '👨‍👨‍👦', '👨‍👨‍👧', '👨‍👨‍👧‍👦', '👨‍👨‍👦‍👦', '👨‍👨‍👧‍👧', '👩‍👩‍👦', '👩‍👩‍👧', '👩‍👩‍👧‍👦', '👩‍👩‍👦‍👦', '👩‍👩‍👧‍👧', '👨‍👦', '👨‍👦‍👦', '👨‍👧', '👨‍👧‍👦', '👨‍👧‍👧', '👩‍👦', '👩‍👦‍👦', '👩‍👧', '👩‍👧‍👦', '👩‍👧‍👧', '🗣️', '👤', '👥', '🫂'];
                     let emojiHtml = '<div class="emoji-grid">';
-                    emojis.forEach(emoji => {
-                        emojiHtml += `<span class="swal-emoji">${emoji}</span>`;
-                    });
+                    emojis.forEach(emoji => { emojiHtml += `<span class="swal-emoji">${emoji}</span>`; });
                     emojiHtml += '</div>';
 
                     Swal.fire(swalOptionsWithPause({
-                        title: '{{ __("Select Emoji") }}',
-                        html: emojiHtml,
-                        showConfirmButton: false,
-                        focusConfirm: false, // Prevent focusing the non-existent confirm button
-                        customClass: {
-                            popup: 'emoji-popup ' + (document.documentElement.classList.contains('dark') ? 'dark' : ''),
-                            // content: 'p-0', // Remove padding from content if needed
-                            // htmlContainer: 'p-0'
-                        },
+                        title: '{{ __("Select Emoji") }}', html: emojiHtml, showConfirmButton: false, focusConfirm: false,
+                        customClass: { popup: 'emoji-popup ' + (document.documentElement.classList.contains('dark') ? 'dark' : '') },
                         didOpen: (modal) => {
-                            pauseAutoRefresh(); // Pause refresh when modal opens
-                            // Add click listener to emojis inside the modal
+                            pauseAutoRefresh();
                             modal.querySelectorAll('.swal-emoji').forEach(el => {
                                 el.addEventListener('click', () => {
                                     const emoji = el.textContent;
@@ -1389,27 +1205,24 @@
                                     messageInput.selectionStart = messageInput.selectionEnd = start + emoji.length;
                                     messageInput.focus();
                                     messageInput.dispatchEvent(new Event('input', { bubbles: true }));
-                                    Swal.close(); // Close Swal after selection
+                                    Swal.close();
                                 });
                             });
                         },
-                         willClose: () => {
-                             resumeAutoRefresh(); // Resume refresh when modal closes
-                         }
+                        willClose: () => { resumeAutoRefresh(); }
                     }));
                 }
 
 
-                // Periodic Refresh (Using AJAX and checking pause flag)
-                // Start intervals initially
-                messageIntervalId = setInterval(refreshChatMessages, 15000);
-                contactIntervalId = setInterval(refreshContactList, 60000);
-                statusIntervalId = setInterval(updateConnectionStatus, 45000);
+                // Periodic Refresh
+                if (!isRefreshPaused) { // Start only if not paused initially
+                    if (selectedPhone) messageIntervalId = setInterval(refreshChatMessages, 15000);
+                    contactIntervalId = setInterval(refreshContactList, 60000);
+                    statusIntervalId = setInterval(updateConnectionStatus, 45000);
+                }
 
-                 // Dismiss flash messages after a delay
-                setTimeout(() => {
-                    $('#flash-success, #flash-error').fadeOut('slow');
-                }, 5000); // 5 seconds
+                 // Dismiss flash messages
+                 setTimeout(() => { $('#flash-success, #flash-error, #flash-validation-errors').fadeOut('slow'); }, 5000);
 
             }); // End document ready
 

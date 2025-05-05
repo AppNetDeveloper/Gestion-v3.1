@@ -8,12 +8,15 @@ const NodeCache = require('node-cache');
 const { Boom } = require('@hapi/boom');
 const { default: makeWASocket } = require('@whiskeysockets/baileys');
 const {
-  fetchLatestBaileysVersion,
-  makeCacheableSignalKeyStore,
-  useMultiFileAuthState,
-  DisconnectReason,
-  makeInMemoryStore,
-} = require('@whiskeysockets/baileys');
+    fetchLatestBaileysVersion,
+    makeCacheableSignalKeyStore,
+    useMultiFileAuthState,
+    DisconnectReason,
+    makeInMemoryStore,
+    // --- ASEGÚRATE DE QUE ESTA LÍNEA ESTÉ PRESENTE ---
+    downloadContentFromMessage
+  } = require('@whiskeysockets/baileys');
+const mime = require('mime-types'); // Asegúrate de tener esta línea y haber hecho npm install mime-types
 const Pino = require('pino');
 const QRCode = require('qrcode');
 const axios = require('axios'); // Para realizar la llamada HTTP externa
@@ -275,53 +278,62 @@ async function startSession(sessionId) {
             saveChats(sessionId, Object.values(sessions[sessionId].chatsMap));
 
             // Procesamos los medios de los mensajes:
+            // --- Procesamiento de Medios (Usando Baileys) ---
             for (const msg of m.messages) {
-                // Procesar Video
-                if (msg.message && msg.message.videoMessage) {
-                const { directPath, mediaKey } = msg.message.videoMessage;
-                const publicUrl = await processMediaMessage(sessionId, msg.key.remoteJid, directPath, mediaKey, 'video');
-                if (publicUrl) {
-                    msg.message.videoMessage.url_decrypted = publicUrl;
-                    console.log(`Video desencriptado y guardado en: ${publicUrl}`);
-                } else {
-                    console.error(`Error procesando video para ${msg.key.remoteJid}`);
+                let mediaObject = null;
+                let mediaType = '';
+
+                // Determinar el tipo de medio y obtener el objeto correcto
+                if (msg.message?.imageMessage) {
+                    mediaObject = msg.message.imageMessage;
+                    mediaType = 'image';
+                    // Log para depurar el objeto imageMessage
+                    console.log('🔎 Detalle del imageMessage recibido:', JSON.stringify(mediaObject, null, 2));
+                } else if (msg.message?.videoMessage) {
+                    mediaObject = msg.message.videoMessage;
+                    mediaType = 'video';
+                    // Log para depurar el objeto videoMessage (opcional)
+                    // console.log('🔎 Detalle del videoMessage recibido:', JSON.stringify(mediaObject, null, 2));
+                } else if (msg.message?.audioMessage) {
+                    mediaObject = msg.message.audioMessage;
+                    mediaType = 'audio';
+                } else if (msg.message?.documentMessage) {
+                    mediaObject = msg.message.documentMessage;
+                    mediaType = 'document';
+                } else if (msg.message?.stickerMessage) {
+                    mediaObject = msg.message.stickerMessage;
+                    mediaType = 'sticker';
                 }
+
+                // Si encontramos un objeto multimedia, lo procesamos
+                if (mediaObject && mediaType) {
+                    console.log(`✨ [${sessionId}] Procesando ${mediaType} de ${msg.key.remoteJid} (MsgID: ${msg.key.id})...`);
+
+                    // --- LLAMADA CORRECTA A LA NUEVA FUNCIÓN ---
+                    // Pasamos: sessionId, el objeto protobuf (mediaObject), el tipo (mediaType), y el ID del mensaje
+                    const publicBaseUrl = process.env.PUBLIC_BASE_URL || `http://localhost:${PORT}`; // <--- ESTA LÍNEA DEBE EXISTIR
+                    const publicUrl = await processMediaMessage(sessionId, mediaObject, mediaType, msg.key.id);
+                    // --- FIN LLAMADA CORRECTA ---
+
+                    if (publicUrl) {
+                        // Añadir la URL pública al objeto del mensaje (opcional, para referencia futura)
+                        // Usamos una clave diferente para no sobreescribir la original 'url' si existe
+                        if (msg.message.imageMessage) msg.message.imageMessage.url_publica = publicUrl;
+                        if (msg.message.videoMessage) msg.message.videoMessage.url_publica = publicUrl;
+                        if (msg.message.audioMessage) msg.message.audioMessage.url_publica = publicUrl;
+                        if (msg.message.documentMessage) msg.message.documentMessage.url_publica = publicUrl;
+                        if (msg.message.stickerMessage) msg.message.stickerMessage.url_publica = publicUrl;
+
+                        console.log(`✅ [${sessionId}] URL pública para ${mediaType} (MsgID: ${msg.key.id}): ${publicUrl}`);
+                        // Guardar historial de nuevo si se modificó el mensaje
+                        saveMessageHistory(sessionId, sessions[sessionId].messageHistory);
+                    } else {
+                        // El error ya se loguea dentro de processMediaMessage si falla la descarga o falta la clave
+                        console.error(`❌ [${sessionId}] Falló el procesamiento de ${mediaType} para ${msg.key.remoteJid} (MsgID: ${msg.key.id})`);
+                    }
                 }
-                // Procesar Imagen
-                else if (msg.message && msg.message.imageMessage) {
-                // Para imágenes, a veces se usa "url" en lugar de "directPath"
-                const { url, mediaKey } = msg.message.imageMessage;
-                const publicUrl = await processMediaMessage(sessionId, msg.key.remoteJid, url, mediaKey, 'image');
-                if (publicUrl) {
-                    msg.message.imageMessage.url_decrypted = publicUrl;
-                    console.log(`Imagen desencriptada y guardada en: ${publicUrl}`);
-                } else {
-                    console.error(`Error procesando imagen para ${msg.key.remoteJid}`);
-                }
-                }
-                // Procesar Audio
-                else if (msg.message && msg.message.audioMessage) {
-                const { url, mediaKey } = msg.message.audioMessage;
-                const publicUrl = await processMediaMessage(sessionId, msg.key.remoteJid, url, mediaKey, 'audio');
-                if (publicUrl) {
-                    msg.message.audioMessage.url_decrypted = publicUrl;
-                    console.log(`Audio desencriptado y guardado en: ${publicUrl}`);
-                } else {
-                    console.error(`Error procesando audio para ${msg.key.remoteJid}`);
-                }
-                }
-                // Procesar Documento
-                else if (msg.message && msg.message.documentMessage) {
-                const { url, mediaKey } = msg.message.documentMessage;
-                const publicUrl = await processMediaMessage(sessionId, msg.key.remoteJid, url, mediaKey, 'document');
-                if (publicUrl) {
-                    msg.message.documentMessage.url_decrypted = publicUrl;
-                    console.log(`Documento desencriptado y guardado en: ${publicUrl}`);
-                } else {
-                    console.error(`Error procesando documento para ${msg.key.remoteJid}`);
-                }
-                }
-            }
+            } // Fin del bucle for (const msg of m.messages)
+
             // Llamada a la API externa si está habilitada
             if (process.env.EXTERNAL_API_ENABLED === 'true' && process.env.EXTERNAL_API_URL) {
                 for (const msg of m.messages) {
@@ -1817,21 +1829,58 @@ app.get('/get-chats/:sessionId', async (req, res) => {
  *         description: Error al obtener los mensajes
  */
 app.get('/get-messages/:sessionId/:jid', async (req, res) => {
-  const { sessionId, jid } = req.params;
-  const session = sessions[sessionId];
-  if (!session) {
-    return res.status(404).json({ error: 'Sesión no encontrada' });
-  }
-  try {
-    const messages = (session.messageHistory || []).filter((msg) => {
-      return msg.key && msg.key.remoteJid === jid;
-    });
-    res.json({ messages });
-  } catch (error) {
-    console.error(`❌ Error al obtener mensajes del chat ${jid}:`, error);
-    res.status(500).json({ error: 'Error al obtener los mensajes' });
-  }
-});
+    const { sessionId, jid } = req.params;
+    const limit = parseInt(req.query.limit) || null;
+    const session = sessions[sessionId];
+
+    if (!session || !session.sock?.user) {
+      return res.status(404).json({ error: 'Sesión no encontrada o no conectada.' });
+    }
+
+    try {
+      // Filtrar mensajes del historial en memoria
+      let messagesFromHistory = (session.messageHistory || []).filter((msg) => {
+        return msg.key && msg.key.remoteJid === jid;
+      });
+
+      // Ordenar por timestamp (más antiguo primero)
+      messagesFromHistory.sort((a,b) => (a.messageTimestamp || 0) - (b.messageTimestamp || 0));
+
+      // Aplicar límite si se especificó
+      if (limit && messagesFromHistory.length > limit) {
+          messagesFromHistory = messagesFromHistory.slice(-limit);
+      }
+
+      // --- EXTRAER URL PÚBLICA ---
+      const formattedMessages = messagesFromHistory.map(msg => {
+          let publicUrl = null;
+          if (msg.message?.imageMessage?.url_publica) {
+              publicUrl = msg.message.imageMessage.url_publica;
+          } else if (msg.message?.videoMessage?.url_publica) {
+              publicUrl = msg.message.videoMessage.url_publica;
+          } else if (msg.message?.audioMessage?.url_publica) {
+              publicUrl = msg.message.audioMessage.url_publica;
+          } else if (msg.message?.documentMessage?.url_publica) {
+              publicUrl = msg.message.documentMessage.url_publica;
+          } else if (msg.message?.stickerMessage?.url_publica) {
+               publicUrl = msg.message.stickerMessage.url_publica;
+          }
+
+          return {
+              messageData: msg, // Devolvemos el objeto mensaje original completo
+              publicMediaUrl: publicUrl // Y añadimos la URL pública si existe
+          };
+      });
+      // --- FIN EXTRACCIÓN ---
+
+
+      res.json({ messages: formattedMessages }); // Devolver los mensajes formateados
+
+    } catch (error) {
+      console.error(`❌ Error al obtener mensajes del chat ${jid} para ${sessionId}:`, error);
+      res.status(500).json({ error: 'Error interno al obtener los mensajes' });
+    }
+  });
 
 /**
  * @openapi
@@ -1919,84 +1968,157 @@ app.post('/send-message/:sessionId', async (req, res) => {
 
 /**
  * @openapi
+ * components:
+ *   schemas:
+ *     DeleteMessageRequest:
+ *       type: object
+ *       required:
+ *         - remoteJid
+ *         - fromMe
+ *         - id
+ *       properties:
+ *         remoteJid:
+ *           type: string
+ *           description: Identificador del chat (por ejemplo “1234@s.whatsapp.net”)
+ *         fromMe:
+ *           type: boolean
+ *           description: Indica si el mensaje fue enviado por el propio usuario
+ *         id:
+ *           type: string
+ *           description: ID interno del mensaje en WhatsApp
+ *         participant:
+ *           type: string
+ *           description: ID del participante (solo para grupos, cuando fromMe es false)
+ *
+ *     SuccessResponse:
+ *       type: object
+ *       properties:
+ *         success:
+ *           type: boolean
+ *           example: true
+ *         message:
+ *           type: string
+ *           example: Solicitud para eliminar mensaje con id "ABC123" enviada.
+ *
+ *     ErrorResponse:
+ *       type: object
+ *       properties:
+ *         error:
+ *           type: string
+ *           example: Se requieren los campos "remoteJid" (string), "fromMe" (boolean) y "id" (string).
+ *
  * /delete-message/{sessionId}:
  *   delete:
+ *     tags:
+ *       - Messages
  *     summary: Elimina un mensaje concreto
+ *     description: |
+ *       Borra un mensaje de WhatsApp tanto en el dispositivo remoto
+ *       como de la memoria local de la sesión.
  *     parameters:
- *       - in: path
- *         name: sessionId
+ *       - name: sessionId
+ *         in: path
+ *         description: ID de la sesión activa de Baileys
  *         required: true
  *         schema:
  *           type: string
  *     requestBody:
- *       description: JSON con "remoteJid", "fromMe" (boolean) e "id"
  *       required: true
+ *       description: Datos necesarios para identificar el mensaje a eliminar
  *       content:
  *         application/json:
  *           schema:
- *             type: object
- *             properties:
- *               remoteJid:
- *                 type: string
- *               fromMe:
- *                 type: boolean
- *               id:
- *                 type: string
+ *             $ref: '#/components/schemas/DeleteMessageRequest'
  *     responses:
- *       200:
+ *       '200':
  *         description: Mensaje eliminado correctamente
- *       400:
- *         description: Datos inválidos
- *       404:
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/SuccessResponse'
+ *       '400':
+ *         description: Datos inválidos o sesión no conectada
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *       '404':
  *         description: Sesión no disponible
- *       500:
- *         description: Error interno
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *       '500':
+ *         description: Error interno del servidor
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
  */
+
 app.delete('/delete-message/:sessionId', async (req, res) => {
-  const { sessionId } = req.params;
-  const { remoteJid, fromMe, id } = req.body;
+    const { sessionId } = req.params;
+    // --- OBTENER CAMPOS SUELTOS DEL CUERPO ---
+    const { remoteJid, fromMe, id, participant } = req.body; // Obtener participant también si se envía
 
-  // Validaciones básicas
-  if (!remoteJid || typeof fromMe === 'undefined' || !id) {
-    return res.status(400).json({
-      error: 'Se requieren los campos "remoteJid", "fromMe" y "id" en el cuerpo de la petición.'
-    });
-  }
+    // --- VALIDACIONES BÁSICAS DE LOS CAMPOS SUELTOS ---
+    // typeof fromMe === 'undefined' es más seguro que !fromMe si el valor puede ser false
+    if (!remoteJid || typeof fromMe !== 'boolean' || !id) {
+      return res.status(400).json({
+        error: 'Se requieren los campos "remoteJid" (string), "fromMe" (boolean) y "id" (string) en el cuerpo de la petición.'
+      });
+    }
+    // --- FIN VALIDACIONES ---
 
-  const session = sessions[sessionId];
-  if (!session) {
-    return res
-      .status(404)
-      .json({ error: `La sesión ${sessionId} no está disponible.` });
-  }
+    const session = sessions[sessionId];
+    if (!session) {
+      return res.status(404).json({ error: `La sesión ${sessionId} no está disponible.` });
+    }
+     if (!session.sock?.user) { // Verificar si está conectado
+       return res.status(400).json({ error: `La sesión ${sessionId} no está conectada.` });
+    }
 
-  try {
-    // 1. Elimina el mensaje del dispositivo (si se puede) usando Baileys
-    // Nota: fromMe debe ser boolean, id es el "ID" del mensaje
-    await session.sock.sendMessage(remoteJid, {
-      delete: { remoteJid, fromMe, id }
-    });
+    try {
+      console.log(`[${sessionId}] 🗑️ Solicitando eliminar mensaje ${id} en chat ${remoteJid}`);
 
-    // 2. Eliminamos el mensaje de la memoria local (messageHistory)
-    session.messageHistory = session.messageHistory.filter((msg) => {
-      const msgId = msg.key?.id;
-      const msgJid = msg.key?.remoteJid;
-      const msgFrom = msg.key?.fromMe;
-      return !(msgId === id && msgJid === remoteJid && msgFrom === fromMe);
-    });
+      // --- CONSTRUIR EL OBJETO messageKey PARA BAILEYS ---
+      // Baileys SÍ espera un objeto anidado para la clave del mensaje
+      const messageKey = {
+          remoteJid,
+          fromMe,
+          id,
+          // Añadir participant solo si existe y fromMe es false (mensajes de grupo recibidos)
+          ...(participant && !fromMe && { participant })
+      };
+      // --- FIN CONSTRUCCIÓN ---
 
-    // 3. Guardamos en disco la nueva lista de mensajes
-    saveMessageHistory(sessionId, session.messageHistory);
+      // 1. Elimina el mensaje del dispositivo usando Baileys y el objeto messageKey construido
+      await session.sock.sendMessage(remoteJid, {
+          delete: messageKey // Pasar el objeto messageKey construido
+      });
 
-    return res.json({
-      success: true,
-      message: `Mensaje con id "${id}" eliminado de la sesión ${sessionId}.`
-    });
-  } catch (error) {
-    console.error(`❌ Error al eliminar mensaje en la sesión ${sessionId}:`, error);
-    return res.status(500).json({ error: 'Error interno al intentar eliminar el mensaje.' });
-  }
-});
+      console.log(`[${sessionId}] ✅ Solicitud de eliminación enviada para mensaje ${id}`);
+
+      // 2. Eliminamos el mensaje de la memoria local (messageHistory)
+      session.messageHistory = session.messageHistory?.filter((msg) => {
+        // Comparar las propiedades de la clave
+        return !(msg.key?.id === id && msg.key?.remoteJid === remoteJid && msg.key?.fromMe === fromMe);
+      }) || [];
+
+      // 3. Guardamos en disco la nueva lista de mensajes
+      saveMessageHistory(sessionId, session.messageHistory);
+
+      return res.json({
+        success: true,
+        message: `Solicitud para eliminar mensaje con id "${id}" enviada.`
+      });
+    } catch (error) {
+      console.error(`[${sessionId}] ❌ Error al eliminar mensaje ${id} en sesión:`, error);
+      // Devolver un mensaje de error más específico si es posible
+      const errorMessage = error.message || 'Error interno al intentar eliminar el mensaje.';
+      return res.status(500).json({ error: errorMessage });
+    }
+  });
 
 /**
  * @openapi
@@ -2191,177 +2313,126 @@ app.get('/sessions', (req, res) => {
  *                   example: Archivo no encontrado
  */
 app.get('/media/:sessionId/:fileName', (req, res) => {
-    const { sessionId, fileName } = req.params;
-    const filePath = path.join(STORE_FILE_PATH, sessionId, 'media', fileName);
-    if (fs.existsSync(filePath)) {
-      res.sendFile(path.resolve(filePath));
+    const { fileName } = req.params; // Solo necesitamos fileName de los params
+    const filePath = path.join(__dirname, 'media', fileName); // Busca en la carpeta 'media' raíz
+    const absoluteFilePath = path.resolve(filePath);
+
+    console.log(`🔍 Solicitando archivo multimedia: ${absoluteFilePath}`);
+
+    if (fs.existsSync(absoluteFilePath)) {
+      console.log(`✔️ Enviando archivo: ${absoluteFilePath}`);
+      res.sendFile(absoluteFilePath, (err) => { // Usar sendFile para que maneje Content-Type
+          if (err) {
+              console.error(`❌ Error al enviar archivo ${absoluteFilePath}:`, err);
+              if (!res.headersSent) {
+                  res.status(500).json({ error: 'Error interno al enviar el archivo.' });
+              }
+          }
+      });
     } else {
+      console.log(`❌ Archivo no encontrado: ${absoluteFilePath}`);
       res.status(404).json({ error: 'Archivo no encontrado' });
     }
   });
 
 /**
- * Guarda el archivo desencriptado en la carpeta de medios de la sesión.
- * Se organiza en: STORE_FILE_PATH/<sessionId>/media/
- * Genera un nombre único usando el chatId (opcional) y la fecha actual.
- * Retorna la ruta completa del archivo guardado.
+ * Procesa el mensaje multimedia: usa downloadContentFromMessage para obtener el buffer desencriptado,
+ * lo guarda en la carpeta /media raíz y retorna la URL pública.
+ * @param {string} sessionId ID de la sesión actual.
+ * @param {object} messageProto El objeto protobuf del mensaje multimedia (ej. imageMessage, videoMessage).
+ * @param {string} mediaType El tipo de medio ('image', 'video', 'audio', 'document', 'sticker').
+ * @param {string} messageId ID del mensaje (para nombre de archivo único).
+ * @returns {Promise<string|null>} La URL pública del archivo guardado o null si hay error.
  */
-async function saveDecryptedMedia(sessionId, chatId, mediaType, encryptedUrl, mediaKey) {
-    try {
-      // Primero, descarga y desencripta el archivo
-      console.log(`Descargando y desencriptando archivo desde ${encryptedUrl}...`);
-      const decryptedFilePath = await decryptMedia(encryptedUrl, mediaKey);
-      console.log(`Archivo desencriptado guardado en: ${decryptedFilePath}`);
-
-      // Define la carpeta para guardar el archivo multimedia en el directorio raíz
-      const mediaDir = path.join(__dirname, 'media'); // Cambié la ruta aquí para que se guarde en la carpeta 'media' en el root de la app
-      const absoluteMediaDir = path.resolve(mediaDir); // Resuelve la ruta absoluta para la carpeta
-      console.log(`Verificando si la carpeta media existe en: ${absoluteMediaDir}`);
-
-      // Si la carpeta no existe, la crea
-      if (!fs.existsSync(absoluteMediaDir)) {
-        console.log(`Carpeta media no encontrada. Creando la carpeta en: ${absoluteMediaDir}`);
-        fs.mkdirSync(absoluteMediaDir, { recursive: true });
-      } else {
-        console.log(`La carpeta media ya existe en: ${absoluteMediaDir}`);
-      }
-
-      // Genera el nombre del archivo
-      const fileName = `${chatId || 'general'}-${Date.now()}.${mediaType}`; // Usamos la extensión del tipo de medio
-      const destPath = path.join(absoluteMediaDir, fileName); // Usa la ruta absoluta para el destino
-      console.log(`Archivo destino generado: ${destPath}`);
-
-      // Mueve el archivo desencriptado a la carpeta de medios
-      console.log(`Moviendo archivo de ${decryptedFilePath} a ${destPath}...`);
-      fs.renameSync(decryptedFilePath, destPath);
-      console.log(`Archivo guardado exitosamente en: ${destPath}`);
-
-      return destPath;
-    } catch (err) {
-      console.error("Error al guardar el medio desencriptado: ", err);
-      throw err;
-    }
-  }
-
-
-  /**
-   * Procesa el mensaje multimedia: llama a decryptMedia para desencriptar el archivo,
-   * lo guarda usando saveDecryptedMedia y retorna la URL pública (endpoint /media/...)
-   */
-  async function processMediaMessage(sessionId, chatId, encryptedUrl, mediaKey, mediaType) {
-    try {
-      // Llama a tu función decryptMedia que desencripta y convierte el archivo
-      const decryptedPath = await decryptMedia(encryptedUrl, mediaKey); // Usar await aquí
-      if (!decryptedPath) {
-        console.error('Error desencriptando el medio');
+async function processMediaMessage(sessionId, messageProto, mediaType, messageId) {
+    if (!messageProto) {
+        console.error(`❌ [${sessionId}] No se proporcionó el protobuf del mensaje multimedia (MsgID: ${messageId}).`);
         return null;
+    }
+
+    // --- VERIFICACIÓN MÁS ROBUSTA ---
+    if (!messageProto.mediaKey || messageProto.mediaKey.length === 0) {
+        console.warn(`⚠️ [${sessionId}] MediaKey faltante o vacía para ${mediaType} (MsgID: ${messageId}). No se puede desencriptar. Mensaje:`, JSON.stringify(messageProto));
+        return null; // No podemos continuar sin la clave
+    }
+    // --- FIN VERIFICACIÓN ---
+
+    try {
+      console.log(`⬇️ [${sessionId}] Descargando y desencriptando ${mediaType} (MsgID: ${messageId})...`);
+
+      // Usamos la función de Baileys para obtener el stream o buffer
+      const stream = await downloadContentFromMessage(messageProto, mediaType);
+
+      // Convertimos el stream a un buffer
+      let buffer = Buffer.from([]);
+      for await(const chunk of stream) {
+          buffer = Buffer.concat([buffer, chunk]);
+      }
+      console.log(`✅ [${sessionId}] ${mediaType} descargado y desencriptado (Tamaño: ${buffer.length} bytes)`);
+
+      // --- Lógica para guardar el buffer ---
+      const mediaDir = path.join(__dirname, 'media'); // Carpeta 'media' en el root
+      const absoluteMediaDir = path.resolve(mediaDir);
+
+      // Crear carpeta si no existe
+      if (!fs.existsSync(absoluteMediaDir)) {
+        console.log(`📁 [${sessionId}] Creando carpeta media en: ${absoluteMediaDir}`);
+        fs.mkdirSync(absoluteMediaDir, { recursive: true });
       }
 
-      // Guarda el archivo desencriptado en la carpeta de medios en el directorio raíz
-      const savedPath = await saveDecryptedMedia(sessionId, chatId, mediaType, decryptedPath); // Usar await aquí
+      // Determinar extensión
+      let extension = mediaType; // Extensión por defecto
+      const mimeType = messageProto.mimetype;
 
-      // Construye una URL para acceder al archivo mediante tu API (debes definir PUBLIC_BASE_URL en tu .env)
-      const publicUrl = `${process.env.PUBLIC_BASE_URL}/media/${path.basename(savedPath)}`;
-      return publicUrl;
+      if (mimeType) {
+          const derivedExtension = mime.extension(mimeType);
+          if (derivedExtension) {
+              extension = derivedExtension;
+              console.log(`   [${sessionId}] Mimetype: ${mimeType} -> Extensión: .${extension}`);
+          } else {
+               console.warn(`   [${sessionId}] ⚠️ No se pudo derivar extensión del mimetype: ${mimeType}. Usando .${extension}`);
+          }
+      } else if (mediaType === 'audio') {
+          extension = 'ogg'; // Baileys suele devolver ogg para audio PTT
+      } else if (mediaType === 'sticker') {
+          extension = 'webp';
+      } else {
+           console.warn(`   [${sessionId}] ⚠️ Mimetype no disponible para ${mediaType}. Usando extensión por defecto: .${extension}`);
+      }
+
+
+      // Genera el nombre del archivo único
+      const fileHash = messageProto.fileSha256 ? messageProto.fileSha256.toString('hex').substring(0, 10) : Date.now(); // Usar hash o timestamp
+      const fileName = `${sessionId}-${messageId}-${fileHash}.${extension}`;
+      const destPath = path.join(absoluteMediaDir, fileName);
+
+      console.log(`💾 [${sessionId}] Guardando archivo desencriptado en: ${destPath}`);
+      fs.writeFileSync(destPath, buffer);
+      console.log(`✔️ [${sessionId}] Archivo guardado exitosamente: ${fileName}`);
+
+      // --- ¡AQUÍ ESTÁ LA CORRECCIÓN! ---
+      // Construye la URL pública (Asegúrate que la ruta API /media/:sessionId/:fileName exista y funcione)
+      // Asegúrate que PUBLIC_BASE_URL está definido en tu .env o usa un valor por defecto
+      const publicBaseUrl = process.env.PUBLIC_BASE_URL || `http://localhost:${PORT}`; // Define publicBaseUrl
+      const publicUrl = `${publicBaseUrl}/media/${sessionId}/${fileName}`; // Usa publicBaseUrl
+      // --- FIN CORRECCIÓN ---
+      console.log(`🔗 [${sessionId}] URL pública generada: ${publicUrl}`);
+
+      return publicUrl; // Retorna la URL para acceder al archivo
+
     } catch (err) {
-      console.error('Error al procesar el mensaje de medios:', err);
+      // Manejo específico del error "Cannot derive from empty media key"
+      if (err.message?.includes('Cannot derive from empty media key')) {
+           console.error(`❌ [${sessionId}] Error al procesar ${mediaType} (MsgID: ${messageId}): La MediaKey está vacía o es inválida.`, err.message);
+      } else {
+          console.error(`❌ [${sessionId}] Error general al procesar ${mediaType} (MsgID: ${messageId}):`, err);
+      }
+      if (err.cause) console.error("   -> Causa del error:", err.cause);
+      // Loguear el objeto que causó el problema puede ser útil para depurar
+      // console.error("   -> Objeto del mensaje problemático:", JSON.stringify(messageProto));
       return null;
     }
   }
-
-
-
-  async function decryptMedia(encryptedUrl, mediaKey) {
-    return new Promise((resolve, reject) => {
-        const baseUrl = 'https://mmg.whatsapp.net'; // La URL base de los archivos en WhatsApp
-        const completeUrl = `${baseUrl}${encryptedUrl}`; // Construir la URL completa
-
-        const fileName = `decrypted_${Date.now()}.enc`; // Archivo temporal de la descarga
-        const mediaDir = path.join(__dirname, 'media'); // Carpeta 'media'
-        if (!fs.existsSync(mediaDir)) {
-            fs.mkdirSync(mediaDir, { recursive: true }); // Crear la carpeta si no existe
-        }
-        const decryptedFilePath = path.join(mediaDir, fileName); // Guardar el archivo en 'media'
-
-        const fileStream = fs.createWriteStream(decryptedFilePath);
-
-        // Descargar el archivo encriptado
-        https.get(completeUrl, (response) => {
-            response.pipe(fileStream);
-            fileStream.on('finish', () => {
-                console.log('Archivo descargado exitosamente');
-
-                // Aquí intentamos obtener un IV dinámico (esto es solo un ejemplo)
-                const iv = extractIVFromFile(decryptedFilePath); // Necesitarás implementar esta función
-
-                // Llamar a la función para desencriptar
-                const outputFile = path.join(mediaDir, `decrypted_${Date.now()}.mp4`); // Ruta para guardar el archivo desencriptado
-                console.log('MediaKey: ', mediaKey);
-                decryptFile(decryptedFilePath, mediaKey, iv, outputFile)
-
-                    .then((result) => {
-                        console.log('Archivo desencriptado y guardado en:', result);
-                        resolve(result); // Devuelve la ruta del archivo desencriptado
-                    })
-                    .catch((err) => {
-                        console.error('Error en la desencriptación:', err);
-                        reject(err); // Manejar errores durante la desencriptación
-                    });
-            });
-        }).on('error', (err) => {
-            console.error('Error de descarga:', err);
-            reject(err); // Si ocurre un error en la descarga
-        });
-    });
-}
-
-function extractIVFromFile(filePath) {
-    // Lee los primeros 16 bytes del archivo para obtener el IV (si AES con IV de 16 bytes)
-    const ivBuffer = Buffer.alloc(16);
-    const file = fs.openSync(filePath, 'r');
-    fs.readSync(file, ivBuffer, 0, 16, 0);
-    fs.closeSync(file);
-    return ivBuffer;
-  }
-
-
-function decryptFile(encryptedFilePath, mediaKey, iv, outputFile) {
-    return new Promise((resolve, reject) => {
-        try {
-            console.log("IV usado:", iv); // Verifica el IV usado
-
-            const decipher = crypto.createDecipheriv('aes-256-cbc', mediaKey, iv);
-
-            const inputStream = fs.createReadStream(encryptedFilePath);
-            const outputStream = fs.createWriteStream(outputFile);
-
-            inputStream.pipe(decipher).pipe(outputStream);
-
-            outputStream.on('finish', () => {
-                console.log('Archivo desencriptado exitosamente:', outputFile);
-                resolve(outputFile);
-            });
-
-            outputStream.on('error', (err) => {
-                console.error('Error al escribir el archivo:', err);
-                reject(err);
-            });
-
-            decipher.on('error', (err) => {
-                console.error('Error de desencriptación:', err);
-                reject(new Error('Error de desencriptación: ' + err.message));
-            });
-
-        } catch (error) {
-            console.error('Error al inicializar el descifrado:', error);
-            reject(new Error('Error al inicializar el descifrado: ' + error.message));
-        }
-    });
-}
-
-
-
-
 
 // Configurar la tarea programada para eliminar archivos a medianoche
 cron.schedule('0 0 * * *', () => {

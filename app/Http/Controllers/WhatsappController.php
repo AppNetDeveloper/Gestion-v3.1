@@ -8,7 +8,7 @@ use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use App\Models\Contact; // Asegúrate que el modelo Contact existe y está importado
 use App\Models\AutoProcess; // Asegúrate que el modelo AutoProcess existe y está importado
-use Session; // Session no se usa si devuelves JSON
+// Session no se usa si devuelves JSON
 
 class WhatsAppController extends Controller
 {
@@ -21,10 +21,10 @@ class WhatsAppController extends Controller
         $sessionId = $userId; // Usamos el id del usuario como sessionId
         $nodeUrl   = env('WATSHAPP_URL'); // Ej: http://localhost:3005
 
-        // Definir $sortedContacts y $autoResponseConfig como variables vacías por defecto
+        // Definir variables por defecto
         $sortedContacts = collect();
         $autoResponseConfig = null;
-        $messages      = collect();
+        $messages      = collect(); // Colección para los mensajes formateados
         $selectedPhone = $request->query('phone');
 
         // Intentar obtener la configuración de auto respuesta siempre
@@ -32,52 +32,58 @@ class WhatsAppController extends Controller
 
         try {
             // Verificamos si la sesión está activa
-            $responseSessions = Http::timeout(5)->get("$nodeUrl/sessions"); // Timeout corto para check rápido
+            $responseSessions = Http::timeout(5)->get("$nodeUrl/sessions");
             $activeSessions = $responseSessions->successful() ? $responseSessions->json()['activeSessions'] ?? [] : [];
 
-            if (!in_array((string)$sessionId, $activeSessions)) { // Convertir sessionId a string para comparación segura
-                // Si la sesión no está activa, mostrar vista con error (sin intentar cargar contactos/mensajes de API)
+            if (!in_array((string)$sessionId, $activeSessions)) {
                 return view('whatsapp.index', compact('sortedContacts', 'selectedPhone', 'messages', 'autoResponseConfig'))
                     ->with('error', __('Session is not active. Please connect WhatsApp.'));
             }
 
-            // Si la sesión está activa, obtenemos los chats (contactos) de la API de Node
-            $responseContacts = Http::timeout(15)->get("$nodeUrl/get-chats/$sessionId"); // Timeout más largo para chats
+            // Si la sesión está activa, obtenemos los chats (contactos)
+            $responseContacts = Http::timeout(15)->get("$nodeUrl/get-chats/$sessionId");
             if (!$responseContacts->successful()) {
                  return view('whatsapp.index', compact('sortedContacts', 'selectedPhone', 'messages', 'autoResponseConfig'))
                     ->with('error', __('Could not get contacts from API.'));
             }
 
-            // Asegurar que 'jid' está presente y filtrar contactos válidos
+            // Procesar y ordenar contactos
             $contacts = collect($responseContacts->json()['chats'] ?? [])
-                ->filter(function ($contact) {
-                    return isset($contact['jid']) && $contact['jid'] !== 'status@broadcast';
-                })
+                ->filter(fn ($contact) => isset($contact['jid']) && $contact['jid'] !== 'status@broadcast')
                 ->map(function ($contact) {
-                    // Limpiar el número de teléfono de su formato completo
                     $phoneNum = preg_replace('/@s\.whatsapp\.net$/', '', $contact['jid']);
+                    // Usar messageTimestamp directamente para ordenar (ya está en ms)
+                    $timestamp = $contact['messageTimestamp'] ?? 0;
                     return [
-                        'jid'         => $contact['jid'], // 'jid' es necesario
+                        'jid'         => $contact['jid'],
                         'phone'       => $phoneNum,
-                        'name'        => $contact['name'] ?? $phoneNum, // Usar phone si no hay nombre
-                        'lastMessage' => $contact['lastMessage'] ?? null,
+                        'name'        => $contact['name'] ?? $phoneNum,
+                        'lastMessageText' => $contact['lastMessageText'] ?? '', // Usar la clave correcta
                         'unreadCount' => $contact['unreadCount'] ?? 0,
-                         // Añadir timestamp para ordenar
-                        'last_message_timestamp' => $contact['lastMessage']['messageTimestamp'] ?? 0,
+                        'last_message_timestamp' => $timestamp, // Usar el timestamp directamente
                     ];
                 });
-
-            // Ordenar los contactos por fecha del último mensaje (si existe)
             $sortedContacts = $contacts->sortByDesc('last_message_timestamp')->values();
 
-            // Si se recibe un query parameter "phone", obtenemos los mensajes para ese contacto
+            // Si se selecciona un teléfono, obtener y procesar mensajes
             if ($selectedPhone) {
-                $jid = $selectedPhone . '@s.whatsapp.net';
-                $responseMsgs = Http::timeout(20)->get("$nodeUrl/get-messages/$sessionId/$jid"); // Timeout para mensajes
+                // Asegurarse que no tenga el @s.whatsapp.net si viene del query param
+                $cleanPhone = preg_replace('/@s\.whatsapp\.net$/', '', $selectedPhone);
+                $jid = $cleanPhone . '@s.whatsapp.net';
+
+                $responseMsgs = Http::timeout(20)->get("$nodeUrl/get-messages/$sessionId/$jid");
+
                 if ($responseMsgs->successful()) {
-                    $messages = collect($responseMsgs->json()['messages'] ?? []);
+                    // Iterar sobre la nueva estructura devuelta por la API Node
+                    $messages = collect($responseMsgs->json()['messages'] ?? [])->map(function ($messageItem) {
+                        // Devolvemos un array que contiene tanto los datos originales como la URL pública
+                        return [
+                            'messageData' => $messageItem['messageData'] ?? null, // Mensaje original
+                            'publicMediaUrl' => $messageItem['publicMediaUrl'] ?? null // URL pública del medio
+                        ];
+                    });
                 } else {
-                     // No redirigir, solo mostrar error y la vista con lo que se tenga
+                     Log::error("Failed to get messages for $jid, user $userId. Status: " . $responseMsgs->status());
                      return view('whatsapp.index', compact('sortedContacts', 'selectedPhone', 'messages', 'autoResponseConfig'))
                         ->with('error', __('Could not get messages for the selected contact.'));
                 }
@@ -85,7 +91,6 @@ class WhatsAppController extends Controller
 
         } catch (\Illuminate\Http\Client\ConnectionException $e) {
              Log::error("WhatsApp API connection error for user $userId: " . $e->getMessage());
-             // Mostrar vista con error de conexión
              return view('whatsapp.index', compact('sortedContacts', 'selectedPhone', 'messages', 'autoResponseConfig'))
                     ->with('error', __('Could not connect to the WhatsApp service. Please check if it is running.'));
         } catch (\Exception $e) {
@@ -94,60 +99,69 @@ class WhatsAppController extends Controller
                     ->with('error', __('An unexpected error occurred.'));
         }
 
+        // Pasamos la colección de mensajes formateados a la vista
         return view('whatsapp.index', compact('sortedContacts', 'selectedPhone', 'messages', 'autoResponseConfig'));
     }
 
 
+    /**
+     * Obtiene la conversación para un teléfono específico.
+     * (Considera si este método es necesario o si index() ya cubre la funcionalidad)
+     */
     public function conversation($phone)
     {
+        // --- DEFINICIONES AÑADIDAS ---
         $userId    = Auth::id();
         $sessionId = $userId;
         $nodeUrl   = env('WATSHAPP_URL');
-
-         // Definir variables por defecto
-        $sortedContacts = collect();
-        $messages = collect();
+        $sortedContacts = collect(); // Inicializar
+        $messages = collect(); // Inicializar
         $autoResponseConfig = AutoProcess::where('user_id', $userId)->first();
+        $selectedPhone = $phone; // Guardar el teléfono seleccionado
+        // --- FIN DEFINICIONES AÑADIDAS ---
 
         try {
-             // Obtener contactos desde la API
+             // Obtener contactos desde la API (igual que en index)
             $responseContacts = Http::timeout(15)->get("$nodeUrl/get-chats/$sessionId");
             if (!$responseContacts->successful()) {
-                return redirect()->route('whatsapp.index')->with('error', 'No se pudieron obtener los contactos.'); // Redirigir a index si falla
+                return redirect()->route('whatsapp.index')->with('error', 'No se pudieron obtener los contactos.');
             }
 
-            // Filtrar los contactos válidos
+             // Procesar y ordenar contactos (igual que en index)
             $contacts = collect($responseContacts->json()['chats'] ?? [])
-                ->filter(function ($contact) {
-                    return isset($contact['jid']) && $contact['jid'] !== 'status@broadcast';
-                })
+                ->filter(fn ($contact) => isset($contact['jid']) && $contact['jid'] !== 'status@broadcast')
                 ->map(function ($contact) {
                     $phoneNum = preg_replace('/@s\.whatsapp\.net$/', '', $contact['jid']);
+                    $timestamp = $contact['messageTimestamp'] ?? 0;
                     return [
                         'jid'         => $contact['jid'],
                         'phone'       => $phoneNum,
                         'name'        => $contact['name'] ?? $phoneNum,
-                        'lastMessage' => $contact['lastMessage'] ?? null,
+                        'lastMessageText' => $contact['lastMessageText'] ?? '',
                         'unreadCount' => $contact['unreadCount'] ?? 0,
-                         // Añadir timestamp para ordenar
-                        'last_message_timestamp' => $contact['lastMessage']['messageTimestamp'] ?? 0,
+                        'last_message_timestamp' => $timestamp,
                     ];
                 });
-
-            // Ordenar los contactos por fecha del último mensaje (si existe)
             $sortedContacts = $contacts->sortByDesc('last_message_timestamp')->values();
 
-            // Obtener los mensajes para el contacto seleccionado
-            if (strpos($phone, '@') === false) {
-                $jid = $phone . '@s.whatsapp.net';
-            } else {
-                $jid = $phone; // Asumir que ya es JID completo si tiene @
-            }
+
+            // Obtener mensajes (con corrección)
+            // Limpiar el teléfono por si acaso
+            $cleanPhone = preg_replace('/@s\.whatsapp\.net$/', '', $phone);
+            $jid = $cleanPhone . '@s.whatsapp.net';
+
             $responseMsgs = Http::timeout(20)->get("$nodeUrl/get-messages/$sessionId/$jid");
             if ($responseMsgs->successful()) {
-                $messages = collect($responseMsgs->json()['messages'] ?? []);
+                 // La API Node ya devuelve la estructura correcta
+                 $messages = collect($responseMsgs->json()['messages'] ?? [])->map(function ($messageItem) {
+                     return [
+                         'messageData' => $messageItem['messageData'] ?? null,
+                         'publicMediaUrl' => $messageItem['publicMediaUrl'] ?? null
+                     ];
+                 });
             } else {
-                 return redirect()->route('whatsapp.index')->with('error', 'No se pudieron obtener los mensajes para ' . $phone); // Redirigir a index si falla
+                 Log::error("Failed to get messages for conversation $jid, user $userId. Status: " . $responseMsgs->status());
+                 return redirect()->route('whatsapp.index')->with('error', 'No se pudieron obtener los mensajes para ' . $phone);
             }
 
         } catch (\Illuminate\Http\Client\ConnectionException $e) {
@@ -159,58 +173,76 @@ class WhatsAppController extends Controller
         }
 
 
-        return view('whatsapp.index', [
+         return view('whatsapp.index', [
             'sortedContacts' => $sortedContacts,
-            'selectedPhone'  => $phone, // Pasar el phone limpio
-            'messages'       => $messages,
+            'selectedPhone'  => $selectedPhone, // Usar la variable definida
+            'messages'       => $messages, // Pasar mensajes formateados
             'autoResponseConfig' => $autoResponseConfig,
         ]);
     }
 
     /**
      * Elimina un mensaje individual (en la API de Node).
-     * Espera un {id} que identificará el mensaje en tu base de datos
-     * o la forma en que obtengas "remoteJid", "fromMe", e "id".
+     * Espera que el cuerpo de la petición sea JSON con { "remoteJid": ..., "fromMe": ..., "id": ... }
      */
-    public function destroyMessage($id, Request $request)
+    public function destroyMessage(Request $request)
     {
-        $userId  = Auth::id(); // Usamos el id del usuario como sessionId
+        $userId  = Auth::id();
         $nodeUrl = env('WATSHAPP_URL');
 
-        // Extraemos los datos enviados desde el formulario
-        $remoteJid = $request->input('remoteJid');
-        $fromMe    = $request->input('fromMe');
+        // Obtener datos del cuerpo JSON (asumiendo que el JS envía messageKey)
+        $messageKeyData = $request->input('messageKey');
 
-        if (!$remoteJid || $fromMe === null || !$id) {
-            // Devolver error JSON para AJAX
-            return response()->json(['success' => false, 'message' => 'Datos del mensaje incompletos.'], 400);
+        // Validar que messageKey y sus componentes existan en la *petición de Laravel*
+        if (!$messageKeyData || !isset($messageKeyData['remoteJid']) || !isset($messageKeyData['fromMe']) || !isset($messageKeyData['id'])) {
+            // Este error ahora es menos probable si el JS envía messageKey, pero lo mantenemos por si acaso
+            return response()->json(['success' => false, 'message' => 'Datos del messageKey incompletos recibidos por Laravel.'], 400);
         }
 
+        // --- Preparar datos como campos sueltos para Node.js ---
+        $remoteJid = $messageKeyData['remoteJid'];
+        $fromMe = filter_var($messageKeyData['fromMe'], FILTER_VALIDATE_BOOLEAN); // Asegurar booleano
+        $messageId = $messageKeyData['id'];
+        $participant = $messageKeyData['participant'] ?? null; // Obtener participant si existe
+        // --- FIN Preparación ---
+
+        $messageIdForLog = $messageId;
+
         try {
-            $response = Http::delete("$nodeUrl/delete-message/$userId", [
+            // --- Enviar campos sueltos en el cuerpo JSON a Node.js ---
+            $payload = [ // Crear el payload con campos sueltos
                 'remoteJid' => $remoteJid,
-                'fromMe'    => filter_var($fromMe, FILTER_VALIDATE_BOOLEAN),
-                'id'        => $id,
-            ]);
+                'fromMe'    => $fromMe,
+                'id'        => $messageId,
+            ];
+            // Añadir participant al payload solo si existe y fromMe es false
+            if ($participant && !$fromMe) {
+                $payload['participant'] = $participant;
+            }
+
+            $response = Http::withHeaders(['Content-Type' => 'application/json'])
+                          ->withBody(json_encode($payload), 'application/json') // Enviar el payload con campos sueltos
+                          ->delete("$nodeUrl/delete-message/$userId");
+            // --- FIN Envío ---
+
 
             if ($response->successful()) {
-                 // Devolver éxito JSON
                 return response()->json(['success' => true, 'message' => 'Mensaje eliminado correctamente.']);
             } else {
-                 // Devolver error JSON
-                 Log::error("Error deleting message $id for user $userId: " . $response->body());
-                 return response()->json(['success' => false, 'message' => "Error eliminando el mensaje: " . $response->json()['error'] ?? $response->body()], $response->status());
+                 Log::error("Error deleting message $messageIdForLog for user $userId: " . $response->body());
+                 $errorBody = $response->json();
+                 // El error de Node.js ahora debería ser más específico si algo falla allí
+                 $errorMessage = $errorBody['error'] ?? ($errorBody['message'] ?? $response->body());
+                 return response()->json(['success' => false, 'message' => "Error eliminando el mensaje: " . $errorMessage], $response->status());
             }
         } catch (\Exception $e) {
-             Log::error("Exception deleting message $id for user $userId: " . $e->getMessage());
-             // Devolver error JSON
+             Log::error("Exception deleting message $messageIdForLog for user $userId: " . $e->getMessage());
              return response()->json(['success' => false, 'message' => "Error en la solicitud: " . $e->getMessage()], 500);
         }
     }
 
     /**
      * Elimina todos los mensajes para un contacto (teléfono).
-     * Llama a la API Node para /delete-chat/:sessionId con { jid }
      */
     public function destroyChat($phone)
     {
@@ -218,22 +250,22 @@ class WhatsAppController extends Controller
         $nodeUrl = env('WATSHAPP_URL');
 
         // Convertimos el $phone en el JID esperado por la API Node
-        $jid = $phone . '@s.whatsapp.net';
+        $cleanPhone = preg_replace('/@s\.whatsapp\.net$/', '', $phone);
+        $jid = $cleanPhone . '@s.whatsapp.net';
 
         try {
-            $response = Http::delete("$nodeUrl/delete-chat/$userId", [
-                'jid' => $jid
-            ]);
+            // La API /delete-chat espera el JID en el cuerpo JSON
+            $response = Http::withHeaders(['Content-Type' => 'application/json'])
+                          ->withBody(json_encode(['jid' => $jid]), 'application/json')
+                          ->delete("$nodeUrl/delete-chat/$userId");
 
             if ($response->successful()) {
-                // Opcional: borrar en tu DB los mensajes de ese phone
-                // WhatsappMessage::where('phone', $phone)->delete();
-
-                // Redirigir a index porque la conversación ya no existe
-                return redirect()->route('whatsapp.index')->with('success', "Chat con $phone eliminado correctamente.");
+                return redirect()->route('whatsapp.index')->with('success', "Chat con $cleanPhone eliminado correctamente.");
             } else {
                  Log::error("Error deleting chat $jid for user $userId: " . $response->body());
-                 return back()->with('error', "Error al eliminar chat: " . $response->json()['error'] ?? $response->body());
+                 $errorBody = $response->json();
+                 $errorMessage = $errorBody['error'] ?? ($errorBody['message'] ?? $response->body());
+                 return back()->with('error', "Error al eliminar chat: " . $errorMessage);
             }
         } catch (\Exception $e) {
              Log::error("Exception deleting chat $jid for user $userId: " . $e->getMessage());
@@ -250,39 +282,30 @@ class WhatsAppController extends Controller
         $nodeUrl = env('WATSHAPP_URL');
 
         try {
-            // Llamada a la API de Node.js para obtener los contactos
-            $response = Http::timeout(30)->get("$nodeUrl/get-contacts/$userId"); // Aumentar timeout si es necesario
+            // Llama a /get-contacts de la API Node
+            $response = Http::timeout(30)->get("$nodeUrl/get-contacts/$userId");
 
-            // Verificamos si la solicitud fue exitosa
             if (!$response->successful()) {
                 Log::error("Failed to fetch contacts from API for user $userId. Status: " . $response->status() . " Body: " . $response->body());
-                // Devolver error JSON
                 return response()->json(['success' => false, 'message' => __('Failed to fetch contacts from API.')], $response->status());
             }
 
-            // Obtener los contactos del JSON que se devuelve
             $contactsData = $response->json()['contacts'] ?? [];
-
-            // Array para almacenar los contactos a insertar
             $contactsToInsert = [];
             $importedCount = 0;
 
-            // Iterar sobre los contactos y procesarlos
             foreach ($contactsData as $contact) {
-                // Limpiar el número de teléfono (si tiene @...)
+                // Limpiar el número de teléfono
                 $phone = preg_replace('/@.*$/', '', $contact['jid']);
-
-                // Validar que el teléfono no esté vacío y sea numérico (básico)
                 if (empty($phone) || !is_numeric($phone)) {
                     Log::warning("Skipping invalid contact JID during import for user $userId: " . $contact['jid']);
                     continue;
                 }
-
-                // Verificar si el teléfono ya existe en la base de datos PARA ESTE USUARIO
+                // Verificar si ya existe para este usuario
                 if (!Contact::where('phone', $phone)->where('user_id', $userId)->exists()) {
                     $contactsToInsert[] = [
                         'user_id'   => $userId,
-                        'name' => $contact['name'] ?? $phone, // Usar phone si no hay nombre
+                        'name' => $contact['name'] ?? $phone, // Usar 'name' que viene de la API Node
                         'phone' => $phone,
                         'created_at' => now(),
                         'updated_at' => now(),
@@ -290,16 +313,13 @@ class WhatsAppController extends Controller
                 }
             }
 
-            // Si hay contactos para insertar, los agregamos a la base de datos
             if (!empty($contactsToInsert)) {
                 Contact::insert($contactsToInsert);
                 $importedCount = count($contactsToInsert);
                 Log::info("$importedCount contacts imported for user $userId.");
-                // Devolver éxito JSON
                 return response()->json(['success' => true, 'message' => __(':count contacts imported successfully.', ['count' => $importedCount])]);
             } else {
                 Log::info("No new contacts to import for user $userId.");
-                 // Devolver éxito JSON (pero indicando que no hubo nuevos)
                  return response()->json(['success' => true, 'message' => __('No new contacts were imported.')]);
             }
 
@@ -308,7 +328,6 @@ class WhatsAppController extends Controller
              return response()->json(['success' => false, 'message' => __('Could not connect to the WhatsApp service.')], 500);
         } catch (\Exception $e) {
             Log::error("General error during contact import for user $userId: " . $e->getMessage());
-             // Devolver error JSON
             return response()->json(['success' => false, 'message' => __('An error occurred during import.')], 500);
         }
     }
@@ -317,41 +336,33 @@ class WhatsAppController extends Controller
 
     /**
      * Devuelve los mensajes de una conversación en formato JSON.
-     * (Necesita ruta: Route::get('/whatsapp/messages/json/{phone}', [WhatsAppController::class, 'getMessagesJson'])->name('whatsapp.messages.json');)
      */
     public function getMessagesJson(Request $request, $phone)
     {
         $userId    = Auth::id();
         $sessionId = $userId;
         $nodeUrl   = env('WATSHAPP_URL');
-        $messages  = []; // Valor por defecto
+        $messages  = [];
 
         try {
-            if (strpos($phone, '@') === false) {
-                $jid = $phone . '@s.whatsapp.net';
-            } else {
-                $jid = $phone;
-            }
+            // Limpiar el teléfono por si acaso
+            $cleanPhone = preg_replace('/@s\.whatsapp\.net$/', '', $phone);
+            $jid = $cleanPhone . '@s.whatsapp.net';
 
             $responseMsgs = Http::timeout(20)->get("$nodeUrl/get-messages/$sessionId/$jid");
 
             if ($responseMsgs->successful()) {
+                // La API Node ya devuelve la estructura correcta con messageData y publicMediaUrl
                 $messages = $responseMsgs->json()['messages'] ?? [];
-                // Opcional: añadir timestamp PHP si no viene de la API consistentemente
-                // foreach ($messages as &$msg) {
-                //     $msg['created_at_ts'] = isset($msg['created_at']) ? \Carbon\Carbon::parse($msg['created_at'])->timestamp : ($msg['messageTimestamp'] ?? 0);
-                // }
             } else {
                  Log::error("Failed to get JSON messages for $jid, user $userId. Status: " . $responseMsgs->status());
-                 // Devolver éxito false pero con array vacío para no romper el JS
                  return response()->json(['success' => false, 'messages' => [], 'message' => 'Could not retrieve messages.'], $responseMsgs->status());
             }
 
+            // Devolvemos directamente la estructura recibida
             return response()->json([
                 'success' => true,
                 'messages' => $messages,
-                // Opcional: puedes devolver info del chat también
-                // 'chat_info' => ['name' => 'Nombre Contacto', 'status' => 'online']
             ]);
 
         } catch (\Illuminate\Http\Client\ConnectionException $e) {
@@ -365,16 +376,16 @@ class WhatsAppController extends Controller
 
      /**
      * Devuelve la lista de contactos en formato JSON.
-     * (Necesita ruta: Route::get('/whatsapp/contacts/json', [WhatsAppController::class, 'getContactsJson'])->name('whatsapp.contacts.json');)
      */
     public function getContactsJson(Request $request)
     {
          $userId    = Auth::id();
          $sessionId = $userId;
          $nodeUrl   = env('WATSHAPP_URL');
-         $contacts = []; // Valor por defecto
+         $contacts = [];
 
          try {
+            // Llama a get-chats para obtener la lista formateada y ordenada
             $responseContacts = Http::timeout(15)->get("$nodeUrl/get-chats/$sessionId");
 
             if (!$responseContacts->successful()) {
@@ -382,26 +393,12 @@ class WhatsAppController extends Controller
                  return response()->json(['success' => false, 'contacts' => [], 'message' => 'Could not retrieve contacts.'], $responseContacts->status());
             }
 
-            $rawContacts = $responseContacts->json()['chats'] ?? [];
-
-            $contacts = collect($rawContacts)
-                ->filter(function ($contact) {
-                    return isset($contact['jid']) && $contact['jid'] !== 'status@broadcast';
-                })
-                ->map(function ($contact) {
-                    $phoneNum = preg_replace('/@s\.whatsapp\.net$/', '', $contact['jid']);
-                    return [
-                        'jid'         => $contact['jid'],
-                        'phone'       => $phoneNum,
-                        'name'        => $contact['name'] ?? $phoneNum,
-                        // Añadir timestamp para ordenar en JS si es necesario
-                        'last_message_timestamp' => $contact['lastMessage']['messageTimestamp'] ?? 0,
-                    ];
-                })->values()->all(); // Convertir a array simple
+            // La API /get-chats ya devuelve el formato deseado
+            $contacts = $responseContacts->json()['chats'] ?? [];
 
              return response()->json([
                 'success' => true,
-                'contacts' => $contacts,
+                'contacts' => $contacts, // Devolver directamente
             ]);
 
          } catch (\Illuminate\Http\Client\ConnectionException $e) {
