@@ -43,6 +43,7 @@ use Webklex\IMAP\Facades\Client;
 use App\Http\Controllers\MediaController;
 use App\Http\Controllers\TelegramController;
 use App\Http\Controllers\MapController;
+use App\Http\Controllers\ScrapingTaskController; // Importa el controlador
 
 
 
@@ -399,6 +400,27 @@ Route::get('/api/history/user/{userId}/date/{date}', [MapController::class, 'get
     ->where('userId', '[0-9]+') // Asegura que userId sea numérico
     ->where('date', '[0-9]{4}-[0-9]{2}-[0-9]{2}') // Asegura formato AAAA-MM-DD
     ->name('api.history.user.day');
+
+// --- Grupo de rutas para Scraping Tasks ---
+Route::prefix('scraping-tasks')->name('scraping.tasks.')->group(function () {
+    // Muestra la vista principal con el formulario y la tabla
+    Route::get('/', [ScrapingTaskController::class, 'index'])->name('index');
+
+    // Guarda una nueva tarea creada desde el formulario
+    Route::post('/', [ScrapingTaskController::class, 'store'])->name('store');
+
+    // Proporciona los datos para la DataTable (llamada por AJAX)
+    Route::get('/data', [ScrapingTaskController::class, 'data'])->name('data');
+
+    // Actualiza una tarea existente (llamada por AJAX desde el modal de edición)
+    Route::put('/{task}', [ScrapingTaskController::class, 'update'])->name('update');
+
+    // Elimina una tarea existente (llamada por AJAX desde el botón de borrar)
+    Route::delete('/{task}', [ScrapingTaskController::class, 'destroy'])->name('destroy');
+
+    // *** NUEVA RUTA para ver contactos de una tarea ***
+    Route::get('/{task}/contacts', [ScrapingTaskController::class, 'showContacts'])->name('contacts');
+});
 
 // Grupo de rutas públicas
 Route::group([], function () {

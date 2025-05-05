@@ -4729,9 +4729,9 @@ swagger-ui-express@^5.0.1:
     swagger-ui-dist ">=5.0.0"
 
 sweetalert2@^11.17.2:
-  version "11.20.0"
-  resolved "https://registry.npmjs.org/sweetalert2/-/sweetalert2-11.20.0.tgz"
-  integrity sha512-MuiRY4UcWvdOBg12WUWWdUAFH+njnx7Ot/ibzPRa9Tk2TXfZqGYK4Nlq5c/u9P1EKCgRkkNsMZuoB8SCvSrwgQ==
+  version "11.21.0"
+  resolved "https://registry.npmjs.org/sweetalert2/-/sweetalert2-11.21.0.tgz"
+  integrity sha512-fiEK7SqRY/QD/wC2uqEHlfYGZ7qe2UcyQbJpbpj4YRVqplBgcI+euPZLZL+evLINcvbtXmL1SFUdZHKqBHGAAQ==
 
 tailwindcss@^3.4.17, "tailwindcss@>=2.0.0 || >=3.0.0 || >=3.0.0-alpha.1", "tailwindcss@>=3.0.0 || >= 3.0.0-alpha.1 || >= 4.0.0-alpha.20 || >= 4.0.0-beta.1", "tailwindcss@>=3.0.0 || insiders || >=4.0.0-alpha.20 || >=4.0.0-beta.1":
   version "3.4.17"
@@ -5025,7 +5025,7 @@ vite-plugin-full-reload@^1.1.0:
     picocolors "^1.0.0"
     picomatch "^2.3.1"
 
-"vite@^5.0.0 || ^6.0.0", vite@^6.1.1:
+"vite@^5.0.0 || ^6.0.0", vite@^6.3.4:
   version "6.3.4"
   resolved "https://registry.npmjs.org/vite/-/vite-6.3.4.tgz"
   integrity sha512-BiReIiMS2fyFqbqNT/Qqt4CVITDU9M9vE+DKcVAsB+ZV0wvTKd+3hMbkpxz1b+NmEDMegpVbisKiAZOnvO92Sw==
