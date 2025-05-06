@@ -127,6 +127,7 @@ function loadChats(sessionId) {
   return [];
 }
 
+
 /**
  * Guarda el historial de mensajes en un archivo JSON persistente (messages.json) en la carpeta de la sesión.
  */
@@ -2334,7 +2335,143 @@ app.get('/media/:sessionId/:fileName', (req, res) => {
       res.status(404).json({ error: 'Archivo no encontrado' });
     }
   });
-
+/**
+ * @openapi
+ * /get-autoresponder-rules/{sessionId}:
+ *   get:
+ *     summary: Obtiene las reglas de autorespuesta de una sesión
+ *     description: Devuelve el listado de reglas asociadas al `sessionId` proporcionado.
+ *     tags:
+ *       - Autoresponder
+ *     parameters:
+ *       - in: path
+ *         name: sessionId
+ *         required: true
+ *         description: Identificador de la sesión
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Listado de reglas obtenido correctamente
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 rules:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                     properties:
+ *                       keyword:
+ *                         type: string
+ *                         description: Palabra clave que dispara la regla
+ *                       response:
+ *                         type: string
+ *                         description: Mensaje de respuesta asociado
+ *                     required:
+ *                       - keyword
+ *                       - response
+ *               required:
+ *                 - rules
+ *       404:
+ *         description: No se encontró la sesión
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 error:
+ *                   type: string
+ *                   example: Sesión no encontrada
+ */
+// Ruta para OBTENER las reglas
+app.get('/get-autoresponder-rules/:sessionId', (req, res) => {
+    // ... (lógica para obtener y devolver las reglas)
+    const { sessionId } = req.params;
+    const sessionRules = autoresponderRules[sessionId] || [];
+    res.json({ rules: sessionRules });
+});
+/**
+ * @openapi
+ * /delete-autoresponder-rule/{sessionId}:
+ *   delete:
+ *     summary: Elimina una regla de autorespuesta de una sesión
+ *     description: Borra la regla que coincida con el campo `keyword` en la sesión indicada.
+ *     tags:
+ *       - Autoresponder
+ *     parameters:
+ *       - in: path
+ *         name: sessionId
+ *         required: true
+ *         description: Identificador de la sesión
+ *         schema:
+ *           type: string
+ *     requestBody:
+ *       description: Keyword de la regla a eliminar
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               keyword:
+ *                 type: string
+ *                 description: Palabra clave de la regla a eliminar
+ *             required:
+ *               - keyword
+ *             example:
+ *               keyword: "hola"
+ *     responses:
+ *       200:
+ *         description: Regla eliminada correctamente
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: Regla para "hola" eliminada.
+ *               required:
+ *                 - message
+ *       400:
+ *         description: Petición mal formada (p.ej. falta `keyword`)
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 error:
+ *                   type: string
+ *                   example: Parámetro `keyword` es obligatorio.
+ *               required:
+ *                 - error
+ *       404:
+ *         description: Sesión o regla no encontrada
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 error:
+ *                   type: string
+ *                   example: Sesión o regla no encontrada.
+ *               required:
+ *                 - error
+ */
+// Ruta para BORRAR una regla
+app.delete('/delete-autoresponder-rule/:sessionId', (req, res) => {
+    // ... (lógica para encontrar y borrar la regla)
+     const { sessionId } = req.params;
+    const { keyword } = req.body;
+    if (!keyword) { /* ... manejo de error ... */ }
+    if (!autoresponderRules[sessionId]) { /* ... manejo de error ... */ }
+    const initialLength = autoresponderRules[sessionId].length;
+    autoresponderRules[sessionId] = autoresponderRules[sessionId].filter(rule => rule.keyword.toLowerCase() !== keyword.toLowerCase());
+    if (autoresponderRules[sessionId].length === initialLength) { /* ... manejo de error ... */ }
+    res.json({ message: `Regla para "${keyword}" eliminada.` });
+});
 /**
  * Procesa el mensaje multimedia: usa downloadContentFromMessage para obtener el buffer desencriptado,
  * lo guarda en la carpeta /media raíz y retorna la URL pública.
