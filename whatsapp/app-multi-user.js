@@ -127,6 +127,46 @@ function loadChats(sessionId) {
   return [];
 }
 
+/**
+ * Guarda las reglas de autoresponder en un archivo JSON persistente (autoresponder_rules.json)
+ * en la carpeta de la sesión.
+ */
+function saveAutoresponderRules(sessionId, rules) {
+    try {
+      const filePath = path.join(STORE_FILE_PATH, sessionId, 'autoresponder_rules.json');
+      // Asegurarse de que 'rules' sea un array, incluso si está vacío
+      const rulesToSave = Array.isArray(rules) ? rules : [];
+      fs.writeFileSync(filePath, JSON.stringify(rulesToSave, null, 2));
+      console.log(`💾 Reglas de autoresponder guardadas para ${sessionId} en ${filePath}`);
+    } catch (error) {
+      console.error(`❌ Error al guardar reglas de autoresponder para ${sessionId}:`, error);
+    }
+  }
+
+  /**
+   * Carga las reglas de autoresponder desde el archivo persistente.
+   */
+  function loadAutoresponderRules(sessionId) {
+    try {
+      const filePath = path.join(STORE_FILE_PATH, sessionId, 'autoresponder_rules.json');
+      if (fs.existsSync(filePath)) {
+        const data = fs.readFileSync(filePath);
+        const rules = JSON.parse(data);
+        // Asegurarse de que devuelve un array
+        if (Array.isArray(rules)) {
+             console.log(`🔍 Reglas de autoresponder cargadas para ${sessionId}:`, rules.length);
+             return rules;
+        } else {
+            console.warn(`⚠️ El archivo de reglas para ${sessionId} no contenía un array. Se devolverá un array vacío.`);
+            return []; // Devolver array vacío si el formato no es correcto
+        }
+      }
+    } catch (error) {
+      console.error(`❌ Error al cargar reglas de autoresponder para ${sessionId}:`, error);
+    }
+    // Si no existe el archivo o hay error, devolver un array vacío
+    return [];
+  }
 
 /**
  * Guarda el historial de mensajes en un archivo JSON persistente (messages.json) en la carpeta de la sesión.
@@ -212,6 +252,11 @@ async function startSession(sessionId) {
     chats: loadChats(sessionId),
     storeInterval,
   };
+
+
+  // Cargar las reglas de autoresponder para esta sesión al iniciar
+  autoresponderRules[sessionId] = loadAutoresponderRules(sessionId);
+  // --------------------------
 
   // Evento para capturar mensajes (recibidos y enviados)
     sock.ev.on('messages.upsert', async (m) => {
@@ -1441,14 +1486,21 @@ app.post('/set-autoresponder/:sessionId', (req, res) => {
     const { sessionId } = req.params;
     const { keyword, response } = req.body;
     if (!keyword || !response) {
-      return res.status(400).json({ error: 'Se requieren "keyword" y "response".' });
+        return res.status(400).json({ error: 'Se requieren "keyword" y "response".' });
     }
     if (!autoresponderRules[sessionId]) {
-      autoresponderRules[sessionId] = [];
+        autoresponderRules[sessionId] = [];
     }
+    // Añadir la nueva regla
     autoresponderRules[sessionId].push({ keyword: keyword.toLowerCase(), response });
+
+    // --- AÑADIR ESTA LÍNEA ---
+    // Guardar las reglas actualizadas en el archivo
+    saveAutoresponderRules(sessionId, autoresponderRules[sessionId]);
+    // --------------------------
+
     res.json({ message: 'Regla de autoresponder configurada', rules: autoresponderRules[sessionId] });
-  });
+});
 
 /**
  * @swagger
@@ -2462,15 +2514,30 @@ app.get('/get-autoresponder-rules/:sessionId', (req, res) => {
  */
 // Ruta para BORRAR una regla
 app.delete('/delete-autoresponder-rule/:sessionId', (req, res) => {
-    // ... (lógica para encontrar y borrar la regla)
-     const { sessionId } = req.params;
+    const { sessionId } = req.params;
     const { keyword } = req.body;
-    if (!keyword) { /* ... manejo de error ... */ }
-    if (!autoresponderRules[sessionId]) { /* ... manejo de error ... */ }
+
+    if (!keyword) {
+        return res.status(400).json({ error: 'Falta la palabra clave (keyword) en el cuerpo de la petición.' });
+    }
+
+    if (!autoresponderRules[sessionId]) {
+        return res.status(404).json({ error: 'No se encontraron reglas para esta sesión o la regla específica no existe.' });
+    }
+
     const initialLength = autoresponderRules[sessionId].length;
     autoresponderRules[sessionId] = autoresponderRules[sessionId].filter(rule => rule.keyword.toLowerCase() !== keyword.toLowerCase());
-    if (autoresponderRules[sessionId].length === initialLength) { /* ... manejo de error ... */ }
-    res.json({ message: `Regla para "${keyword}" eliminada.` });
+
+    if (autoresponderRules[sessionId].length === initialLength) {
+        return res.status(404).json({ error: `Regla con la palabra clave "${keyword}" no encontrada.` });
+    }
+
+    // --- AÑADIR ESTA LÍNEA ---
+    // Guardar las reglas actualizadas tras eliminar una
+    saveAutoresponderRules(sessionId, autoresponderRules[sessionId]);
+    // --------------------------
+
+    res.json({ message: `Regla para "${keyword}" eliminada correctamente.` });
 });
 /**
  * Procesa el mensaje multimedia: usa downloadContentFromMessage para obtener el buffer desencriptado,
