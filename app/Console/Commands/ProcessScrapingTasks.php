@@ -106,7 +106,7 @@ class ProcessScrapingTasks extends Command
                 $endpoint = '/buscar-google-ddg-limpio';
                 $payload = [
                     'keyword' => $task->keyword,
-                    'results' => 100, // Ajustado, puedes hacerlo configurable
+                    'results' => 1000, // Ajustado, puedes hacerlo configurable
                     'callback_url' => $callbackUrl,
                 ];
                 break;
@@ -115,7 +115,7 @@ class ProcessScrapingTasks extends Command
                 $payload = [
                     'actividad' => $task->keyword,
                     'provincia' => $task->region,
-                    'paginas' => 5, // Ajustado, puedes hacerlo configurable
+                    'paginas' => 100, // Ajustado, puedes hacerlo configurable
                     'callback_url' => $callbackUrl,
                 ];
                 break;
@@ -124,7 +124,7 @@ class ProcessScrapingTasks extends Command
                 $payload = [
                     'actividad' => $task->keyword,
                     'provincia' => $task->region,
-                    'paginas' => 5, // Ajustado, aunque Python use 1, enviamos lo solicitado
+                    'paginas' => 1, // Ajustado, aunque Python use 1, enviamos lo solicitado
                     'callback_url' => $callbackUrl,
                 ];
                 break;
