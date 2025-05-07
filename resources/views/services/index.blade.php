@@ -94,8 +94,11 @@
                         </div>
 
                         <div class="flex flex-wrap gap-3">
-                            {{-- Botón "Create Service" ultra simplificado --}}
-                            <button type="submit" style="border: 1px solid black; padding: 5px 10px; background-color: lightgray;">
+                            {{-- Botón "Create Service" con estilo más visible --}}
+                            <button type="submit"
+                                    class="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 dark:bg-indigo-700 dark:hover:bg-indigo-600 text-white font-medium text-sm rounded-md shadow-md hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 dark:focus:ring-offset-slate-800 transition duration-150 ease-in-out">
+                                {{-- Puedes volver a añadir el icono si quieres, ahora que el botón tiene fondo --}}
+                                {{-- <iconify-icon icon="heroicons:plus-circle" class="mr-2"></iconify-icon> --}}
                                 {{ __('Create Service') }}
                             </button>
                         </div>
@@ -199,9 +202,9 @@
                 // Lógica para el formulario colapsable
                 const toggleHeader = document.getElementById('toggleServiceFormHeader');
                 const formContainer = document.getElementById('serviceFormContainer');
-                const toggleButton = document.getElementById('formToggleButton'); // Referencia al botón de texto
+                const toggleIconElement = document.getElementById('formToggleIcon');
 
-                if (toggleHeader && formContainer && toggleButton) {
+                if (toggleHeader && formContainer && toggleIconElement) {
                     function setFormState(expand, animate = true) {
                         if (!animate) {
                             formContainer.style.transition = 'none';
@@ -211,11 +214,13 @@
 
                         if (expand) {
                             formContainer.classList.add('expanded');
-                            toggleButton.textContent = '-'; // Cambiar texto a '-'
+                            toggleIconElement.setAttribute('icon', 'heroicons:minus-circle-20-solid');
+                            toggleIconElement.classList.add('rotated');
                             toggleHeader.setAttribute('aria-expanded', 'true');
                         } else {
                             formContainer.classList.remove('expanded');
-                            toggleButton.textContent = '+'; // Cambiar texto a '+'
+                            toggleIconElement.setAttribute('icon', 'heroicons:plus-circle-20-solid');
+                            toggleIconElement.classList.remove('rotated');
                             toggleHeader.setAttribute('aria-expanded', 'false');
                         }
 
@@ -227,14 +232,14 @@
                     }
 
                     const hasValidationErrors = {{ ($errors->any() && old('_token')) ? 'true' : 'false' }};
-                    setFormState(hasValidationErrors, false); // Establecer estado inicial
+                    setFormState(hasValidationErrors, false);
 
                     toggleHeader.addEventListener('click', function () {
                         const isExpanded = formContainer.classList.contains('expanded');
-                        setFormState(!isExpanded); // Alternar estado
+                        setFormState(!isExpanded);
                     });
                 } else {
-                     console.error('Toggle elements not found! Check IDs: toggleServiceFormHeader, serviceFormContainer, formToggleButton');
+                     console.error('Toggle elements not found! Check IDs: toggleServiceFormHeader, serviceFormContainer, formToggleIcon');
                 }
 
                 // Inicializar DataTables y otros plugins que dependen de jQuery

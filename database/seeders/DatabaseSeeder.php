@@ -30,6 +30,9 @@ class DatabaseSeeder extends Seeder
             ShiftDaysSeeder::class,
             MediaSeeder::class,
             HostListSeeder::class,
+            ServiceSeeder::class,
+            DiscountSeeder::class, // Add this line
+            ClientSeeder::class,
         ]);
 
     }

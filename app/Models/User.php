@@ -17,6 +17,7 @@ use Spatie\MediaLibrary\MediaCollections\Models\Media;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Intervention\Image\Facades\Image;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 
 class User extends Authenticatable implements MustVerifyEmail, HasMedia
 {
@@ -188,6 +189,12 @@ class User extends Authenticatable implements MustVerifyEmail, HasMedia
         return $this->belongsToMany(ShiftDay::class, 'shift_day_user', 'user_id', 'shift_day_id')
                     ->using(ShiftDayUser::class)
                     ->withTimestamps();
+    }
+
+    // En app/Models/User.php
+    public function tasks(): BelongsToMany
+    {
+        return $this->belongsToMany(Task::class, 'task_user');
     }
 }
 

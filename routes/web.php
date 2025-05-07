@@ -44,7 +44,7 @@ use App\Http\Controllers\MediaController;
 use App\Http\Controllers\TelegramController;
 use App\Http\Controllers\MapController;
 use App\Http\Controllers\ScrapingTaskController; // Importa el controlador
-
+use App\Http\Controllers\ServiceController; // Asegúrate de importar tu controlador
 
 
 require __DIR__ . '/auth.php';
@@ -383,7 +383,7 @@ Route::get('/auto-response-whatsapp-get', [AutoProcessController::class, 'getWha
     // image show
     Route::get('/images/{media}', [ImageController::class, 'show'])->name('image.show');
 
-});
+
 
 
 
@@ -401,6 +401,8 @@ Route::get('/api/history/user/{userId}/date/{date}', [MapController::class, 'get
     ->where('date', '[0-9]{4}-[0-9]{2}-[0-9]{2}') // Asegura formato AAAA-MM-DD
     ->name('api.history.user.day');
 
+
+});
 // --- Grupo de rutas para Scraping Tasks ---
 Route::middleware(['auth'])->prefix('scraping-tasks')->name('scraping.tasks.')->group(function () {
     Route::get('/', [ScrapingTaskController::class, 'index'])->name('index')->middleware('can:scrapingtasks index');
@@ -409,6 +411,14 @@ Route::middleware(['auth'])->prefix('scraping-tasks')->name('scraping.tasks.')->
     Route::put('/{task}', [ScrapingTaskController::class, 'update'])->name('update')->middleware('can:scrapingtasks update');
     Route::delete('/{task}', [ScrapingTaskController::class, 'destroy'])->name('destroy')->middleware('can:scrapingtasks delete');
     Route::get('/{task}/contacts', [ScrapingTaskController::class, 'showContacts'])->name('contacts')->middleware('can:scrapingtasks show_contacts');
+});
+
+Route::middleware(['auth'])->group(function () {
+
+    // Rutas para Services
+    // IMPORTANTE: La ruta específica 'services/data' debe ir ANTES de Route::resource
+    Route::get('services/data', [ServiceController::class, 'data'])->name('services.data');
+    Route::resource('services', ServiceController::class);
 });
 
 // Grupo de rutas públicas
