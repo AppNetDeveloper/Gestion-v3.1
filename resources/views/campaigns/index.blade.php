@@ -94,8 +94,8 @@
                         </div>
 
                         <div class="flex flex-wrap gap-3">
-                            {{-- Botón "Create Service" ultra simplificado --}}
-                            <button type="submit" style="border: 1px solid black; padding: 5px 10px; background-color: lightgray;">
+                            {{-- Botón "Create Service" con estilos forzados para asegurar visibilidad --}}
+                            <button type="submit" style="border: 2px solid #000000 !important; padding: 8px 16px !important; background-color: #d1d5db !important; color: #000000 !important; display: inline-block !important; font-weight: bold !important; opacity: 1 !important; visibility: visible !important; border-radius: 4px !important; box-shadow: 0 2px 4px rgba(0,0,0,0.1) !important; position: relative !important; z-index: 50 !important;">
                                 {{ __('Create Service') }}
                             </button>
                         </div>
