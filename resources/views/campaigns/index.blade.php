@@ -12,56 +12,87 @@
     @if (session('error'))
         <x-alert :message="session('error')" :type="'danger'" />
     @endif
+    {{-- Mostrar errores de validación del formulario de creación --}}
+    @if ($errors->any() && old('_token')) {{-- old('_token') ayuda a asegurar que los errores son de este formulario --}}
+        <div class="mb-4 p-4 bg-red-100 dark:bg-red-900 border border-red-200 dark:border-red-700 text-red-700 dark:text-red-200 rounded-lg">
+            <p class="font-semibold mb-2">{{ __('Please correct the following errors:') }}</p>
+            <ul class="list-disc list-inside">
+                @foreach ($errors->all() as $error)
+                    <li>{{ $error }}</li>
+                @endforeach
+            </ul>
+        </div>
+    @endif
     {{-- Alert end --}}
 
     <div class="card bg-white dark:bg-slate-800 shadow-xl rounded-lg">
-        {{-- Entire <header> block was removed previously --}}
-
         <div class="card-body p-6">
-            {{-- Formulario para crear nueva campaña --}}
+            {{-- Formulario colapsable para crear nueva campaña --}}
             <div class="mb-8 p-4 border border-slate-200 dark:border-slate-700 rounded-lg">
-                <h3 class="text-xl font-semibold text-slate-700 dark:text-slate-200 mb-4">{{ __('Create New Campaign') }}</h3>
-                <form action="{{ route('campaigns.store') }}" method="POST" class="space-y-6">
-                    @csrf
-                    <div>
-                        <label for="prompt" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
-                            {{ __('Campaign Prompt') }}
-                        </label>
-                        <textarea id="prompt" name="prompt" rows="4"
-                                  class="inputField w-full p-3 border border-slate-300 dark:border-slate-600 rounded-md dark:bg-slate-900 focus:ring-indigo-500 focus:border-indigo-500 dark:focus:ring-indigo-500 dark:focus:border-indigo-500 transition"
-                                  placeholder="{{ __('Enter your campaign prompt...') }}" required>{{ old('prompt') }}</textarea>
-                    </div>
+                {{-- Encabezado para desplegar/colapsar --}}
+                <div id="toggleCampaignFormHeader" class="flex justify-between items-center cursor-pointer">
+                    <h3 class="text-xl font-semibold text-slate-700 dark:text-slate-200">{{ __('Create New Campaign') }}</h3>
+                    <button type="button" aria-expanded="false" aria-controls="campaignFormContainer"
+                            class="bg-indigo-100 hover:bg-indigo-200 dark:bg-slate-700 dark:hover:bg-slate-600 text-indigo-600 dark:text-indigo-400 p-1 rounded-full focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 dark:focus:ring-offset-slate-800
+                                   flex items-center justify-center w-8 h-8 transition-colors duration-150">
+                        <iconify-icon id="campaignFormToggleIcon" icon="heroicons:plus-circle-20-solid" class="text-2xl transition-transform duration-300 ease-in-out"></iconify-icon>
+                    </button>
+                </div>
 
-                    <div>
-                        <label for="campaign_start" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
-                            {{ __('Campaign Start Date & Time') }}
-                        </label>
-                        <input type="datetime-local" id="campaign_start" name="campaign_start"
-                               class="inputField w-full p-3 border border-slate-300 dark:border-slate-600 rounded-md dark:bg-slate-900 focus:ring-indigo-500 focus:border-indigo-500 dark:focus:ring-indigo-500 dark:focus:border-indigo-500 transition"
-                               placeholder="{{ __('Select date and time') }}" value="{{ old('campaign_start') }}">
-                    </div>
+                {{-- Contenedor del formulario --}}
+                <div id="campaignFormContainer" class="overflow-hidden"> {{-- mt-6 se maneja con CSS/JS --}}
+                    <form action="{{ route('campaigns.store') }}" method="POST" class="space-y-6 pt-6">
+                        @csrf
+                        <div>
+                            <label for="prompt" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                                {{ __('Campaign Prompt') }} <span class="text-red-500">*</span>
+                            </label>
+                            <textarea id="prompt" name="prompt" rows="4"
+                                      class="inputField w-full p-3 border {{ $errors->has('prompt') ? 'border-red-500' : 'border-slate-300 dark:border-slate-600' }} rounded-md dark:bg-slate-900 focus:ring-indigo-500 focus:border-indigo-500 dark:focus:ring-indigo-500 dark:focus:border-indigo-500 transition"
+                                      placeholder="{{ __('Enter your campaign prompt...') }}" required>{{ old('prompt') }}</textarea>
+                            @error('prompt')
+                                <p class="mt-1 text-xs text-red-500">{{ $message }}</p>
+                            @enderror
+                        </div>
 
-                    <div>
-                        <label for="model" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
-                            {{ __('Select Model') }}
-                        </label>
-                        <select id="model" name="model"
-                                class="inputField w-full p-3 border border-slate-300 dark:border-slate-600 rounded-md dark:bg-slate-900 focus:ring-indigo-500 focus:border-indigo-500 dark:focus:ring-indigo-500 dark:focus:border-indigo-500 transition">
-                            <option value="whatsapp" {{ old('model') == 'whatsapp' ? 'selected' : '' }}>{{ __('WhatsApp') }}</option>
-                            <option value="email" {{ old('model') == 'email' ? 'selected' : '' }}>{{ __('Email') }}</option>
-                            <option value="sms" {{ old('model') == 'sms' ? 'selected' : '' }}>{{ __('SMS') }}</option>
-                            <option value="telegram" {{ old('model') == 'telegram' ? 'selected' : '' }}>{{ __('Telegram') }}</option>
-                        </select>
-                    </div>
+                        <div>
+                            <label for="campaign_start" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                                {{ __('Campaign Start Date & Time') }}
+                            </label>
+                            <input type="datetime-local" id="campaign_start" name="campaign_start"
+                                   class="inputField w-full p-3 border {{ $errors->has('campaign_start') ? 'border-red-500' : 'border-slate-300 dark:border-slate-600' }} rounded-md dark:bg-slate-900 focus:ring-indigo-500 focus:border-indigo-500 dark:focus:ring-indigo-500 dark:focus:border-indigo-500 transition"
+                                   placeholder="{{ __('Select date and time') }}" value="{{ old('campaign_start') }}">
+                             @error('campaign_start')
+                                <p class="mt-1 text-xs text-red-500">{{ $message }}</p>
+                            @enderror
+                        </div>
 
-                    {{-- BOTÓN DE CREAR CAMPAÑA CON ESTILOS VERDES PARA DIAGNÓSTICO --}}
-                    <div class="flex flex-wrap gap-3">
-                        <button type="submit" class="px-6 py-2.5 bg-green-500 hover:bg-green-600 dark:bg-green-700 dark:hover:bg-green-600 text-white rounded-full flex items-center transition-colors duration-150">
-                            <iconify-icon icon="bi:send-fill" class="mr-2"></iconify-icon>
-                            {{ __('Create Campaign') }}
-                        </button>
-                    </div>
-                </form>
+                        <div>
+                            <label for="model" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                                {{ __('Select Model') }} <span class="text-red-500">*</span>
+                            </label>
+                            <select id="model" name="model"
+                                    class="inputField w-full p-3 border {{ $errors->has('model') ? 'border-red-500' : 'border-slate-300 dark:border-slate-600' }} rounded-md dark:bg-slate-900 focus:ring-indigo-500 focus:border-indigo-500 dark:focus:ring-indigo-500 dark:focus:border-indigo-500 transition" required>
+                                <option value="" disabled {{ old('model') ? '' : 'selected' }}>{{ __('Select an option') }}</option>
+                                <option value="whatsapp" {{ old('model') == 'whatsapp' ? 'selected' : '' }}>{{ __('WhatsApp') }}</option>
+                                <option value="email" {{ old('model') == 'email' ? 'selected' : '' }}>{{ __('Email') }}</option>
+                                <option value="sms" {{ old('model') == 'sms' ? 'selected' : '' }}>{{ __('SMS') }}</option>
+                                <option value="telegram" {{ old('model') == 'telegram' ? 'selected' : '' }}>{{ __('Telegram') }}</option>
+                            </select>
+                             @error('model')
+                                <p class="mt-1 text-xs text-red-500">{{ $message }}</p>
+                            @enderror
+                        </div>
+
+                        {{-- Botón de Crear Campaña --}}
+                        <div class="flex flex-wrap gap-3">
+                            <button type="submit" class="px-6 py-2.5 bg-green-500 hover:bg-green-600 dark:bg-green-700 dark:hover:bg-green-600 text-white rounded-full flex items-center transition-colors duration-150 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 dark:focus:ring-offset-slate-800">
+                                <iconify-icon icon="bi:send-fill" class="mr-2"></iconify-icon>
+                                {{ __('Create Campaign') }}
+                            </button>
+                        </div>
+                    </form>
+                </div>
             </div>
 
             <div class="mt-8">
@@ -95,158 +126,54 @@
         {{-- <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css"> --}}
 
         <style>
-            .inputField:focus {
-                /* Tailwind's focus classes handle this */
+            .inputField:focus { /* Tailwind's focus classes handle this */ }
+            table.dataTable#campaignsTable { border-spacing: 0; }
+            table.dataTable#campaignsTable th, table.dataTable#campaignsTable td { padding: 0.75rem 1rem; vertical-align: middle; }
+            table.dataTable#campaignsTable tbody tr:hover { background-color: #f9fafb; }
+            .dark table.dataTable#campaignsTable tbody tr:hover { background-color: #1f2937; }
+            table.dataTable thead th.sorting:after, table.dataTable thead th.sorting_asc:after, table.dataTable thead th.sorting_desc:after { display: inline-block; margin-left: 5px; opacity: 0.5; color: inherit; }
+            table.dataTable thead th.sorting:after { content: "\\2195"; }
+            table.dataTable thead th.sorting_asc:after { content: "\\2191"; }
+            table.dataTable thead th.sorting_desc:after { content: "\\2193"; }
+            .swal2-popup { width: 90% !important; max-width: 1000px !important; border-radius: 0.5rem !important; }
+            .dark .swal2-popup { background: #1f2937 !important; color: #d1d5db !important; }
+            .dark .swal2-title { color: #f3f4f6 !important; }
+            .dark .swal2-html-container { color: #d1d5db !important; }
+            .dark .swal2-actions button.swal2-confirm { background-color: #4f46e5 !important; }
+            .dark .swal2-actions button.swal2-cancel { background-color: #4b5563 !important; }
+            .custom-swal-input, .custom-swal-textarea { width: 100% !important; max-width: 100% !important; box-sizing: border-box !important; padding: 0.75rem !important; display: block !important; border: 1px solid #d1d5db !important; border-radius: 0.375rem !important; background-color: #fff !important; color: #111827 !important; }
+            .custom-swal-input:focus, .custom-swal-textarea:focus { outline: none !important; border-color: #4f46e5 !important; box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.3) !important; }
+            .dark .custom-swal-input, .dark .custom-swal-textarea { background-color: #374151 !important; border-color: #4b5563 !important; color: #f3f4f6 !important; }
+            .dark .custom-swal-input:focus, .dark .custom-swal-textarea:focus { border-color: #6366f1 !important; box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.4) !important; }
+            .dataTables_wrapper .dataTables_paginate .paginate_button { display: inline-flex !important; align-items: center !important; justify-content: center !important; padding: 0.5rem 1rem !important; margin: 0 0.125rem !important; border: 1px solid #d1d5db !important; border-radius: 0.375rem !important; background-color: #f9fafb !important; color: #374151 !important; cursor: pointer !important; transition: background-color 0.15s ease-in-out, border-color 0.15s ease-in-out, color 0.15s ease-in-out; }
+            .dataTables_wrapper .dataTables_paginate .paginate_button.current { background-color: #4f46e5 !important; color: #fff !important; border-color: #4f46e5 !important; }
+            .dataTables_wrapper .dataTables_paginate .paginate_button:hover:not(.current) { background-color: #f3f4f6 !important; border-color: #9ca3af !important; }
+            .dark .dataTables_wrapper .dataTables_paginate .paginate_button { background-color: #374151 !important; color: #d1d5db !important; border-color: #4b5563 !important; }
+            .dark .dataTables_wrapper .dataTables_paginate .paginate_button.current { background-color: #4f46e5 !important; color: #fff !important; border-color: #4f46e5 !important; }
+            .dark .dataTables_wrapper .dataTables_paginate .paginate_button:hover:not(.current) { background-color: #4b5563 !important; border-color: #6b7280 !important; }
+            .dataTables_wrapper .dataTables_length, .dataTables_wrapper .dataTables_filter, .dataTables_wrapper .dataTables_info, .dataTables_wrapper .dataTables_paginate { padding-top: 1rem; }
+            .dataTables_wrapper .dataTables_filter input { padding: 0.5rem 0.75rem; border: 1px solid #d1d5db; border-radius: 0.375rem; background-color: #fff; }
+            .dark .dataTables_wrapper .dataTables_filter input { background-color: #374151; border-color: #4b5563; color: #f3f4f6; }
+            .dataTables_wrapper .dataTables_length select { padding: 0.5rem 2rem 0.5rem 0.75rem; border: 1px solid #d1d5db; border-radius: 0.375rem; background-color: #fff; }
+            .dark .dataTables_wrapper .dataTables_length select { background-color: #374151; border-color: #4b5563; color: #f3f4f6; }
+            .dataTables_footer { display: flex; justify-content: space-between; align-items: center; margin-top: 1rem; padding-top: 1rem; border-top: 1px solid #e5e7eb; }
+            .dark .dataTables_footer { border-top-color: #374151; }
+
+            /* Estilos para el contenedor colapsable */
+            #campaignFormContainer {
+                max-height: 0;
+                overflow: hidden;
+                transition: max-height 0.5s ease-out, opacity 0.5s ease-out, padding-top 0.5s ease-out;
+                opacity: 0;
+                padding-top: 0 !important;
             }
-            table.dataTable#campaignsTable {
-                border-spacing: 0;
+            #campaignFormContainer.expanded {
+                max-height: 1000px; /* Ajusta si tu formulario es muy alto */
+                opacity: 1;
+                padding-top: 1.5rem !important; /* Corresponde a pt-6 en el form */
             }
-            table.dataTable#campaignsTable th,
-            table.dataTable#campaignsTable td {
-                padding: 0.75rem 1rem;
-                vertical-align: middle;
-            }
-            table.dataTable#campaignsTable tbody tr:hover {
-                background-color: #f9fafb;
-            }
-            .dark table.dataTable#campaignsTable tbody tr:hover {
-                background-color: #1f2937;
-            }
-             table.dataTable thead th.sorting:after,
-             table.dataTable thead th.sorting_asc:after,
-             table.dataTable thead th.sorting_desc:after {
-                 display: inline-block;
-                 margin-left: 5px;
-                 opacity: 0.5;
-                 color: inherit;
-             }
-             table.dataTable thead th.sorting:after { content: "\\2195"; }
-             table.dataTable thead th.sorting_asc:after { content: "\\2191"; }
-             table.dataTable thead th.sorting_desc:after { content: "\\2193"; }
-            .swal2-popup {
-                width: 90% !important;
-                max-width: 1000px !important;
-                border-radius: 0.5rem !important;
-            }
-            .dark .swal2-popup {
-                background: #1f2937 !important;
-                color: #d1d5db !important;
-            }
-            .dark .swal2-title {
-                color: #f3f4f6 !important;
-            }
-            .dark .swal2-html-container {
-                color: #d1d5db !important;
-            }
-            .dark .swal2-actions button.swal2-confirm {
-                background-color: #4f46e5 !important; /* Indigo-600 */
-            }
-            .dark .swal2-actions button.swal2-cancel {
-                background-color: #4b5563 !important; /* Slate-600 */
-            }
-            .custom-swal-input,
-            .custom-swal-textarea {
-                width: 100% !important;
-                max-width: 100% !important;
-                box-sizing: border-box !important;
-                padding: 0.75rem !important;
-                display: block !important;
-                border: 1px solid #d1d5db !important; /* slate-300 */
-                border-radius: 0.375rem !important; /* rounded-md */
-                background-color: #fff !important; /* Light mode background */
-                color: #111827 !important; /* Light mode text */
-            }
-            .custom-swal-input:focus,
-            .custom-swal-textarea:focus {
-                outline: none !important;
-                border-color: #4f46e5 !important; /* indigo-500 */
-                box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.3) !important; /* Indigo focus ring */
-            }
-            .dark .custom-swal-input,
-            .dark .custom-swal-textarea {
-                background-color: #374151 !important; /* dark:bg-slate-700 */
-                border-color: #4b5563 !important; /* dark:border-slate-600 */
-                color: #f3f4f6 !important; /* dark:text-slate-100 */
-            }
-            .dark .custom-swal-input:focus,
-            .dark .custom-swal-textarea:focus {
-                border-color: #6366f1 !important; /* indigo-500 for dark */
-                box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.4) !important;
-            }
-            .dataTables_wrapper .dataTables_paginate .paginate_button {
-                display: inline-flex !important;
-                align-items: center !important;
-                justify-content: center !important;
-                padding: 0.5rem 1rem !important;
-                margin: 0 0.125rem !important;
-                border: 1px solid #d1d5db !important;
-                border-radius: 0.375rem !important;
-                background-color: #f9fafb !important;
-                color: #374151 !important;
-                cursor: pointer !important;
-                transition: background-color 0.15s ease-in-out, border-color 0.15s ease-in-out, color 0.15s ease-in-out;
-            }
-            .dataTables_wrapper .dataTables_paginate .paginate_button.current {
-                background-color: #4f46e5 !important;
-                color: #fff !important;
-                border-color: #4f46e5 !important;
-            }
-            .dataTables_wrapper .dataTables_paginate .paginate_button:hover:not(.current) {
-                background-color: #f3f4f6 !important;
-                border-color: #9ca3af !important;
-            }
-            .dark .dataTables_wrapper .dataTables_paginate .paginate_button {
-                background-color: #374151 !important;
-                color: #d1d5db !important;
-                border-color: #4b5563 !important;
-            }
-            .dark .dataTables_wrapper .dataTables_paginate .paginate_button.current {
-                background-color: #4f46e5 !important;
-                color: #fff !important;
-                border-color: #4f46e5 !important;
-            }
-            .dark .dataTables_wrapper .dataTables_paginate .paginate_button:hover:not(.current) {
-                background-color: #4b5563 !important;
-                border-color: #6b7280 !important;
-            }
-            .dataTables_wrapper .dataTables_length,
-            .dataTables_wrapper .dataTables_filter,
-            .dataTables_wrapper .dataTables_info,
-            .dataTables_wrapper .dataTables_paginate {
-                padding-top: 1rem;
-            }
-            .dataTables_wrapper .dataTables_filter input {
-                padding: 0.5rem 0.75rem;
-                border: 1px solid #d1d5db; /* slate-300 */
-                border-radius: 0.375rem; /* rounded-md */
-                background-color: #fff;
-            }
-            .dark .dataTables_wrapper .dataTables_filter input {
-                background-color: #374151; /* dark:bg-slate-700 */
-                border-color: #4b5563; /* dark:border-slate-600 */
-                color: #f3f4f6; /* dark:text-slate-100 */
-            }
-            .dataTables_wrapper .dataTables_length select {
-                padding: 0.5rem 2rem 0.5rem 0.75rem; /* Adjust padding for arrow */
-                border: 1px solid #d1d5db;
-                border-radius: 0.375rem;
-                background-color: #fff;
-            }
-             .dark .dataTables_wrapper .dataTables_length select {
-                background-color: #374151;
-                border-color: #4b5563;
-                color: #f3f4f6;
-            }
-            .dataTables_footer {
-                display: flex;
-                justify-content: space-between;
-                align-items: center;
-                margin-top: 1rem;
-                padding-top: 1rem;
-                border-top: 1px solid #e5e7eb; /* slate-200 */
-            }
-            .dark .dataTables_footer {
-                border-top-color: #374151; /* dark:border-slate-700 */
+            #campaignFormToggleIcon.rotated {
+                transform: rotate(180deg);
             }
         </style>
     @endpush
@@ -259,6 +186,51 @@
 
         <script>
             $(document).ready(function() {
+                // Lógica para el formulario colapsable de Campañas
+                const campaignToggleHeader = document.getElementById('toggleCampaignFormHeader');
+                const campaignFormContainer = document.getElementById('campaignFormContainer');
+                const campaignToggleIconElement = document.getElementById('campaignFormToggleIcon');
+
+                if (campaignToggleHeader && campaignFormContainer && campaignToggleIconElement) {
+                    function setCampaignFormState(expand, animate = true) {
+                        if (!animate) {
+                            campaignFormContainer.style.transition = 'none';
+                        } else {
+                            campaignFormContainer.style.transition = 'max-height 0.5s ease-out, opacity 0.5s ease-out, padding-top 0.5s ease-out';
+                        }
+
+                        if (expand) {
+                            campaignFormContainer.classList.add('expanded');
+                            campaignToggleIconElement.setAttribute('icon', 'heroicons:minus-circle-20-solid');
+                            campaignToggleIconElement.classList.add('rotated');
+                            campaignToggleHeader.setAttribute('aria-expanded', 'true');
+                        } else {
+                            campaignFormContainer.classList.remove('expanded');
+                            campaignToggleIconElement.setAttribute('icon', 'heroicons:plus-circle-20-solid');
+                            campaignToggleIconElement.classList.remove('rotated');
+                            campaignToggleHeader.setAttribute('aria-expanded', 'false');
+                        }
+
+                         if (!animate) {
+                           requestAnimationFrame(() => {
+                                campaignFormContainer.style.transition = 'max-height 0.5s ease-out, opacity 0.5s ease-out, padding-top 0.5s ease-out';
+                           });
+                        }
+                    }
+
+                    // Comprobar si hay errores de validación para el formulario de campañas
+                    const campaignHasValidationErrors = {{ ($errors->any() && old('_token')) ? 'true' : 'false' }};
+                    setCampaignFormState(campaignHasValidationErrors, false); // Establecer estado inicial sin animación
+
+                    campaignToggleHeader.addEventListener('click', function () {
+                        const isExpanded = campaignFormContainer.classList.contains('expanded');
+                        setCampaignFormState(!isExpanded); // Alternar estado con animación
+                    });
+                } else {
+                     console.error('Campaign toggle elements not found! Check IDs: toggleCampaignFormHeader, campaignFormContainer, campaignFormToggleIcon');
+                }
+
+
                 // Initialize DataTable and store its instance
                 const campaignsDataTable = $('#campaignsTable').DataTable({
                     dom: "<'flex flex-col md:flex-row md:justify-between gap-4 mb-4'<'md:w-1/2'l><'md:w-1/2'f>>" +
