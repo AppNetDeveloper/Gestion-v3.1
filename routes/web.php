@@ -44,7 +44,9 @@ use App\Http\Controllers\MediaController;
 use App\Http\Controllers\TelegramController;
 use App\Http\Controllers\MapController;
 use App\Http\Controllers\ScrapingTaskController; // Importa el controlador
-use App\Http\Controllers\ServiceController; // Asegúrate de importar tu controlador
+use App\Http\Controllers\ServiceController; // Controlador de Servicios
+use App\Http\Controllers\ClientController;  // Importar Controlador de Clientes
+use App\Http\Controllers\QuoteController;   // Importar Controlador de Presupuestos
 
 
 require __DIR__ . '/auth.php';
@@ -419,6 +421,14 @@ Route::middleware(['auth'])->group(function () {
     // IMPORTANTE: La ruta específica 'services/data' debe ir ANTES de Route::resource
     Route::get('services/data', [ServiceController::class, 'data'])->name('services.data');
     Route::resource('services', ServiceController::class);
+
+    // Rutas para Clients
+    Route::get('clients/data', [ClientController::class, 'data'])->name('clients.data'); // Para DataTables AJAX
+    Route::resource('clients', ClientController::class);
+
+    // Rutas para Quotes (Presupuestos)
+    Route::get('quotes/data', [QuoteController::class, 'data'])->name('quotes.data'); // Para DataTables AJAX
+    Route::resource('quotes', QuoteController::class);
 });
 
 // Grupo de rutas públicas
