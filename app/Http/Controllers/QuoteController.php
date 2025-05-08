@@ -11,6 +11,8 @@ use Illuminate\Support\Facades\Validator;
 use Yajra\DataTables\Facades\DataTables; // Si usas Yajra DataTables
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\DB; // Para transacciones
+use Barryvdh\DomPDF\Facade\Pdf; // <--- Asegúrate de tener esta línea
+
 
 class QuoteController extends Controller
 {
@@ -428,6 +430,35 @@ class QuoteController extends Controller
         } catch (\Exception $e) {
             Log::error('Error deleting quote: '.$e->getMessage());
             return response()->json(['error' => __('An error occurred while deleting the quote.')], 500);
+        }
+    }
+    // *** AÑADIR ESTE MÉTODO ***
+    /**
+     * Export the specified quote as PDF.
+     *
+     * @param  \App\Models\Quote  $quote
+     * @return \Illuminate\Http\Response
+     */
+    public function exportPdf(Quote $quote)
+    {
+        // Cargar las relaciones necesarias
+        $quote->load('client', 'items.service');
+
+        // Datos para pasar a la vista PDF
+        $data = [
+            'quote' => $quote,
+        ];
+
+        try {
+            // Generar el PDF usando la vista Blade específica
+            $pdf = Pdf::loadView('quotes.pdf_template', $data);
+
+            // Mostrar el PDF en el navegador
+            return $pdf->stream('quote-'.$quote->quote_number.'.pdf');
+
+        } catch (\Exception $e) {
+            Log::error('Error generating PDF for quote #'.$quote->id.': '.$e->getMessage());
+            return redirect()->route('quotes.show', $quote->id)->with('error', __('Could not generate PDF.'));
         }
     }
 }

@@ -136,14 +136,14 @@
                                 {{ __('Notes to Client') }}
                             </label>
                             <textarea id="notes_to_client" name="notes_to_client" rows="3"
-                                      class="inputField w-full p-3 border {{ $errors->has('notes_to_client') ? 'border-red-500' : 'border-slate-300 dark:border-slate-600' }} rounded-md dark:bg-slate-900 focus:ring-indigo-500 focus:border-indigo-500 dark:focus:ring-indigo-500 dark:focus:border-indigo-500 transition">{{ old('notes_to_client') }}</textarea>
+                                      class="inputField w-full p-3 border {{ $errors->has('notes_to_client') ? 'border-red-500' : 'border-slate-300 dark:border-slate-600' }} rounded-md dark:bg-slate-900 focus:ring-indigo-500 focus:border-indigo-500 dark:focus:ring-indigo-500 dark:focus:border-indigo-500 transition">{{ old('notes_to_client', __('Default quote notes')) }}</textarea>
                         </div>
                          <div>
                             <label for="terms_and_conditions" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
                                 {{ __('Terms & Conditions') }}
                             </label>
                             <textarea id="terms_and_conditions" name="terms_and_conditions" rows="3"
-                                      class="inputField w-full p-3 border {{ $errors->has('terms_and_conditions') ? 'border-red-500' : 'border-slate-300 dark:border-slate-600' }} rounded-md dark:bg-slate-900 focus:ring-indigo-500 focus:border-indigo-500 dark:focus:ring-indigo-500 dark:focus:border-indigo-500 transition">{{ old('terms_and_conditions') }}</textarea>
+                                      class="inputField w-full p-3 border {{ $errors->has('terms_and_conditions') ? 'border-red-500' : 'border-slate-300 dark:border-slate-600' }} rounded-md dark:bg-slate-900 focus:ring-indigo-500 focus:border-indigo-500 dark:focus:ring-indigo-500 dark:focus:border-indigo-500 transition">{{ old('terms_and_conditions', __('Default quote terms')) }}</textarea>
                         </div>
                          <div>
                             <label for="internal_notes" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
@@ -202,6 +202,7 @@
             {{-- Servicio (Selector) --}}
             <div class="col-span-12 md:col-span-3">
                 <label class="block text-xs mb-1 sr-only">{{ __('Service') }}</label>
+                {{-- Añadir clase 'select2' si se carga globalmente --}}
                 <select name="items[__INDEX__][service_id]" class="inputField item-service select2 w-full p-2 text-sm border border-slate-300 dark:border-slate-600 rounded-md dark:bg-slate-900">
                      <option value="">{{ __('Select or type description') }}</option>
                      @foreach($services ?? [] as $service)
@@ -245,9 +246,7 @@
 
     {{-- Estilos adicionales --}}
     @push('styles')
-        <link rel="stylesheet" href="https://cdn.datatables.net/1.13.6/css/jquery.dataTables.min.css">
-        <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css">
-        {{-- Select2 CSS --}}
+        {{-- Cargar CSS de Select2 aquí --}}
         <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
         <style>
             /* Estilos para Select2 */
@@ -267,7 +266,7 @@
             .dark .select2-results__option { color: #cbd5e1 !important; }
             .dark .select2-container--default .select2-results__option--highlighted[aria-selected] { background-color: #4f46e5 !important; }
 
-            /* Estilos generales (copiados) */
+            /* Estilos generales */
             .inputField:focus { /* Tailwind's focus classes handle this */ }
             .swal2-popup { width: 90% !important; max-width: 700px !important; border-radius: 0.5rem !important; }
             .dark .swal2-popup { background: #1f2937 !important; color: #d1d5db !important; }
@@ -307,29 +306,39 @@
             // Esperar a que jQuery esté listo
              $(function() {
                  // Verificar si Select2 está cargado
-                if (typeof $.fn.select2 === 'undefined') {
-                    console.error('Select2 plugin is not loaded.');
-                } else {
-                    // Inicializar Select2 en los selectores iniciales
-                    const $clientSelect = $('#client_id');
-                    const $discountSelect = $('#discount_id');
+                 const isSelect2Loaded = typeof $.fn.select2 !== 'undefined';
+                 if (!isSelect2Loaded) {
+                    console.warn('Select2 plugin is not loaded. Using standard dropdowns.');
+                 } else {
+                     console.log('Select2 plugin IS loaded.');
+                     // Inicializar Select2 en los selectores que tengan la clase 'select2'
+                     $('.select2').each(function() {
+                         const $select = $(this);
+                         const placeholderText = $select.find('option[disabled]').text() || $select.find('option[value=""]').text() || 'Select an option';
+                         try {
+                             $select.select2({
+                                 placeholder: placeholderText,
+                                 allowClear: true,
+                                 width: '100%'
+                             });
+                             console.log('Select2 initialized for:', $select.attr('id') || $select.attr('name'));
+                         } catch (error) {
+                             console.error('Error initializing Select2 for:', $select.attr('id') || $select.attr('name'), error);
+                         }
+                     });
 
-                    $clientSelect.select2({ placeholder: "{{ __('Select a client') }}", allowClear: true })
-                        .on('select2:select', function(e) {
-                            const selectedOption = e.params.data.element;
-                            currentVatRate = parseFloat($(selectedOption).data('vat-rate')) || defaultVatRate;
-                            $('#vatRateDisplay').text(currentVatRate.toFixed(2));
-                            calculateTotals();
-                        })
-                        .on('select2:unselect', function(e) {
-                            currentVatRate = defaultVatRate;
-                            $('#vatRateDisplay').text(currentVatRate.toFixed(2));
-                            calculateTotals();
-                        });
+                     // Añadir listeners específicos de Select2
+                     $('#client_id').on('select2:select', handleClientChange)
+                                     .on('select2:unselect', handleClientUnselect);
+                     $('#discount_id').on('change', calculateTotals);
 
-                    $discountSelect.select2({ placeholder: "{{ __('None') }}", allowClear: true })
-                        .on('change', calculateTotals);
-                }
+                 } // Fin del else (Select2 está cargado)
+
+                 // Si Select2 NO está cargado, añadir listeners 'change' normales
+                 if (!isSelect2Loaded) {
+                     $('#client_id').on('change', handleClientChange);
+                     $('#discount_id').on('change', calculateTotals);
+                 }
 
 
                 const itemsContainer = $('#quoteItemsContainer');
@@ -345,20 +354,23 @@
                     itemsContainer.append($newRow);
 
                     const $newSelect = $newRow.find('.item-service');
-                    if (typeof $.fn.select2 !== 'undefined' && $newSelect.length) {
-                        $newSelect.select2({ placeholder: "{{ __('Select or type description') }}", allowClear: true })
-                        .on('select2:select', function (e) {
-                            const selectedOption = e.params.data.element;
-                            if (!selectedOption) return;
-                            const $row = $(this).closest('.quote-item-row');
-                            const description = $(selectedOption).data('description') || '';
-                            const price = $(selectedOption).data('price') || '0.00';
-                            $row.find('.item-description').val(description);
-                            $row.find('.item-price').val(price);
-                            updateLineTotal($row);
-                            calculateTotals();
-                        });
-                    } else { console.error('Select2 plugin not loaded or new select element not found.'); }
+
+                    // Intentar inicializar Select2 si está cargado
+                    if (isSelect2Loaded && $newSelect.length) {
+                         try {
+                            $newSelect.select2({ placeholder: "{{ __('Select or type description') }}", allowClear: true, width: '100%' })
+                            .on('select2:select', handleServiceSelect);
+                            console.log('Select2 initialized for new item row:', itemIndex);
+                         } catch (error) {
+                             console.error('Error initializing Select2 for new item row:', itemIndex, error);
+                             // Fallback si falla la inicialización de Select2 en la nueva fila
+                             $newSelect.on('change', handleServiceSelect);
+                         }
+                    } else {
+                        // Fallback a listener 'change' normal
+                        $newSelect.on('change', handleServiceSelect);
+                        if(!isSelect2Loaded) console.warn('Select2 not loaded for new item row:', itemIndex, '. Using standard change listener.');
+                    }
 
                     $newRow.find('.remove-item-btn').on('click', function() { $newRow.remove(); calculateTotals(); });
                     $newRow.find('.item-quantity, .item-price').on('input', function() { updateLineTotal($newRow); calculateTotals(); });
@@ -366,6 +378,58 @@
                     itemIndex++;
                     updateLineTotal($newRow);
                 }
+
+                // Handler para el cambio de servicio (funciona con select2:select y change)
+                function handleServiceSelect(e) {
+                    let selectedOption;
+                    // Verificar si el evento viene de Select2 o es un evento 'change' normal
+                    if (isSelect2Loaded && e.type === 'select2:select') {
+                        selectedOption = e.params.data.element;
+                        console.log('Service selected (Select2)');
+                    } else if (e.target && e.target.tagName === 'SELECT') { // Verificar si es un evento 'change' de un select
+                        selectedOption = $(this).find('option:selected')[0];
+                        console.log('Service selected (Standard Change)');
+                    } else {
+                        console.log('Unknown event type or target for service select:', e.type, e.target);
+                        return; // Salir si no es un evento esperado
+                    }
+
+                    if (!selectedOption || !$(selectedOption).val()) { console.log('No valid service option selected'); return; }
+
+                    const $row = $(this).closest('.quote-item-row');
+                    const description = $(selectedOption).data('description') || '';
+                    const price = $(selectedOption).data('price') || '0.00';
+                    console.log('Service data:', { description, price });
+                    $row.find('.item-description').val(description);
+                    $row.find('.item-price').val(price);
+                    updateLineTotal($row);
+                    calculateTotals();
+                }
+
+                 // Handler para el cambio de cliente (funciona con select2:select y change)
+                 function handleClientChange(e) {
+                    let selectedOption;
+                    if (isSelect2Loaded && e.type === 'select2:select') {
+                        selectedOption = e.params.data.element;
+                    } else if (e.target && e.target.tagName === 'SELECT') {
+                         selectedOption = $(this).find('option:selected')[0];
+                    } else {
+                         console.log('Unknown event type or target for client select:', e.type, e.target);
+                         return;
+                    }
+                    const rateAttr = $(selectedOption).data('vat-rate');
+                    currentVatRate = (rateAttr !== undefined && !isNaN(parseFloat(rateAttr))) ? parseFloat(rateAttr) : defaultVatRate;
+                    $('#vatRateDisplay').text(currentVatRate.toFixed(2));
+                    calculateTotals();
+                 }
+
+                 // Handler para deseleccionar cliente (solo Select2)
+                 function handleClientUnselect(e) {
+                    currentVatRate = defaultVatRate;
+                    $('#vatRateDisplay').text(currentVatRate.toFixed(2));
+                    calculateTotals();
+                 }
+
 
                 // Función para actualizar el total de una línea
                 function updateLineTotal($row) {
@@ -392,23 +456,21 @@
                     if (selectedDiscountId) {
                         const selectedDiscount = discountsData.find(d => d.id == selectedDiscountId);
                         if (selectedDiscount) {
-                            if (selectedDiscount.type === 'percentage') {
-                                discountAmount = subtotal * (parseFloat(selectedDiscount.value) / 100);
-                            } else if (selectedDiscount.type === 'fixed_amount') {
-                                discountAmount = parseFloat(selectedDiscount.value);
-                            }
+                            if (selectedDiscount.type === 'percentage') { discountAmount = subtotal * (parseFloat(selectedDiscount.value) / 100); }
+                            else if (selectedDiscount.type === 'fixed_amount') { discountAmount = parseFloat(selectedDiscount.value); }
                         }
                     }
                     discountAmount = Math.min(subtotal, discountAmount);
 
                     const taxableBase = subtotal - discountAmount;
-                    const taxAmount = taxableBase * (currentVatRate / 100); // Usar currentVatRate
+                    const validVatRate = (!isNaN(parseFloat(currentVatRate))) ? parseFloat(currentVatRate) : defaultVatRate;
+                    const taxAmount = taxableBase * (validVatRate / 100);
                     const total = taxableBase + taxAmount;
 
                     $('#quoteSubtotal').text(subtotal.toFixed(2) + ' €');
                     $('#quoteDiscount').text(discountAmount.toFixed(2) + ' €');
                     $('#quoteTaxes').text(taxAmount.toFixed(2) + ' €');
-                    $('#vatRateDisplay').text(currentVatRate.toFixed(2));
+                    $('#vatRateDisplay').text(validVatRate.toFixed(2));
                     $('#quoteTotal').text(total.toFixed(2) + ' €');
 
                     $('#inputSubtotal').val(subtotal.toFixed(2));
@@ -442,13 +504,19 @@
                 // Calcular totales iniciales después de asegurar que el cliente 'old' se procese
                 const oldClientId = "{{ old('client_id') }}";
                 if(oldClientId){
-                    const $selectedOption = $('#client_id').find('option[value="' + oldClientId + '"]');
-                    if($selectedOption.length > 0){
-                         currentVatRate = parseFloat($selectedOption.data('vat-rate')) || defaultVatRate;
-                         $('#vatRateDisplay').text(currentVatRate.toFixed(2));
-                    }
+                     // Esperar un instante para que Select2 (si existe) o el DOM estén listos
+                    setTimeout(function() {
+                        const $selectedOption = $('#client_id').find('option[value="' + oldClientId + '"]');
+                        if($selectedOption.length > 0){
+                             const rateAttr = $selectedOption.data('vat-rate');
+                             currentVatRate = (rateAttr !== undefined && !isNaN(parseFloat(rateAttr))) ? parseFloat(rateAttr) : defaultVatRate;
+                             $('#vatRateDisplay').text(currentVatRate.toFixed(2));
+                        }
+                        calculateTotals(); // Calcular totales iniciales aquí
+                    }, 100);
+                } else {
+                    calculateTotals(); // Calcular totales iniciales si no hay cliente 'old'
                 }
-                calculateTotals();
 
             }); // Fin document ready jQuery
         </script>
