@@ -94,11 +94,10 @@
                         </div>
 
                         <div class="flex flex-wrap gap-3">
-                            {{-- Botón "Create Service" con estilo más visible --}}
+                            {{-- Botón "Create Service" con estilo del ejemplo (verde, redondeado, con icono) --}}
                             <button type="submit"
-                                    class="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 dark:bg-indigo-700 dark:hover:bg-indigo-600 text-white font-medium text-sm rounded-md shadow-md hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 dark:focus:ring-offset-slate-800 transition duration-150 ease-in-out">
-                                {{-- Puedes volver a añadir el icono si quieres, ahora que el botón tiene fondo --}}
-                                {{-- <iconify-icon icon="heroicons:plus-circle" class="mr-2"></iconify-icon> --}}
+                                    class="px-6 py-2.5 bg-green-500 hover:bg-green-600 dark:bg-green-700 dark:hover:bg-green-600 text-white rounded-full flex items-center transition-colors duration-150 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 dark:focus:ring-offset-slate-800">
+                                <iconify-icon icon="bi:send-fill" class="mr-2"></iconify-icon>
                                 {{ __('Create Service') }}
                             </button>
                         </div>
@@ -202,7 +201,7 @@
                 // Lógica para el formulario colapsable
                 const toggleHeader = document.getElementById('toggleServiceFormHeader');
                 const formContainer = document.getElementById('serviceFormContainer');
-                const toggleIconElement = document.getElementById('formToggleIcon');
+                const toggleIconElement = document.getElementById('formToggleIcon'); // Referencia al Iconify
 
                 if (toggleHeader && formContainer && toggleIconElement) {
                     function setFormState(expand, animate = true) {
@@ -214,12 +213,12 @@
 
                         if (expand) {
                             formContainer.classList.add('expanded');
-                            toggleIconElement.setAttribute('icon', 'heroicons:minus-circle-20-solid');
+                            toggleIconElement.setAttribute('icon', 'heroicons:minus-circle-20-solid'); // Cambiar icono
                             toggleIconElement.classList.add('rotated');
                             toggleHeader.setAttribute('aria-expanded', 'true');
                         } else {
                             formContainer.classList.remove('expanded');
-                            toggleIconElement.setAttribute('icon', 'heroicons:plus-circle-20-solid');
+                            toggleIconElement.setAttribute('icon', 'heroicons:plus-circle-20-solid'); // Cambiar icono
                             toggleIconElement.classList.remove('rotated');
                             toggleHeader.setAttribute('aria-expanded', 'false');
                         }
@@ -232,11 +231,11 @@
                     }
 
                     const hasValidationErrors = {{ ($errors->any() && old('_token')) ? 'true' : 'false' }};
-                    setFormState(hasValidationErrors, false);
+                    setFormState(hasValidationErrors, false); // Establecer estado inicial
 
                     toggleHeader.addEventListener('click', function () {
                         const isExpanded = formContainer.classList.contains('expanded');
-                        setFormState(!isExpanded);
+                        setFormState(!isExpanded); // Alternar estado
                     });
                 } else {
                      console.error('Toggle elements not found! Check IDs: toggleServiceFormHeader, serviceFormContainer, formToggleIcon');
