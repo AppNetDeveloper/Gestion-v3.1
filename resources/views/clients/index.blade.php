@@ -195,7 +195,7 @@
                                 <th class="px-4 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-300 uppercase tracking-wider border-b-2 border-slate-200 dark:border-slate-600">{{ __('Email') }}</th>
                                 <th class="px-4 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-300 uppercase tracking-wider border-b-2 border-slate-200 dark:border-slate-600">{{ __('Phone') }}</th>
                                 <th class="px-4 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-300 uppercase tracking-wider border-b-2 border-slate-200 dark:border-slate-600">{{ __('VAT Number') }}</th>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-300 uppercase tracking-wider border-b-2 border-slate-200 dark:border-slate-600">{{ __('VAT Rate') }}</th> {{-- Nueva Columna --}}
+                                <th class="px-4 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-300 uppercase tracking-wider border-b-2 border-slate-200 dark:border-slate-600">{{ __('VAT Rate') }}</th>
                                 <th class="px-4 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-300 uppercase tracking-wider border-b-2 border-slate-200 dark:border-slate-600">{{ __('City') }}</th>
                                 <th class="px-4 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-300 uppercase tracking-wider border-b-2 border-slate-200 dark:border-slate-600">{{ __('Created At') }}</th>
                                 <th class="px-4 py-3 text-center text-xs font-medium text-slate-500 dark:text-slate-300 uppercase tracking-wider border-b-2 border-slate-200 dark:border-slate-600">{{ __('Action') }}</th>
@@ -300,13 +300,13 @@
                                      $('#clientsTable tbody').html( `<tr><td colspan="9" class="text-center py-10 text-red-500">${errorMsg}</td></tr>` ); // Ajustado colspan a 9
                                 }
                             },
-                            columns: [ // Añadida columna vat_rate
+                            columns: [ // Añadida columna vat_rate_display
                                 { data: 'id', className: 'text-sm text-slate-700 dark:text-slate-300' },
                                 { data: 'name', className: 'text-sm text-slate-700 dark:text-slate-300' },
                                 { data: 'email', className: 'text-sm text-slate-700 dark:text-slate-300' },
                                 { data: 'phone', className: 'text-sm text-slate-700 dark:text-slate-300' },
                                 { data: 'vat_number', name: 'vat_number', className: 'text-sm text-slate-700 dark:text-slate-300' },
-                                { data: 'vat_rate', name: 'vat_rate', className: 'text-sm text-slate-700 dark:text-slate-300 text-right', render: function(data) { return data !== null ? parseFloat(data).toFixed(2) + '%' : '-'; } }, // Nueva columna formateada
+                                { data: 'vat_rate_display', name: 'vat_rate', className: 'text-sm text-slate-700 dark:text-slate-300 text-right' }, // Columna para mostrar formateado
                                 { data: 'city', className: 'text-sm text-slate-700 dark:text-slate-300' },
                                 { data: 'created_at', className: 'text-sm text-slate-700 dark:text-slate-300' },
                                 { data: 'action', orderable: false, searchable: false, className: 'text-sm text-center' }
@@ -321,12 +321,65 @@
                             }
                         });
 
-                        // Handler para eliminar un cliente (sin cambios)
-                        $('#clientsTable').on('click', '.deleteClient', function () { /* ... */ });
+                        // Handler para eliminar un cliente
+                        $('#clientsTable').on('click', '.deleteClient', function () {
+                            const clientId = $(this).data('id');
+                            console.log('Delete button clicked for client ID:', clientId); // Log para depurar
+                            if (!clientId) {
+                                console.error('Client ID not found for delete button.');
+                                return;
+                            }
+                            Swal.fire({
+                                title: '{{ __("Are you sure?") }}',
+                                text: '{{ __("This will delete the client permanently.") }}',
+                                icon: 'warning',
+                                showCancelButton: true,
+                                confirmButtonText: '{{ __("Delete") }}',
+                                cancelButtonText: '{{ __("Cancel") }}',
+                                confirmButtonColor: '#e11d48',
+                                cancelButtonColor: '#64748b',
+                                customClass: { popup: $('html').hasClass('dark') ? 'dark-swal-popup' : '' }
+                            }).then((result) => {
+                                if (result.isConfirmed) {
+                                    console.log('Confirmed deletion for client ID:', clientId); // Log para depurar
+                                    fetch(`/clients/${clientId}`, {
+                                        method: 'DELETE',
+                                        headers: {
+                                            'Content-Type': 'application/json',
+                                            'X-CSRF-TOKEN': '{{ csrf_token() }}'
+                                        }
+                                    })
+                                    .then(response => {
+                                        console.log('Fetch response status:', response.status); // Log para depurar
+                                        return response.json();
+                                    })
+                                    .then(data => {
+                                        console.log('Fetch response data:', data); // Log para depurar
+                                        if (data.success) {
+                                            Swal.fire('{{ __("Deleted!") }}', data.success, 'success');
+                                            clientsDataTable.ajax.reload(null, false);
+                                        } else {
+                                            Swal.fire('{{ __("Error") }}', data.error || '{{ __("An error occurred") }}', 'error');
+                                        }
+                                    })
+                                    .catch(error => {
+                                        console.error('Delete fetch error:', error); // Log para depurar
+                                        Swal.fire('{{ __("Error") }}', '{{ __("An error occurred while deleting the client.") }}', 'error');
+                                    });
+                                }
+                            });
+                        });
+
 
                         // Handler para editar un cliente (actualizado para vat_rate)
                         $('#clientsTable').on('click', '.editClient', function () {
                             const clientId = $(this).data('id');
+                            console.log('Edit button clicked for client ID:', clientId); // Log para depurar
+                            if (!clientId) {
+                                console.error('Client ID not found for edit button.');
+                                return;
+                            }
+                            // Obtener todos los datos del cliente desde los data-attributes
                             const name = $(this).data('name');
                             const email = $(this).data('email');
                             const phone = $(this).data('phone');
@@ -337,6 +390,7 @@
                             const postal_code = $(this).data('postal_code');
                             const country = $(this).data('country');
                             const notes = $(this).data('notes');
+                             console.log('Editing data:', {clientId, name, email, phone, vat_number, vat_rate, address, city, postal_code, country, notes}); // Log para depurar
 
                             Swal.fire({
                                 title: '{{ __("Edit Client") }}',
@@ -349,7 +403,7 @@
                                         {{-- VAT Number y VAT Rate --}}
                                         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                                             <div> <label for="edit_client_vat" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">{{ __("VAT Number (NIF/CIF)") }}</label> <input type="text" id="edit_client_vat" class="custom-swal-input" value="${$('<div/>').text(vat_number).html()}"> </div>
-                                            <div> <label for="edit_client_vat_rate" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">{{ __("Applicable VAT Rate (%)") }}</label> <input type="number" id="edit_client_vat_rate" step="0.01" min="0" max="100" class="custom-swal-input" value="${vat_rate !== null ? parseFloat(vat_rate).toFixed(2) : ''}" placeholder="21.00"> </div>
+                                            <div> <label for="edit_client_vat_rate" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">{{ __("Applicable VAT Rate (%)") }}</label> <input type="number" id="edit_client_vat_rate" step="0.01" min="0" max="100" class="custom-swal-input" value="${vat_rate !== null && vat_rate !== undefined ? parseFloat(vat_rate).toFixed(2) : ''}" placeholder="21.00"> </div>
                                         </div>
                                         {{-- Dirección --}}
                                         <div> <label for="edit_client_address" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">{{ __("Address") }}</label> <textarea id="edit_client_address" class="custom-swal-textarea" rows="2">${$('<div/>').text(address).html()}</textarea> </div>
@@ -390,13 +444,18 @@
                             }).then((result) => {
                                 if (result.isConfirmed && result.value) {
                                     const data = result.value;
+                                    console.log('Submitting update data:', data); // Log para depurar
                                     fetch(`/clients/${clientId}`, {
                                         method: 'PUT',
                                         headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': '{{ csrf_token() }}' },
                                         body: JSON.stringify(data)
                                     })
-                                    .then(response => response.json())
+                                    .then(response => {
+                                        console.log('Update response status:', response.status); // Log para depurar
+                                        return response.json();
+                                    })
                                     .then(resp => {
+                                        console.log('Update response data:', resp); // Log para depurar
                                         if (resp.success) {
                                             Swal.fire('{{ __("Updated!") }}', resp.success, 'success');
                                             clientsDataTable.ajax.reload(null, false);
@@ -405,7 +464,7 @@
                                             else { Swal.fire('{{ __("Error") }}', resp.error || '{{ __("An error occurred while updating.") }}', 'error'); }
                                         }
                                     })
-                                    .catch(error => { console.error('Update error:', error); Swal.fire('{{ __("Error") }}', '{{ __("An error occurred while updating the client.") }}', 'error'); });
+                                    .catch(error => { console.error('Update fetch error:', error); Swal.fire('{{ __("Error") }}', '{{ __("An error occurred while updating the client.") }}', 'error'); });
                                 }
                             });
                         });
