@@ -19,6 +19,7 @@ class ClientSeeder extends Seeder
             'email' => 'contacto@empresauno.es',
             'phone' => '912345678',
             'vat_number' => 'B12345678',
+            'vat_rate' => 21.00, // <-- Campo añadido
             'address' => 'Calle Falsa 123, Oficina A',
             'city' => 'Madrid',
             'postal_code' => '28001',
@@ -30,6 +31,7 @@ class ClientSeeder extends Seeder
             'email' => 'juan.perez@autonomo.es',
             'phone' => '600123456',
             'vat_number' => '12345678Z',
+            'vat_rate' => 21.00, // <-- Campo añadido
             'address' => 'Avenida Principal 45, Bajo',
             'city' => 'Barcelona',
             'postal_code' => '08001',
@@ -40,6 +42,7 @@ class ClientSeeder extends Seeder
             'name' => 'Tech Solutions Global',
             'email' => 'info@techglobalsolutions.com',
             'phone' => '933219876',
+            'vat_rate' => 0.00, // <-- Ejemplo con IVA 0 (quizás intracomunitario o exento)
             // vat_number, address, etc. pueden ser nullables si así los definiste
         ]);
     }

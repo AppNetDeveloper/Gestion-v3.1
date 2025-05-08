@@ -20,11 +20,21 @@ class Client extends Model
         'email',
         'phone',
         'vat_number', // NIF/CIF
+        'vat_rate',   // <-- AÑADIDO AQUÍ
         'address',
         'city',
         'postal_code',
         'country',
         'notes',
+    ];
+
+    /**
+     * The attributes that should be cast.
+     *
+     * @var array<string, string>
+     */
+    protected $casts = [
+        'vat_rate' => 'decimal:2', // <-- AÑADIDO AQUÍ (para manejarlo como decimal)
     ];
 
     /**

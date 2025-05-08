@@ -17,10 +17,10 @@
     <div class="card bg-white dark:bg-slate-800 shadow-xl rounded-lg">
         <div class="card-body p-6">
 
-            {{-- Botón para ir a la página de creación --}}
+            {{-- Botón para ir a la página de creación (con clases Bootstrap) --}}
             <div class="mb-6 text-right"> {{-- Alineado a la derecha --}}
-                <a href="{{ route('quotes.create') }}" class="inline-flex items-center px-4 py-2 bg-indigo-600 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-indigo-700 active:bg-indigo-900 focus:outline-none focus:border-indigo-900 focus:ring ring-indigo-300 disabled:opacity-25 transition ease-in-out duration-150">
-                    <iconify-icon icon="heroicons:plus-solid" class="text-lg ltr:mr-2 rtl:ml-2"></iconify-icon>
+                <a href="{{ route('quotes.create') }}" class="btn btn-primary"> {{-- Clases Bootstrap --}}
+                    {{-- Puedes añadir icono Bootstrap si quieres: <i class="bi bi-plus-lg me-1"></i> --}}
                     {{ __('Create New Quote') }}
                 </a>
             </div>
@@ -50,6 +50,8 @@
     @push('styles')
         <link rel="stylesheet" href="https://cdn.datatables.net/1.13.6/css/jquery.dataTables.min.css">
         <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css">
+        {{-- Si usas iconos Bootstrap, necesitarías cargar su CSS --}}
+        {{-- <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css"> --}}
         <style>
             .inputField:focus { /* Tailwind's focus classes handle this */ }
             table.dataTable#quotesTable { border-spacing: 0; } /* Cambiado ID */
@@ -85,37 +87,33 @@
     @endpush
 
     @push('scripts')
-        {{-- *** NO incluir jQuery si ya está cargado globalmente por la app *** --}}
-        {{-- <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script> --}}
+        {{-- *** Cargar jQuery PRIMERO *** --}}
+        <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
 
-        {{-- Cargar DataTables DESPUÉS de que jQuery esté disponible --}}
+        {{-- Cargar DataTables DESPUÉS de jQuery --}}
         <script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
         {{-- Otros scripts --}}
         <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
         <script src="https://code.iconify.design/iconify-icon/1.0.7/iconify-icon.min.js"></script>
 
         <script>
-            // Esperar a que el DOM esté completamente cargado
-            $(function() { // Atajo de jQuery para document ready
-                if (typeof $ === 'undefined') {
-                    console.error('jQuery is not loaded. Cannot initialize DataTables or attach jQuery event handlers.');
-                    return;
-                }
+            // Esperar a que el DOM esté completamente cargado Y jQuery esté listo
+            $(function() {
+                // Verificar si DataTables está cargado
                 if (typeof $.fn.DataTable === 'undefined') {
                      console.error('DataTables plugin is not loaded.');
-                     // Podrías mostrar un mensaje al usuario
                      $('#quotesTable tbody').html(
                         `<tr><td colspan="6" class="text-center py-10 text-red-500">{{ __("DataTable library not loaded.") }}</td></tr>`
                      );
-                     return;
+                     return; // Salir si DataTables no está
                 }
 
                 const quotesDataTable = $('#quotesTable').DataTable({ // Cambiado ID
-                    processing: true, // Añadir indicador de procesamiento
-                    serverSide: true, // Habilitar procesamiento del lado del servidor si esperas muchos datos
+                    processing: true,
+                    serverSide: true, // Recomendado si tienes muchos presupuestos
                     ajax: {
                         url: '{{ route("quotes.data") }}', // Cambiada ruta
-                        type: 'GET', // O POST si prefieres
+                        type: 'GET',
                         error: function (jqXHR, textStatus, errorThrown) {
                             console.error("AJAX error details:", jqXHR);
                             let errorMsg = "{{ __('Error loading data. Please try again.') }}";
@@ -131,17 +129,13 @@
                     },
                     columns: [ // Cambiadas columnas
                         { data: 'quote_number', name: 'quote_number', className: 'text-sm text-slate-700 dark:text-slate-300' },
-                        { data: 'client_name', name: 'client.name', className: 'text-sm text-slate-700 dark:text-slate-300' }, // Usar client_name definido en el controlador
+                        { data: 'client_name', name: 'client.name', className: 'text-sm text-slate-700 dark:text-slate-300' },
                         { data: 'quote_date', name: 'quote_date', className: 'text-sm text-slate-700 dark:text-slate-300' },
                         { data: 'status', name: 'status', className: 'text-sm text-slate-700 dark:text-slate-300' },
                         { data: 'total_amount', name: 'total_amount', className: 'text-sm text-slate-700 dark:text-slate-300 text-right' },
                         { data: 'action', name: 'action', orderable: false, searchable: false, className: 'text-sm text-center' }
                     ],
-                    order: [[0, "desc"]], // Ordenar por número de presupuesto descendente
-                    // Configuración adicional de DataTables (igual que antes)
-                    dom: "<'flex flex-col md:flex-row md:justify-between gap-4 mb-4'<'md:w-1/2'l><'md:w-1/2'f>>" +
-                         "<'overflow-x-auto't>" +
-                         "<'flex flex-col md:flex-row md:justify-between gap-4 mt-4'<'md:w-1/2'i><'md:w-1/2'p>>",
+                    order: [[0, "desc"]],
                     responsive: true,
                     autoWidth: false,
                     language: {
@@ -194,10 +188,6 @@
                         }
                     });
                 });
-
-                // Nota: El handler para editar (.editQuote) ahora es un enlace <a> que redirige
-                // a la página de edición, por lo que no necesita un manejador de clic aquí
-                // a menos que quieras abrir la edición en un modal (lo cual sería más complejo).
 
             }); // Fin de $(function() { ... });
         </script>
