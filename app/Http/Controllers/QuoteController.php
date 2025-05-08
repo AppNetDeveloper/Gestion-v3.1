@@ -53,14 +53,23 @@ class QuoteController extends Controller
                 })
                  ->editColumn('status', function($row) {
                     // Podrías añadir formato condicional para el estado (colores, badges)
-                    return ucfirst($row->status ?? 'draft'); // ej. Draft, Sent, Accepted...
+                    // Ejemplo básico:
+                    $status = ucfirst($row->status ?? 'draft');
+                    $color = 'text-slate-500'; // default
+                    switch ($row->status) {
+                        case 'sent': $color = 'text-blue-500'; break;
+                        case 'accepted': $color = 'text-green-500'; break;
+                        case 'rejected':
+                        case 'expired': $color = 'text-red-500'; break;
+                        case 'draft': $color = 'text-yellow-500'; break;
+                    }
+                    return "<span class='{$color}'>{$status}</span>";
                 })
                 ->editColumn('quote_date', function ($row) {
                     return $row->quote_date ? $row->quote_date->format('d/m/Y') : ''; // Formatear fecha
                 })
                 ->addColumn('action', function($row){
                     // Botones de acción (Ver, Editar, Eliminar)
-                    // Nota: Editar presupuestos puede ser complejo por los items.
                     $viewBtn = '<a href="'.route('quotes.show', $row->id).'" class="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 p-1" title="'.__('View Quote').'">
                                     <iconify-icon icon="heroicons:eye" style="font-size: 1.25rem;"></iconify-icon>
                                 </a>';
@@ -73,7 +82,7 @@ class QuoteController extends Controller
                                  </button>';
                     return '<div class="flex items-center justify-center space-x-1">'.$viewBtn . $editBtn . $deleteBtn.'</div>';
                 })
-                ->rawColumns(['action', 'status']) // Permite HTML en 'action' y 'status' si añades badges
+                ->rawColumns(['action', 'status']) // Permite HTML en 'action' y 'status'
                 ->make(true);
         }
         return abort(403, 'Unauthorized action.');
@@ -86,9 +95,9 @@ class QuoteController extends Controller
      */
     public function create()
     {
-         // Necesitarás pasar datos para los selectores (clientes, servicios)
-        $clients = Client::orderBy('name')->pluck('name', 'id');
-        $services = Service::orderBy('name')->get(['id', 'name', 'default_price', 'unit']); // Pasar más datos para JS
+         // *** CORRECCIÓN AQUÍ: Obtener colección de objetos Client ***
+        $clients = Client::orderBy('name')->get(['id', 'name', 'vat_rate']); // Obtener los campos necesarios
+        $services = Service::orderBy('name')->get(['id', 'name', 'default_price', 'unit', 'description']); // Añadir descripción
         $discounts = Discount::where('is_active', true)->orderBy('name')->get(); // Para descuentos aplicables
 
         $breadcrumbItems = [
@@ -125,8 +134,11 @@ class QuoteController extends Controller
             'items.*.item_description' => 'required|string|max:255',
             'items.*.quantity' => 'required|integer|min:1',
             'items.*.unit_price' => 'required|numeric|min:0',
-            'items.*.line_discount_percentage' => 'nullable|numeric|min:0|max:100',
+            // 'items.*.line_discount_percentage' => 'nullable|numeric|min:0|max:100', // Validar si se implementa
             // ... más validaciones para items
+        ], [
+            'items.required' => __('You must add at least one item to the quote.'), // Mensaje personalizado
+            'items.min' => __('You must add at least one item to the quote.'),
         ]);
 
         if ($validator->fails()) {
@@ -144,47 +156,72 @@ class QuoteController extends Controller
                 'client_id', 'quote_number', 'quote_date', 'expiry_date', 'status',
                 'terms_and_conditions', 'notes_to_client', 'internal_notes', 'discount_id'
             ]);
-            // Calcular totales (esto debería hacerse con más precisión, considerando descuentos de línea, etc.)
-            $quoteData['subtotal'] = 0; // Calcular basado en items
-            $quoteData['discount_amount'] = 0; // Calcular descuento global si aplica
-            $quoteData['tax_amount'] = 0; // Calcular impuestos (requiere lógica de IVA)
-            $quoteData['total_amount'] = 0; // Calcular total final
+            // Calcular totales (se recalcularán después de añadir items)
+            $quoteData['subtotal'] = 0;
+            $quoteData['discount_amount'] = 0;
+            $quoteData['tax_amount'] = 0;
+            $quoteData['total_amount'] = 0;
 
             $quote = Quote::create($quoteData);
 
-            // Crear los QuoteItems
+            // Crear los QuoteItems y calcular totales
             $totalSubtotal = 0;
+            $globalDiscountAmount = 0;
+            $totalTaxAmount = 0;
+
             foreach ($request->input('items', []) as $itemData) {
-                $itemSubtotal = $itemData['quantity'] * $itemData['unit_price'];
-                $lineDiscountAmount = 0; // Calcular descuento de línea aquí
-                $lineTotal = $itemSubtotal - $lineDiscountAmount; // Simplificado
+                $itemSubtotal = ($itemData['quantity'] ?? 1) * ($itemData['unit_price'] ?? 0);
+                $lineDiscountAmount = 0; // Calcular descuento de línea aquí si se implementa
+                $lineTotal = $itemSubtotal - $lineDiscountAmount;
                 $totalSubtotal += $lineTotal; // Sumar al subtotal general (después de descuentos de línea)
 
                 $quote->items()->create([
                     'service_id' => $itemData['service_id'] ?? null,
                     'item_description' => $itemData['item_description'],
-                    'quantity' => $itemData['quantity'],
-                    'unit_price' => $itemData['unit_price'],
+                    'quantity' => $itemData['quantity'] ?? 1,
+                    'unit_price' => $itemData['unit_price'] ?? 0,
                     'item_subtotal' => $itemSubtotal,
-                    'discount_id' => $itemData['discount_id'] ?? null,
-                    'line_discount_percentage' => $itemData['line_discount_percentage'] ?? null,
+                    // 'discount_id' => $itemData['discount_id'] ?? null, // Si hay descuento por línea
+                    // 'line_discount_percentage' => $itemData['line_discount_percentage'] ?? null,
                     'line_discount_amount' => $lineDiscountAmount, // Guardar descuento calculado
                     'line_total' => $lineTotal, // Guardar total de línea
                     'sort_order' => $itemData['sort_order'] ?? 0,
                 ]);
             }
 
-            // Actualizar totales del Quote (simplificado)
-            // Aquí deberías aplicar el descuento global (si existe) y calcular impuestos
+            // Calcular descuento global si aplica
+            if ($request->filled('discount_id')) {
+                $discount = Discount::find($request->input('discount_id'));
+                if ($discount) {
+                    if ($discount->type == 'percentage') {
+                        $globalDiscountAmount = $totalSubtotal * ($discount->value / 100);
+                    } else { // fixed_amount
+                        $globalDiscountAmount = $discount->value;
+                    }
+                     // Asegurar que el descuento no sea mayor que el subtotal
+                    $globalDiscountAmount = min($totalSubtotal, $globalDiscountAmount);
+                }
+            }
+
+            // Calcular impuestos sobre la base imponible (subtotal - descuento global)
+            $taxableBase = $totalSubtotal - $globalDiscountAmount;
+            $client = Client::find($request->input('client_id'));
+            $vatRate = $client->vat_rate ?? config('app.vat_rate', 21); // Usar tasa del cliente o por defecto
+            $totalTaxAmount = $taxableBase * ($vatRate / 100);
+
+            // Calcular total final
+            $finalTotal = $taxableBase + $totalTaxAmount;
+
+            // Actualizar totales del Quote
             $quote->subtotal = $totalSubtotal;
-            // $quote->discount_amount = ...;
-            // $quote->tax_amount = ...;
-            $quote->total_amount = $totalSubtotal; // Actualizar con cálculo real
+            $quote->discount_amount = $globalDiscountAmount;
+            $quote->tax_amount = $totalTaxAmount;
+            $quote->total_amount = $finalTotal;
             $quote->save();
 
             DB::commit(); // Confirmar transacción
 
-            return redirect()->route('quotes.index')->with('success', __('Quote created successfully!'));
+            return redirect()->route('quotes.show', $quote->id)->with('success', __('Quote created successfully!')); // Redirigir a la vista show
 
         } catch (\Exception $e) {
             DB::rollBack(); // Revertir transacción en caso de error
@@ -225,8 +262,9 @@ class QuoteController extends Controller
     {
         // Cargar relaciones y datos necesarios para el formulario de edición
         $quote->load('items'); // Cargar items existentes
-        $clients = Client::orderBy('name')->pluck('name', 'id');
-        $services = Service::orderBy('name')->get(['id', 'name', 'default_price', 'unit']);
+        // *** CORRECCIÓN AQUÍ: Obtener colección de objetos Client ***
+        $clients = Client::orderBy('name')->get(['id', 'name', 'vat_rate']);
+        $services = Service::orderBy('name')->get(['id', 'name', 'default_price', 'unit', 'description']);
         $discounts = Discount::where('is_active', true)->orderBy('name')->get();
 
          $breadcrumbItems = [
@@ -265,8 +303,11 @@ class QuoteController extends Controller
             'items.*.item_description' => 'required|string|max:255',
             'items.*.quantity' => 'required|integer|min:1',
             'items.*.unit_price' => 'required|numeric|min:0',
-            'items.*.line_discount_percentage' => 'nullable|numeric|min:0|max:100',
+            // 'items.*.line_discount_percentage' => 'nullable|numeric|min:0|max:100',
             // ... más validaciones para items
+        ], [
+            'items.required' => __('You must add at least one item to the quote.'),
+            'items.min' => __('You must add at least one item to the quote.'),
         ]);
 
         if ($validator->fails()) {
@@ -283,13 +324,13 @@ class QuoteController extends Controller
                 'client_id', 'quote_number', 'quote_date', 'expiry_date', 'status',
                 'terms_and_conditions', 'notes_to_client', 'internal_notes', 'discount_id'
             ]);
-            // Recalcular totales aquí...
+            // Los totales se recalcularán después de sincronizar items
             $quoteData['subtotal'] = 0;
             $quoteData['discount_amount'] = 0;
             $quoteData['tax_amount'] = 0;
             $quoteData['total_amount'] = 0;
 
-            $quote->update($quoteData);
+            $quote->update($quoteData); // Actualizar primero los datos principales
 
             // Sincronizar items (más complejo: actualizar existentes, añadir nuevos, eliminar viejos)
             $existingItemIds = $quote->items()->pluck('id')->toArray();
@@ -297,7 +338,7 @@ class QuoteController extends Controller
             $totalSubtotal = 0;
 
             foreach ($request->input('items', []) as $itemData) {
-                 $itemSubtotal = $itemData['quantity'] * $itemData['unit_price'];
+                 $itemSubtotal = ($itemData['quantity'] ?? 1) * ($itemData['unit_price'] ?? 0);
                  $lineDiscountAmount = 0; // Calcular
                  $lineTotal = $itemSubtotal - $lineDiscountAmount;
                  $totalSubtotal += $lineTotal;
@@ -305,27 +346,27 @@ class QuoteController extends Controller
                 $itemPayload = [
                     'service_id' => $itemData['service_id'] ?? null,
                     'item_description' => $itemData['item_description'],
-                    'quantity' => $itemData['quantity'],
-                    'unit_price' => $itemData['unit_price'],
+                    'quantity' => $itemData['quantity'] ?? 1,
+                    'unit_price' => $itemData['unit_price'] ?? 0,
                     'item_subtotal' => $itemSubtotal,
-                    'discount_id' => $itemData['discount_id'] ?? null,
-                    'line_discount_percentage' => $itemData['line_discount_percentage'] ?? null,
+                    // 'discount_id' => $itemData['discount_id'] ?? null,
+                    // 'line_discount_percentage' => $itemData['line_discount_percentage'] ?? null,
                     'line_discount_amount' => $lineDiscountAmount,
                     'line_total' => $lineTotal,
                     'sort_order' => $itemData['sort_order'] ?? 0,
                 ];
 
-                if (isset($itemData['id']) && in_array($itemData['id'], $existingItemIds)) {
+                if (isset($itemData['id']) && $itemData['id'] && in_array($itemData['id'], $existingItemIds)) {
                     // Actualizar item existente
                     $item = $quote->items()->find($itemData['id']);
                     if ($item) {
                         $item->update($itemPayload);
-                        $newItemIds[] = $item->id;
+                        $newItemIds[] = (int)$item->id; // Asegurar que sea int
                     }
                 } else {
                     // Crear nuevo item
                     $newItem = $quote->items()->create($itemPayload);
-                    $newItemIds[] = $newItem->id;
+                    $newItemIds[] = (int)$newItem->id; // Asegurar que sea int
                 }
             }
 
@@ -335,12 +376,28 @@ class QuoteController extends Controller
                 $quote->items()->whereIn('id', $itemsToDelete)->delete();
             }
 
-             // Actualizar totales del Quote (simplificado)
+             // Recalcular totales después de sincronizar items
+            $globalDiscountAmount = 0;
+            if ($request->filled('discount_id')) {
+                $discount = Discount::find($request->input('discount_id'));
+                if ($discount) {
+                    if ($discount->type == 'percentage') { $globalDiscountAmount = $totalSubtotal * ($discount->value / 100); }
+                    else { $globalDiscountAmount = $discount->value; }
+                    $globalDiscountAmount = min($totalSubtotal, $globalDiscountAmount);
+                }
+            }
+            $taxableBase = $totalSubtotal - $globalDiscountAmount;
+            $client = Client::find($request->input('client_id')); // Obtener cliente actualizado
+            $vatRate = $client->vat_rate ?? config('app.vat_rate', 21);
+            $totalTaxAmount = $taxableBase * ($vatRate / 100);
+            $finalTotal = $taxableBase + $totalTaxAmount;
+
+            // Actualizar totales del Quote
             $quote->subtotal = $totalSubtotal;
-            // $quote->discount_amount = ...;
-            // $quote->tax_amount = ...;
-            $quote->total_amount = $totalSubtotal; // Actualizar con cálculo real
-            $quote->save();
+            $quote->discount_amount = $globalDiscountAmount;
+            $quote->tax_amount = $totalTaxAmount;
+            $quote->total_amount = $finalTotal;
+            $quote->save(); // Guardar los totales actualizados
 
 
             DB::commit();
@@ -349,7 +406,7 @@ class QuoteController extends Controller
 
         } catch (\Exception $e) {
              DB::rollBack();
-            Log::error('Error updating quote: '.$e->getMessage());
+            Log::error('Error updating quote: '.$e->getMessage().' at '.$e->getFile().':'.$e->getLine()); // Log más detallado
             return redirect()->route('quotes.edit', $quote->id)
                         ->withInput()
                         ->with('error', __('An error occurred while updating the quote.'));

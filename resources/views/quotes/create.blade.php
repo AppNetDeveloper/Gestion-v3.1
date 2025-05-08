@@ -36,8 +36,12 @@
                         </label>
                         <select id="client_id" name="client_id" class="inputField select2 w-full p-3 border {{ $errors->has('client_id') ? 'border-red-500' : 'border-slate-300 dark:border-slate-600' }} rounded-md dark:bg-slate-900 focus:ring-indigo-500 focus:border-indigo-500 dark:focus:ring-indigo-500 dark:focus:border-indigo-500 transition" required>
                             <option value="" disabled selected>{{ __('Select a client') }}</option>
-                            @foreach($clients ?? [] as $id => $name)
-                                <option value="{{ $id }}" {{ old('client_id') == $id ? 'selected' : '' }}>{{ $name }}</option>
+                            @foreach($clients ?? [] as $client)
+                                <option value="{{ $client->id }}"
+                                        data-vat-rate="{{ $client->vat_rate ?? config('app.vat_rate', 21) }}"
+                                        {{ old('client_id') == $client->id ? 'selected' : '' }}>
+                                    {{ $client->name }}
+                                </option>
                             @endforeach
                         </select>
                         @error('client_id') <p class="mt-1 text-xs text-red-500">{{ $message }}</p> @enderror
@@ -63,12 +67,12 @@
                         @error('quote_date') <p class="mt-1 text-xs text-red-500">{{ $message }}</p> @enderror
                     </div>
 
-                     {{-- Fecha Vencimiento --}}
+                     {{-- Fecha Vencimiento (con valor por defecto +10 días) --}}
                     <div>
                         <label for="expiry_date" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
                             {{ __('Expiry Date') }}
                         </label>
-                        <input type="date" id="expiry_date" name="expiry_date" value="{{ old('expiry_date') }}"
+                        <input type="date" id="expiry_date" name="expiry_date" value="{{ old('expiry_date', date('Y-m-d', strtotime('+10 days'))) }}"
                                class="inputField w-full p-3 border {{ $errors->has('expiry_date') ? 'border-red-500' : 'border-slate-300 dark:border-slate-600' }} rounded-md dark:bg-slate-900 focus:ring-indigo-500 focus:border-indigo-500 dark:focus:ring-indigo-500 dark:focus:border-indigo-500 transition">
                         @error('expiry_date') <p class="mt-1 text-xs text-red-500">{{ $message }}</p> @enderror
                     </div>
@@ -92,7 +96,6 @@
                         </label>
                         <select id="discount_id" name="discount_id" class="inputField select2 w-full p-3 border {{ $errors->has('discount_id') ? 'border-red-500' : 'border-slate-300 dark:border-slate-600' }} rounded-md dark:bg-slate-900 focus:ring-indigo-500 focus:border-indigo-500 dark:focus:ring-indigo-500 dark:focus:border-indigo-500 transition">
                             <option value="">{{ __('None') }}</option>
-                            {{-- Los data-attributes se usarán en JS para obtener tipo y valor --}}
                             @foreach($discounts ?? [] as $discount)
                                 <option value="{{ $discount->id }}"
                                         data-type="{{ $discount->type }}"
@@ -162,7 +165,7 @@
                             <span id="quoteDiscount" class="font-medium text-slate-900 dark:text-white">0.00 €</span>
                         </div>
                          <div class="flex justify-between">
-                            <span class="text-slate-600 dark:text-slate-300">{{ __('VAT') }} ({{ config('app.vat_rate', 21) }}%):</span> {{-- Usar valor de config --}}
+                            <span class="text-slate-600 dark:text-slate-300">{{ __('VAT') }} (<span id="vatRateDisplay">{{ config('app.vat_rate', 21) }}</span>%):</span>
                             <span id="quoteTaxes" class="font-medium text-slate-900 dark:text-white">0.00 €</span>
                         </div>
                          <hr class="my-1 border-slate-200 dark:border-slate-700">
@@ -285,8 +288,8 @@
     @endpush
 
     @push('scripts')
-        {{-- *** NO incluir jQuery si ya está cargado globalmente por la app *** --}}
-        {{-- <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script> --}}
+        {{-- *** Cargar jQuery PRIMERO *** --}}
+        <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
 
         {{-- Cargar Select2 DESPUÉS de jQuery --}}
         <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
@@ -297,80 +300,75 @@
         <script>
             // Pasar datos de descuentos a JavaScript
             const discountsData = @json($discounts ?? []);
+            // Tasa de IVA por defecto de la configuración
+            const defaultVatRate = {{ config('app.vat_rate', 21) }};
+            let currentVatRate = defaultVatRate; // Variable para guardar la tasa actual
 
-            // Esperar a que el DOM esté completamente cargado
-            document.addEventListener('DOMContentLoaded', function() {
+            // Esperar a que jQuery esté listo
+             $(function() {
+                 // Verificar si Select2 está cargado
+                if (typeof $.fn.select2 === 'undefined') {
+                    console.error('Select2 plugin is not loaded.');
+                } else {
+                    // Inicializar Select2 en los selectores iniciales
+                    const $clientSelect = $('#client_id');
+                    const $discountSelect = $('#discount_id');
 
-                if (typeof $ === 'undefined') {
-                    console.error('jQuery is not loaded. Cannot initialize Select2 or dynamic rows.');
-                    return;
+                    $clientSelect.select2({ placeholder: "{{ __('Select a client') }}", allowClear: true })
+                        .on('select2:select', function(e) {
+                            const selectedOption = e.params.data.element;
+                            currentVatRate = parseFloat($(selectedOption).data('vat-rate')) || defaultVatRate;
+                            $('#vatRateDisplay').text(currentVatRate.toFixed(2));
+                            calculateTotals();
+                        })
+                        .on('select2:unselect', function(e) {
+                            currentVatRate = defaultVatRate;
+                            $('#vatRateDisplay').text(currentVatRate.toFixed(2));
+                            calculateTotals();
+                        });
+
+                    $discountSelect.select2({ placeholder: "{{ __('None') }}", allowClear: true })
+                        .on('change', calculateTotals);
                 }
 
-                // Inicializar Select2 en los selectores iniciales
-                $('#client_id').select2({ placeholder: "{{ __('Select a client') }}", allowClear: true });
-                $('#discount_id').select2({ placeholder: "{{ __('None') }}", allowClear: true })
-                    .on('change', calculateTotals); // Recalcular al cambiar descuento global
 
-                const itemsContainer = document.getElementById('quoteItemsContainer');
-                const addItemBtn = document.getElementById('addQuoteItemBtn');
-                const itemTemplate = document.getElementById('quoteItemTemplate');
+                const itemsContainer = $('#quoteItemsContainer');
+                const addItemBtn = $('#addQuoteItemBtn');
+                const itemTemplateHtml = $('#quoteItemTemplate').html();
                 let itemIndex = 0;
 
                 // Función para añadir una nueva fila de item
                 function addQuoteItemRow() {
-                    if (!itemTemplate || !itemsContainer) {
-                        console.error('Template or container not found for quote items.');
-                        return;
-                    }
-                    const templateContent = itemTemplate.innerHTML.replace(/__INDEX__/g, itemIndex);
-                    const newRowDiv = document.createElement('div');
-                    newRowDiv.innerHTML = templateContent;
-                    const newRow = newRowDiv.firstElementChild;
-                    if (!newRow) return;
+                    if (!itemTemplateHtml || !itemsContainer.length) { return; }
+                    const newItemHtml = itemTemplateHtml.replace(/__INDEX__/g, itemIndex);
+                    const $newRow = $(newItemHtml);
+                    itemsContainer.append($newRow);
 
-                    itemsContainer.appendChild(newRow);
-
-                    const newSelect = newRow.querySelector('.item-service');
-                    if (typeof $.fn.select2 !== 'undefined' && newSelect) {
-                        $(newSelect).select2({
-                            placeholder: "{{ __('Select or type description') }}",
-                            allowClear: true
-                        }).on('select2:select', function (e) {
+                    const $newSelect = $newRow.find('.item-service');
+                    if (typeof $.fn.select2 !== 'undefined' && $newSelect.length) {
+                        $newSelect.select2({ placeholder: "{{ __('Select or type description') }}", allowClear: true })
+                        .on('select2:select', function (e) {
                             const selectedOption = e.params.data.element;
                             if (!selectedOption) return;
-                            const row = $(this).closest('.quote-item-row');
+                            const $row = $(this).closest('.quote-item-row');
                             const description = $(selectedOption).data('description') || '';
                             const price = $(selectedOption).data('price') || '0.00';
-                            row.find('.item-description').val(description);
-                            row.find('.item-price').val(price);
-                            updateLineTotal(row);
+                            $row.find('.item-description').val(description);
+                            $row.find('.item-price').val(price);
+                            updateLineTotal($row);
                             calculateTotals();
                         });
-                    } else {
-                        console.error('Select2 plugin not loaded or new select element not found.');
-                    }
+                    } else { console.error('Select2 plugin not loaded or new select element not found.'); }
 
-                    const removeBtn = newRow.querySelector('.remove-item-btn');
-                    if(removeBtn) {
-                        removeBtn.addEventListener('click', function() {
-                            newRow.remove();
-                            calculateTotals();
-                        });
-                    }
-
-                    const qtyInput = newRow.querySelector('.item-quantity');
-                    const priceInput = newRow.querySelector('.item-price');
-                    // Usar jQuery para asegurar que los listeners se añadan después de que el DOM se actualice
-                    $(qtyInput).on('input', () => { updateLineTotal($(newRow)); calculateTotals(); });
-                    $(priceInput).on('input', () => { updateLineTotal($(newRow)); calculateTotals(); });
+                    $newRow.find('.remove-item-btn').on('click', function() { $newRow.remove(); calculateTotals(); });
+                    $newRow.find('.item-quantity, .item-price').on('input', function() { updateLineTotal($newRow); calculateTotals(); });
 
                     itemIndex++;
-                    updateLineTotal($(newRow));
+                    updateLineTotal($newRow);
                 }
 
                 // Función para actualizar el total de una línea
-                function updateLineTotal(rowElement) {
-                    const $row = $(rowElement);
+                function updateLineTotal($row) {
                     const quantity = parseFloat($row.find('.item-quantity').val()) || 0;
                     const price = parseFloat($row.find('.item-price').val()) || 0;
                     const lineTotal = quantity * price;
@@ -388,11 +386,10 @@
                     });
 
                     let discountAmount = 0;
-                    const globalDiscountSelect = $('#discount_id');
-                    const selectedDiscountId = globalDiscountSelect.val();
+                    const $discountSelect = $('#discount_id');
+                    const selectedDiscountId = $discountSelect.val();
 
                     if (selectedDiscountId) {
-                        // Buscar el descuento seleccionado en nuestros datos JS
                         const selectedDiscount = discountsData.find(d => d.id == selectedDiscountId);
                         if (selectedDiscount) {
                             if (selectedDiscount.type === 'percentage') {
@@ -402,45 +399,35 @@
                             }
                         }
                     }
-
-                    // Asegurar que el descuento no sea mayor que el subtotal
                     discountAmount = Math.min(subtotal, discountAmount);
 
-                    // Calcular base imponible
                     const taxableBase = subtotal - discountAmount;
-
-                    // Calcular impuestos (IVA) - Usar valor de configuración si existe, si no, 21%
-                    const vatRate = {{ config('app.vat_rate', 21) }}; // Obtener tasa de IVA
-                    const taxAmount = taxableBase * (vatRate / 100);
-
+                    const taxAmount = taxableBase * (currentVatRate / 100); // Usar currentVatRate
                     const total = taxableBase + taxAmount;
 
-                    // Actualizar spans
                     $('#quoteSubtotal').text(subtotal.toFixed(2) + ' €');
                     $('#quoteDiscount').text(discountAmount.toFixed(2) + ' €');
                     $('#quoteTaxes').text(taxAmount.toFixed(2) + ' €');
+                    $('#vatRateDisplay').text(currentVatRate.toFixed(2));
                     $('#quoteTotal').text(total.toFixed(2) + ' €');
 
-                    // Actualizar inputs hidden
                     $('#inputSubtotal').val(subtotal.toFixed(2));
                     $('#inputDiscount').val(discountAmount.toFixed(2));
                     $('#inputTaxes').val(taxAmount.toFixed(2));
                     $('#inputTotal').val(total.toFixed(2));
                 }
 
-                // Listener para el botón "Add Item"
-                if (addItemBtn) {
-                    addItemBtn.addEventListener('click', addQuoteItemRow);
-                }
 
-                // Añadir filas existentes si hay datos 'old' o una fila inicial
+                // Listener para el botón "Add Item"
+                if (addItemBtn.length) { addItemBtn.on('click', addQuoteItemRow); }
+
+                // Añadir filas existentes o inicial
                 const oldItems = @json(old('items', []));
                 if (oldItems && oldItems.length > 0) {
                     oldItems.forEach((itemData, index) => {
                         addQuoteItemRow();
-                        const lastRow = itemsContainer.lastElementChild;
-                        if (lastRow) {
-                            const $lastRow = $(lastRow);
+                        const $lastRow = $('#quoteItemsContainer .quote-item-row').last();
+                        if ($lastRow.length) {
                             $lastRow.find('.item-service').val(itemData.service_id || '').trigger('change');
                             $lastRow.find('.item-description').val(itemData.item_description || '');
                             $lastRow.find('.item-quantity').val(itemData.quantity || 1);
@@ -448,14 +435,22 @@
                             updateLineTotal($lastRow);
                         }
                     });
-                } else if (itemsContainer.children.length === 0) {
+                } else if ($('#quoteItemsContainer .quote-item-row').length === 0) {
                     addQuoteItemRow();
                 }
-                calculateTotals(); // Calcular totales iniciales
+
+                // Calcular totales iniciales después de asegurar que el cliente 'old' se procese
+                const oldClientId = "{{ old('client_id') }}";
+                if(oldClientId){
+                    const $selectedOption = $('#client_id').find('option[value="' + oldClientId + '"]');
+                    if($selectedOption.length > 0){
+                         currentVatRate = parseFloat($selectedOption.data('vat-rate')) || defaultVatRate;
+                         $('#vatRateDisplay').text(currentVatRate.toFixed(2));
+                    }
+                }
+                calculateTotals();
 
             }); // Fin document ready jQuery
         </script>
     @endpush
 </x-app-layout>
-
-
