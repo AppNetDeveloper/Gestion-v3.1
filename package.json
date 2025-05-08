@@ -21,6 +21,7 @@
         "lodash": "^4.17.19",
         "postcss": "^8.5.3",
         "sass": "^1.59.3",
+        "select2": "^4.1.0-rc.0",
         "tailwindcss": "^3.4.17",
         "vite": "^6.3.4"
     },
@@ -58,7 +59,6 @@
         "plyr": "^3.7.8",
         "qrcode": "^1.5.4",
         "resize-observer-polyfill": "^1.5.1",
-        "select2": "^4.1.0-rc.0",
         "simplebar": "^6.3.0",
         "swagger-jsdoc": "^6.2.8",
         "swagger-ui-express": "^5.0.1",

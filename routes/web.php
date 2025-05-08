@@ -429,6 +429,8 @@ Route::middleware(['auth'])->group(function () {
     // Rutas para Quotes (Presupuestos)
     Route::get('quotes/data', [QuoteController::class, 'data'])->name('quotes.data'); // Para DataTables AJAX
     Route::resource('quotes', QuoteController::class);
+
+    Route::get('quotes/{quote}/pdf', [QuoteController::class, 'exportPdf'])->name('quotes.pdf');
 });
 
 // Grupo de rutas públicas
