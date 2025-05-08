@@ -38,14 +38,19 @@ class ClientController extends Controller
             $data = Client::latest()->get(); // Obtiene los clientes más recientes primero
             return DataTables::of($data)
                 ->addIndexColumn()
+                 ->addColumn('vat_rate_display', function($row) { // Columna virtual para mostrar formateado
+                    return $row->vat_rate !== null ? number_format($row->vat_rate, 2, ',', '.') . '%' : '-';
+                })
                 ->addColumn('action', function($row){
                     // Botones de acción (Editar, Eliminar)
+                    // *** AÑADIDO data-vat_rate ***
                     $editBtn = '<button class="editClient text-indigo-600 hover:text-indigo-800 dark:text-indigo-400 dark:hover:text-indigo-300 transition-colors duration-150 p-1"
                                     data-id="'.$row->id.'"
                                     data-name="'.htmlspecialchars($row->name, ENT_QUOTES).'"
                                     data-email="'.htmlspecialchars($row->email ?? '', ENT_QUOTES).'"
                                     data-phone="'.htmlspecialchars($row->phone ?? '', ENT_QUOTES).'"
                                     data-vat_number="'.htmlspecialchars($row->vat_number ?? '', ENT_QUOTES).'"
+                                    data-vat_rate="'.$row->vat_rate.'"
                                     data-address="'.htmlspecialchars($row->address ?? '', ENT_QUOTES).'"
                                     data-city="'.htmlspecialchars($row->city ?? '', ENT_QUOTES).'"
                                     data-postal_code="'.htmlspecialchars($row->postal_code ?? '', ENT_QUOTES).'"
@@ -58,8 +63,6 @@ class ClientController extends Controller
                                     data-id="'.$row->id.'" title="'.__('Delete Client').'">
                                     <iconify-icon icon="heroicons:trash" style="font-size: 1.25rem;"></iconify-icon>
                                  </button>';
-                    // Podrías añadir un botón para ver detalles/proyectos/presupuestos del cliente
-                    // $viewBtn = '<a href="'.route('clients.show', $row->id).'" class="text-blue-600 ...">...</a>';
                     return '<div class="flex items-center justify-center space-x-2">'.$editBtn . $deleteBtn.'</div>';
                 })
                 ->editColumn('created_at', function ($row) {
@@ -90,11 +93,13 @@ class ClientController extends Controller
      */
     public function store(Request $request)
     {
+        // *** AÑADIDA VALIDACIÓN PARA vat_rate ***
         $validator = Validator::make($request->all(), [
             'name' => 'required|string|max:255',
             'email' => 'nullable|email|max:255|unique:clients,email',
             'phone' => 'nullable|string|max:20',
             'vat_number' => 'nullable|string|max:20|unique:clients,vat_number', // NIF/CIF
+            'vat_rate' => 'nullable|numeric|min:0|max:100', // Validación para la tasa de IVA
             'address' => 'nullable|string',
             'city' => 'nullable|string|max:100',
             'postal_code' => 'nullable|string|max:10',
@@ -110,7 +115,16 @@ class ClientController extends Controller
         }
 
         try {
-            Client::create($request->all()); // Usamos all() porque los nombres coinciden con $fillable
+            // *** AÑADIDO vat_rate a los datos a crear ***
+            // Usar only() para asegurar que solo pasamos los campos permitidos por $fillable
+             $clientData = $request->only([
+                 'name', 'email', 'phone', 'vat_number', 'vat_rate',
+                 'address', 'city', 'postal_code', 'country', 'notes'
+             ]);
+             // Convertir vat_rate a null si está vacío para evitar problemas con la BD si no es nullable
+             $clientData['vat_rate'] = $request->filled('vat_rate') ? $request->input('vat_rate') : null;
+
+            Client::create($clientData);
             return redirect()->route('clients.index')->with('success', __('Client created successfully!'));
         } catch (\Exception $e) {
             Log::error('Error creating client: '.$e->getMessage());
@@ -140,6 +154,7 @@ class ClientController extends Controller
     public function edit(Client $client)
     {
         // Probablemente manejado por modal, así que devolvemos JSON
+        // El vat_rate ya se carga automáticamente con el modelo $client
         return response()->json($client);
     }
 
@@ -152,11 +167,13 @@ class ClientController extends Controller
      */
     public function update(Request $request, Client $client)
     {
+        // *** AÑADIDA VALIDACIÓN PARA vat_rate ***
         $validator = Validator::make($request->all(), [
             'name' => 'required|string|max:255',
             'email' => 'nullable|email|max:255|unique:clients,email,'.$client->id,
             'phone' => 'nullable|string|max:20',
             'vat_number' => 'nullable|string|max:20|unique:clients,vat_number,'.$client->id,
+            'vat_rate' => 'nullable|numeric|min:0|max:100', // Validación para la tasa de IVA
             'address' => 'nullable|string',
             'city' => 'nullable|string|max:100',
             'postal_code' => 'nullable|string|max:10',
@@ -170,7 +187,14 @@ class ClientController extends Controller
         }
 
         try {
-            $client->update($request->all());
+             // *** AÑADIDO vat_rate a los datos a actualizar ***
+             $clientData = $request->only([
+                 'name', 'email', 'phone', 'vat_number', 'vat_rate',
+                 'address', 'city', 'postal_code', 'country', 'notes'
+             ]);
+             $clientData['vat_rate'] = $request->filled('vat_rate') ? $request->input('vat_rate') : null;
+
+            $client->update($clientData);
             return response()->json(['success' => __('Client updated successfully!')]);
         } catch (\Exception $e) {
             Log::error('Error updating client: '.$e->getMessage());
@@ -187,16 +211,12 @@ class ClientController extends Controller
     public function destroy(Client $client)
     {
         try {
-            // Aquí podrías añadir lógica para verificar si el cliente tiene
-            // presupuestos, proyectos o facturas asociadas antes de borrar,
-            // dependiendo de tus reglas de negocio (onDelete cascade/restrict).
             $client->delete();
             return response()->json(['success' => __('Client deleted successfully!')]);
         } catch (\Exception $e) {
             Log::error('Error deleting client: '.$e->getMessage());
-            // Capturar errores de restricción de clave foránea si no usas cascade
              if (str_contains($e->getMessage(), 'foreign key constraint fails')) {
-                 return response()->json(['error' => __('Cannot delete client because they have associated records (quotes, projects, invoices).')], 409); // 409 Conflict
+                 return response()->json(['error' => __('Cannot delete client because they have associated records (quotes, projects, invoices).')], 409);
              }
             return response()->json(['error' => __('An error occurred while deleting the client.')], 500);
         }
