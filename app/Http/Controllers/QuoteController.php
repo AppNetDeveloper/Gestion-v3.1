@@ -12,7 +12,8 @@ use Yajra\DataTables\Facades\DataTables; // Si usas Yajra DataTables
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\DB; // Para transacciones
 use Barryvdh\DomPDF\Facade\Pdf; // <--- Asegúrate de tener esta línea
-
+use App\Mail\QuoteSentMail; // <-- Asegúrate que la ruta sea correcta
+use Illuminate\Support\Facades\Mail;
 
 class QuoteController extends Controller
 {
@@ -459,6 +460,54 @@ class QuoteController extends Controller
         } catch (\Exception $e) {
             Log::error('Error generating PDF for quote #'.$quote->id.': '.$e->getMessage());
             return redirect()->route('quotes.show', $quote->id)->with('error', __('Could not generate PDF.'));
+        }
+    }
+    /**
+     * Send the quote email to the client.
+     *
+     * @param  \Illuminate\Http\Request  $request
+     * @param  \App\Models\Quote  $quote
+     * @return \Illuminate\Http\RedirectResponse
+     */
+    public function sendEmail(Request $request, Quote $quote)
+    {
+        // 1. Validar que el cliente tenga email
+        if (!$quote->client || !$quote->client->email) {
+            return redirect()->route('quotes.show', $quote->id)->with('error', __('Client does not have an email address.'));
+        }
+
+        // 2. Cargar relaciones necesarias
+        $quote->load('client', 'items.service'); // Asegúrate de cargar todo lo que necesite el PDF y el email
+
+        try {
+            // 3. Generar el PDF para adjuntar
+            $pdfData = null;
+            try {
+                 // Usamos la misma vista que para la descarga directa
+                 $pdf = Pdf::loadView('quotes.pdf_template', ['quote' => $quote]);
+                 $pdfData = $pdf->output(); // Obtener contenido binario del PDF
+            } catch (\Exception $pdfError) {
+                 Log::error('Error generating PDF for email attachment (Quote #'.$quote->id.'): '.$pdfError->getMessage());
+                 // Decidir si enviar sin PDF o fallar
+                 // return redirect()->route('quotes.show', $quote->id)->with('error', __('Could not generate PDF attachment. Email not sent.'));
+                 // Por ahora, intentaremos enviar sin PDF si falla la generación
+            }
+
+
+            // 4. Enviar el Mailable (DESCOMENTADO)
+            Mail::to($quote->client->email)->send(new QuoteSentMail($quote, $pdfData)); // Pasar quote y pdfData
+
+            // 5. (Opcional) Actualizar estado del presupuesto a 'sent' si estaba en 'draft'
+            if ($quote->status === 'draft') {
+                 $quote->update(['status' => 'sent']);
+            }
+
+            Log::info("Quote #{$quote->id} email sent successfully to {$quote->client->email}"); // Log de éxito
+            return redirect()->route('quotes.show', $quote->id)->with('success', __('Quote sent successfully to client!'));
+
+        } catch (\Exception $e) {
+            Log::error('Error sending quote email #'.$quote->id.': '.$e->getMessage().' at '.$e->getFile().':'.$e->getLine()); // Log más detallado
+            return redirect()->route('quotes.show', $quote->id)->with('error', __('An error occurred while sending the email.'));
         }
     }
 }

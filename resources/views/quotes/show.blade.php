@@ -22,16 +22,23 @@
                     <iconify-icon icon="heroicons:pencil-square" class="text-lg mr-1"></iconify-icon>
                     {{ __('Edit') }}
                 </a>
-                {{-- Botón Imprimir --}}
                 <button type="button" onclick="window.print()" class="btn btn-outline-secondary btn-sm inline-flex items-center">
                     <iconify-icon icon="heroicons:printer" class="text-lg mr-1"></iconify-icon>
                     {{ __('Print') }}
                 </button>
-                 {{-- Botón Exportar PDF --}}
                 <a href="{{ route('quotes.pdf', $quote->id) }}" target="_blank" class="btn btn-outline-secondary btn-sm inline-flex items-center">
                     <iconify-icon icon="heroicons:arrow-down-tray" class="text-lg mr-1"></iconify-icon>
                     {{ __('Export PDF') }}
                 </a>
+                {{-- Botón Enviar por Email --}}
+                {{-- Usamos un formulario para enviar la petición POST --}}
+                <form action="{{ route('quotes.send', $quote->id) }}" method="POST" class="inline">
+                    @csrf
+                    <button type="submit" class="btn btn-outline-secondary btn-sm inline-flex items-center">
+                        <iconify-icon icon="heroicons:envelope" class="text-lg mr-1"></iconify-icon>
+                        {{ __('Send Email') }}
+                    </button>
+                </form>
                 {{-- Aquí podrías añadir más botones --}}
             </div>
 
@@ -105,11 +112,10 @@
                             <tr>
                                 <td class="px-4 py-3 text-sm text-slate-700 dark:text-slate-300">
                                     {{ $item->item_description }}
-                                    {{-- Podrías mostrar el nombre del servicio si existe: $item->service?->name --}}
                                 </td>
                                 <td class="px-4 py-3 text-sm text-slate-700 dark:text-slate-300 text-center">{{ $item->quantity }}</td>
                                 <td class="px-4 py-3 text-sm text-slate-700 dark:text-slate-300 text-right">{{ number_format($item->unit_price, 2, ',', '.') }} €</td>
-                                <td class="px-4 py-3 text-sm text-slate-700 dark:text-slate-300 text-right">{{ number_format($item->line_total, 2, ',', '.') }} €</td> {{-- Asumiendo que line_total ya tiene el descuento aplicado --}}
+                                <td class="px-4 py-3 text-sm text-slate-700 dark:text-slate-300 text-right">{{ number_format($item->line_total, 2, ',', '.') }} €</td>
                             </tr>
                         @endforeach
                     </tbody>
@@ -148,7 +154,6 @@
                     @endif
                     <div class="flex justify-between">
                         @php
-                            // Determinar la tasa de IVA usada (del cliente o por defecto)
                             $appliedVatRate = $quote->client->vat_rate ?? config('app.vat_rate', 21);
                         @endphp
                         <span class="text-slate-500 dark:text-slate-400">{{ __('VAT') }} ({{ number_format($appliedVatRate, 2, ',', '.') }}%):</span>
@@ -173,6 +178,5 @@
     @push('scripts')
         {{-- Añadir scripts si es necesario --}}
          <script src="https://code.iconify.design/iconify-icon/1.0.7/iconify-icon.min.js"></script>
-         {{-- El script para window.print() ya está inline en el botón --}}
     @endpush
 </x-app-layout>
