@@ -618,5 +618,12 @@
     "Quote updated successfully!": "Quote updated successfully!",
     "An error occurred while updating the quote.": "An error occurred while updating the quote.",
     "Quote deleted successfully!": "Quote deleted successfully!",
-    "You must add at least one item to the quote.": "You must add at least one item to the quote."
+    "You must add at least one item to the quote.": "You must add at least one item to the quote.",
+    "Welcome to :app_name, :name!": "Welcome to :AppNet Developer",
+    "Your account has been created successfully.": "Your account has been created successfully.",
+    "Here are your login details:": "Here are your login details:",
+    "We recommend changing your password after your first login.": "We recommend changing your password after your first login.",
+    "Login to Your Account": "Login to Your Account",
+    "If you have any questions, please contact us.": "If you have any questions, please contact us.",
+    "Thanks,": "Thanks,"
 }

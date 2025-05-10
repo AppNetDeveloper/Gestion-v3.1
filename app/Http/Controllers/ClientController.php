@@ -2,11 +2,18 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Client; // Importa tu modelo Client
+use App\Models\Client;
+use App\Models\User; // <-- Importar el modelo User
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
-use Yajra\DataTables\Facades\DataTables; // Si usas Yajra DataTables
-use Illuminate\Support\Facades\Log; // Para loguear errores
+use Yajra\DataTables\Facades\DataTables;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Hash; // <-- Para hashear la contraseña
+use Illuminate\Support\Str; // <-- Para generar strings aleatorios
+use Illuminate\Support\Facades\Mail; // <-- Para enviar email
+use App\Mail\NewUserWelcomeMail; // <-- Crearás este Mailable después
+
+use Illuminate\Support\Facades\DB; // Para transacciones
 
 class ClientController extends Controller
 {
@@ -17,12 +24,10 @@ class ClientController extends Controller
      */
     public function index()
     {
-        // Prepara datos básicos para la vista principal
         $breadcrumbItems = [
-            ['name' => __('Dashboard'), 'url' => '/dashboard'], // Ajusta URL si es necesario
+            ['name' => __('Dashboard'), 'url' => '/dashboard'],
             ['name' => __('Clients'), 'url' => route('clients.index')],
         ];
-        // La tabla se carga vía AJAX, solo pasamos los breadcrumbs
         return view('clients.index', compact('breadcrumbItems'));
     }
 
@@ -35,15 +40,13 @@ class ClientController extends Controller
     public function data(Request $request)
     {
         if ($request->ajax()) {
-            $data = Client::latest()->get(); // Obtiene los clientes más recientes primero
+            $data = Client::latest()->get();
             return DataTables::of($data)
                 ->addIndexColumn()
-                 ->addColumn('vat_rate_display', function($row) { // Columna virtual para mostrar formateado
+                 ->addColumn('vat_rate_display', function($row) {
                     return $row->vat_rate !== null ? number_format($row->vat_rate, 2, ',', '.') . '%' : '-';
                 })
                 ->addColumn('action', function($row){
-                    // Botones de acción (Editar, Eliminar)
-                    // *** AÑADIDO data-vat_rate ***
                     $editBtn = '<button class="editClient text-indigo-600 hover:text-indigo-800 dark:text-indigo-400 dark:hover:text-indigo-300 transition-colors duration-150 p-1"
                                     data-id="'.$row->id.'"
                                     data-name="'.htmlspecialchars($row->name, ENT_QUOTES).'"
@@ -66,9 +69,9 @@ class ClientController extends Controller
                     return '<div class="flex items-center justify-center space-x-2">'.$editBtn . $deleteBtn.'</div>';
                 })
                 ->editColumn('created_at', function ($row) {
-                    return $row->created_at ? $row->created_at->format('d/m/Y H:i') : ''; // Formatear fecha
+                    return $row->created_at ? $row->created_at->format('d/m/Y H:i') : '';
                 })
-                ->rawColumns(['action']) // Permite HTML en la columna 'action'
+                ->rawColumns(['action'])
                 ->make(true);
         }
         return abort(403, 'Unauthorized action.');
@@ -81,7 +84,6 @@ class ClientController extends Controller
      */
     public function create()
     {
-        // El formulario de creación está en la vista index.
         return redirect()->route('clients.index');
     }
 
@@ -93,13 +95,12 @@ class ClientController extends Controller
      */
     public function store(Request $request)
     {
-        // *** AÑADIDA VALIDACIÓN PARA vat_rate ***
         $validator = Validator::make($request->all(), [
             'name' => 'required|string|max:255',
-            'email' => 'nullable|email|max:255|unique:clients,email',
+            'email' => 'required|email|max:255|unique:users,email', // Email es ahora obligatorio y único en users
             'phone' => 'nullable|string|max:20',
-            'vat_number' => 'nullable|string|max:20|unique:clients,vat_number', // NIF/CIF
-            'vat_rate' => 'nullable|numeric|min:0|max:100', // Validación para la tasa de IVA
+            'vat_number' => 'nullable|string|max:20|unique:clients,vat_number',
+            'vat_rate' => 'nullable|numeric|min:0|max:100',
             'address' => 'nullable|string',
             'city' => 'nullable|string|max:100',
             'postal_code' => 'nullable|string|max:10',
@@ -114,20 +115,67 @@ class ClientController extends Controller
                         ->with('error', __('Failed to create client. Please check the errors.'));
         }
 
+        DB::beginTransaction(); // Iniciar transacción
+
         try {
-            // *** AÑADIDO vat_rate a los datos a crear ***
-            // Usar only() para asegurar que solo pasamos los campos permitidos por $fillable
-             $clientData = $request->only([
+            $clientData = $request->only([
                  'name', 'email', 'phone', 'vat_number', 'vat_rate',
                  'address', 'city', 'postal_code', 'country', 'notes'
              ]);
-             // Convertir vat_rate a null si está vacío para evitar problemas con la BD si no es nullable
-             $clientData['vat_rate'] = $request->filled('vat_rate') ? $request->input('vat_rate') : null;
+            $clientData['vat_rate'] = $request->filled('vat_rate') ? $request->input('vat_rate') : null;
 
-            Client::create($clientData);
-            return redirect()->route('clients.index')->with('success', __('Client created successfully!'));
+            // Lógica para crear o asociar usuario
+            $user = User::where('email', $request->input('email'))->first();
+            $newUserPassword = null;
+
+            if (!$user) {
+                // Crear nuevo usuario si no existe
+                $newUserPassword = Str::random(10); // Generar contraseña aleatoria
+                $user = User::create([
+                    'name' => $request->input('name'),
+                    'email' => $request->input('email'),
+                    'password' => Hash::make($newUserPassword),
+                    'email_verified_at' => now(), // Marcar como verificado directamente
+                    // Puedes añadir otros campos por defecto para el usuario si es necesario
+                ]);
+                $user->assignRole('customer'); // Asignar rol 'customer'
+                Log::info("New user created for client: {$user->email}");
+
+                // (Opcional pero recomendado) Enviar email de bienvenida con la contraseña
+                // Debes crear el Mailable: php artisan make:mail NewUserWelcomeMail
+                // Mail::to($user->email)->send(new NewUserWelcomeMail($user, $newUserPassword));
+                // Log::info("Welcome email sent to new user: {$user->email}");
+
+            } else {
+                // Si el usuario ya existe, simplemente nos aseguramos de que tenga el rol 'customer'
+                // (o podrías decidir no hacer nada o mostrar un aviso)
+                if (!$user->hasRole('customer')) {
+                    $user->assignRole('customer');
+                    Log::info("Existing user {$user->email} assigned 'customer' role.");
+                }
+            }
+
+            // Asociar el user_id al cliente
+            $clientData['user_id'] = $user->id;
+
+            $client = Client::create($clientData);
+
+            DB::commit(); // Confirmar transacción
+
+            $successMessage = __('Client created successfully!');
+            if ($newUserPassword) {
+                // Podrías añadir la contraseña al mensaje de éxito para el admin (¡cuidado con la seguridad!)
+                // O mejor, confiar en que el email se envió.
+                // $successMessage .= ' ' . __('New user created with password: ') . $newUserPassword;
+                // Por ahora, solo mensaje genérico.
+                $successMessage .= ' ' . __('A new user account has been created for this client.');
+            }
+
+            return redirect()->route('clients.index')->with('success', $successMessage);
+
         } catch (\Exception $e) {
-            Log::error('Error creating client: '.$e->getMessage());
+            DB::rollBack(); // Revertir transacción en caso de error
+            Log::error('Error creating client and/or user: '.$e->getMessage().' at '.$e->getFile().':'.$e->getLine());
             return redirect()->route('clients.index')->with('error', __('An error occurred while creating the client.'));
         }
     }
@@ -136,25 +184,23 @@ class ClientController extends Controller
      * Display the specified resource.
      *
      * @param  \App\Models\Client  $client
-     * @return \Illuminate\Http\Response // O JsonResponse, o View
+     * @return \Illuminate\Http\Response
      */
     public function show(Client $client)
     {
-        // Aquí podrías cargar una vista de detalle del cliente con sus proyectos, presupuestos, etc.
-        // Ejemplo: return view('clients.show', compact('client'));
-        return response()->json($client); // Para pruebas o API
+        return response()->json($client);
     }
 
     /**
      * Show the form for editing the specified resource.
      *
      * @param  \App\Models\Client  $client
-     * @return \Illuminate\Http\JsonResponse // O View, o RedirectResponse
+     * @return \Illuminate\Http\JsonResponse
      */
     public function edit(Client $client)
     {
-        // Probablemente manejado por modal, así que devolvemos JSON
-        // El vat_rate ya se carga automáticamente con el modelo $client
+        // Cargar el usuario asociado para mostrar su email si es necesario
+        $client->load('user');
         return response()->json($client);
     }
 
@@ -167,13 +213,17 @@ class ClientController extends Controller
      */
     public function update(Request $request, Client $client)
     {
-        // *** AÑADIDA VALIDACIÓN PARA vat_rate ***
+        // Obtener el usuario asociado al cliente, si existe
+        $associatedUser = $client->user;
+        $userIdToIgnore = $associatedUser ? $associatedUser->id : null;
+
         $validator = Validator::make($request->all(), [
             'name' => 'required|string|max:255',
-            'email' => 'nullable|email|max:255|unique:clients,email,'.$client->id,
+            // Email es ahora obligatorio. Si se cambia, debe ser único en users, ignorando el usuario actual si está asociado.
+            'email' => 'required|email|max:255|unique:users,email,' . $userIdToIgnore,
             'phone' => 'nullable|string|max:20',
             'vat_number' => 'nullable|string|max:20|unique:clients,vat_number,'.$client->id,
-            'vat_rate' => 'nullable|numeric|min:0|max:100', // Validación para la tasa de IVA
+            'vat_rate' => 'nullable|numeric|min:0|max:100',
             'address' => 'nullable|string',
             'city' => 'nullable|string|max:100',
             'postal_code' => 'nullable|string|max:10',
@@ -182,22 +232,37 @@ class ClientController extends Controller
         ]);
 
         if ($validator->fails()) {
-            // Devolver errores JSON para el modal de SweetAlert
             return response()->json(['errors' => $validator->errors()], 422);
         }
 
+        DB::beginTransaction();
         try {
-             // *** AÑADIDO vat_rate a los datos a actualizar ***
-             $clientData = $request->only([
+            $clientData = $request->only([
                  'name', 'email', 'phone', 'vat_number', 'vat_rate',
                  'address', 'city', 'postal_code', 'country', 'notes'
              ]);
-             $clientData['vat_rate'] = $request->filled('vat_rate') ? $request->input('vat_rate') : null;
+            $clientData['vat_rate'] = $request->filled('vat_rate') ? $request->input('vat_rate') : null;
+
+            // Actualizar el email del usuario asociado si ha cambiado y el cliente tiene un usuario asociado
+            if ($associatedUser && $associatedUser->email !== $request->input('email')) {
+                $associatedUser->email = $request->input('email');
+                // Si cambias el email de un usuario que implementa MustVerifyEmail,
+                // Laravel puede requerir una nueva verificación.
+                // Aquí lo marcamos como verificado ya que el admin lo está cambiando.
+                $associatedUser->email_verified_at = now();
+                $associatedUser->save();
+            }
+            // Si el cliente no tiene un usuario asociado pero se proporciona un email,
+            // podríamos considerar crear uno aquí también, o manejarlo como una acción separada.
+            // Por ahora, solo actualizamos el email del cliente.
 
             $client->update($clientData);
+
+            DB::commit();
             return response()->json(['success' => __('Client updated successfully!')]);
         } catch (\Exception $e) {
-            Log::error('Error updating client: '.$e->getMessage());
+            DB::rollBack();
+            Log::error('Error updating client: '.$e->getMessage().' at '.$e->getFile().':'.$e->getLine());
             return response()->json(['error' => __('An error occurred while updating the client.')], 500);
         }
     }
@@ -210,6 +275,8 @@ class ClientController extends Controller
      */
     public function destroy(Client $client)
     {
+        // Considerar qué hacer con el usuario asociado. ¿Eliminarlo también? ¿Desasociarlo?
+        // Por ahora, solo eliminamos el cliente. La FK en 'clients' tiene onDelete('set null') para user_id.
         try {
             $client->delete();
             return response()->json(['success' => __('Client deleted successfully!')]);

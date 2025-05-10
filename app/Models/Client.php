@@ -26,6 +26,7 @@ class Client extends Model
         'postal_code',
         'country',
         'notes',
+        'user_id'
     ];
 
     /**
