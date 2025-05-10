@@ -510,4 +510,87 @@ class QuoteController extends Controller
             return redirect()->route('quotes.show', $quote->id)->with('error', __('An error occurred while sending the email.'));
         }
     }
+        /**
+     * Convert the specified quote to an invoice.
+     *
+     * @param  \Illuminate\Http\Request  $request
+     * @param  \App\Models\Quote  $quote
+     * @return \Illuminate\Http\RedirectResponse
+     */
+    public function convertToInvoice(Request $request, Quote $quote)
+    {
+        // 1. Verificar estado del presupuesto
+        if ($quote->status !== 'accepted') {
+            return redirect()->route('quotes.show', $quote->id)->with('error', __('Only accepted quotes can be converted to invoices.'));
+        }
+
+        // 2. (Opcional) Verificar si ya se ha generado una factura para este presupuesto
+        if (Invoice::where('quote_id', $quote->id)->exists()) {
+             return redirect()->route('quotes.show', $quote->id)->with('error', __('An invoice has already been generated for this quote.'));
+        }
+
+        // Cargar relaciones necesarias
+        $quote->load('client', 'items.service', 'items.discount');
+
+        DB::beginTransaction();
+        try {
+            // 3. Crear la Factura
+            $invoice = Invoice::create([
+                'client_id' => $quote->client_id,
+                'quote_id' => $quote->id,
+                'project_id' => $quote->project_id, // Si el presupuesto está ligado a un proyecto
+                'invoice_number' => 'INV-' . date('Ymd') . '-' . rand(1000,9999), // Generar número de factura (ajusta la lógica)
+                'invoice_date' => now(),
+                'due_date' => now()->addDays(30), // Fecha de vencimiento (ej. 30 días)
+                'status' => 'draft', // Estado inicial de la factura
+                'subtotal' => $quote->subtotal,
+                'discount_amount' => $quote->discount_amount,
+                'tax_amount' => $quote->tax_amount,
+                'total_amount' => $quote->total_amount,
+                'currency' => $quote->currency ?? 'EUR', // Asumir EUR si no está en el presupuesto
+                'payment_terms' => $quote->terms_and_conditions, // O términos de pago específicos
+                'notes_to_client' => $quote->notes_to_client,
+                // 'verifactu_id' => null, // Se generaría al emitir/firmar la factura
+            ]);
+
+            // 4. Crear los Items de la Factura
+            foreach ($quote->items as $quoteItem) {
+                InvoiceItem::create([
+                    'invoice_id' => $invoice->id,
+                    'service_id' => $quoteItem->service_id,
+                    // 'quote_item_id' => $quoteItem->id, // Para trazabilidad
+                    'item_description' => $quoteItem->item_description,
+                    'quantity' => $quoteItem->quantity,
+                    'unit_price' => $quoteItem->unit_price,
+                    'item_subtotal' => $quoteItem->item_subtotal,
+                    // 'line_discount_percentage' => $quoteItem->line_discount_percentage,
+                    'line_discount_amount' => $quoteItem->line_discount_amount ?? 0,
+                    'tax_rate' => $quote->client->vat_rate ?? config('app.vat_rate', 21), // Usar IVA del cliente o por defecto
+                    'tax_amount_per_item' => 0, // Recalcular si es necesario
+                    'line_tax_total' => 0, // Recalcular basado en la base imponible de la línea y la tasa
+                    'line_total' => $quoteItem->line_total,
+                    'sort_order' => $quoteItem->sort_order,
+                ]);
+                // Nota: El cálculo de 'tax_amount_per_item' y 'line_tax_total' en InvoiceItem
+                // debería hacerse con más precisión aquí, similar a como se hace en el presupuesto.
+            }
+
+            // 5. (Opcional) Actualizar estado del presupuesto
+            $quote->status = 'invoiced'; // O 'partially_invoiced'
+            $quote->save();
+
+            DB::commit();
+
+            Log::info("Quote #{$quote->id} converted to Invoice #{$invoice->id}");
+            // Redirigir a la vista de detalle de la nueva factura (necesitarás crearla)
+            // return redirect()->route('invoices.show', $invoice->id)->with('success', __('Quote successfully converted to invoice!'));
+            return redirect()->route('quotes.show', $quote->id)->with('success', __('Quote successfully converted to invoice! Invoice #') . $invoice->invoice_number);
+
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Log::error('Error converting quote #'.$quote->id.' to invoice: '.$e->getMessage().' at '.$e->getFile().':'.$e->getLine());
+            return redirect()->route('quotes.show', $quote->id)->with('error', __('An error occurred while converting the quote to an invoice.'));
+        }
+    }
 }

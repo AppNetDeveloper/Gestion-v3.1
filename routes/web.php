@@ -432,6 +432,7 @@ Route::middleware(['auth'])->group(function () {
 
     Route::get('quotes/{quote}/pdf', [QuoteController::class, 'exportPdf'])->name('quotes.pdf');
     Route::post('quotes/{quote}/send', [QuoteController::class, 'sendEmail'])->name('quotes.send');
+    Route::post('quotes/{quote}/convert-to-invoice', [QuoteController::class, 'convertToInvoice'])->name('quotes.convertToInvoice'); // <-- NUEVA RUTA
 });
 
 // Grupo de rutas públicas
