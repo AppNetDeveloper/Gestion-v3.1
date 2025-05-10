@@ -208,5 +208,14 @@ class User extends Authenticatable implements MustVerifyEmail, HasMedia
     {
         return $this->belongsToMany(Task::class, 'task_user');
     }
+    /**
+     * The projects that are assigned to the user.
+     */
+    public function assignedProjects(): BelongsToMany // <-- NUEVA RELACIÓN
+    {
+        return $this->belongsToMany(Project::class, 'project_user');
+        // 'project_user' es el nombre de la tabla pivote.
+        // Laravel inferirá las claves foráneas 'project_id' y 'user_id'.
+    }
 }
 

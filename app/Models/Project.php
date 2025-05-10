@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany; // <-- Importar BelongsToMany
 
 class Project extends Model
 {
@@ -76,5 +77,16 @@ class Project extends Model
     {
         // Esto asume que la tabla 'invoices' tiene una columna 'project_id'
         return $this->hasMany(Invoice::class);
+    }
+
+        /**
+     * The users that are assigned to the project.
+     */
+    public function assignedUsers(): BelongsToMany // <-- NUEVA RELACIÓN
+    {
+        return $this->belongsToMany(User::class, 'project_user');
+        // 'project_user' es el nombre de la tabla pivote.
+        // Laravel inferirá las claves foráneas 'project_id' y 'user_id'.
+        // Si usaste otros nombres en la tabla pivote, especifícalos aquí.
     }
 }

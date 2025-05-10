@@ -47,6 +47,8 @@ use App\Http\Controllers\ScrapingTaskController; // Importa el controlador
 use App\Http\Controllers\ServiceController; // Controlador de Servicios
 use App\Http\Controllers\ClientController;  // Importar Controlador de Clientes
 use App\Http\Controllers\QuoteController;   // Importar Controlador de Presupuestos
+use App\Http\Controllers\ProjectController; // <-- Importar ProjectController
+use App\Http\Controllers\TaskController; // <-- Importar TaskController
 
 
 require __DIR__ . '/auth.php';
@@ -433,7 +435,15 @@ Route::middleware(['auth'])->group(function () {
     Route::post('quotes/{quote}/reject', [QuoteController::class, 'reject'])->name('quotes.reject'); // <-- NUEVA RUTA RECHAZAR
     Route::get('quotes/{quote}/pdf', [QuoteController::class, 'exportPdf'])->name('quotes.pdf');
     Route::post('quotes/{quote}/send', [QuoteController::class, 'sendEmail'])->name('quotes.send');
-    Route::post('quotes/{quote}/convert-to-invoice', [QuoteController::class, 'convertToInvoice'])->name('quotes.convertToInvoice'); // <-- NUEVA RUTA
+    Route::post('quotes/{quote}/convert-to-invoice', [QuoteController::class, 'convertToInvoice'])->name('quotes.convertToInvoice');
+
+      // Rutas para Projects (Proyectos)
+      Route::get('projects/data', [ProjectController::class, 'data'])->name('projects.data'); // Para DataTables AJAX
+      Route::resource('projects', ProjectController::class);// <-- NUEVA RUTA
+
+          // Tasks (Anidadas bajo proyectos)
+    Route::get('projects/{project}/tasks/data', [TaskController::class, 'data'])->name('projects.tasks.data'); // <-- NUEVA RUTA PARA DATATABLES DE TAREAS
+    Route::resource('projects.tasks', TaskController::class)->shallow();
 });
 
 // Grupo de rutas públicas
