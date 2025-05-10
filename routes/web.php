@@ -429,7 +429,8 @@ Route::middleware(['auth'])->group(function () {
     // Rutas para Quotes (Presupuestos)
     Route::get('quotes/data', [QuoteController::class, 'data'])->name('quotes.data'); // Para DataTables AJAX
     Route::resource('quotes', QuoteController::class);
-
+    Route::post('quotes/{quote}/accept', [QuoteController::class, 'accept'])->name('quotes.accept'); // <-- NUEVA RUTA ACEPTAR
+    Route::post('quotes/{quote}/reject', [QuoteController::class, 'reject'])->name('quotes.reject'); // <-- NUEVA RUTA RECHAZAR
     Route::get('quotes/{quote}/pdf', [QuoteController::class, 'exportPdf'])->name('quotes.pdf');
     Route::post('quotes/{quote}/send', [QuoteController::class, 'sendEmail'])->name('quotes.send');
     Route::post('quotes/{quote}/convert-to-invoice', [QuoteController::class, 'convertToInvoice'])->name('quotes.convertToInvoice'); // <-- NUEVA RUTA

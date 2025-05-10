@@ -19,7 +19,7 @@ class ServiceController extends Controller
         // Los datos para la tabla se cargarán vía AJAX a través del método data()
         // Aquí solo preparamos los datos para la vista principal, como el breadcrumb
         $breadcrumbItems = [
-            ['name' => __('Dashboard'), 'url' => '/dashboard'], // Ajusta la URL del dashboard si es diferente
+            ['name' => __('Dashboard'), 'url' => '/dashboard'],
             ['name' => __('Services'), 'url' => route('services.index')],
         ];
         return view('services.index', compact('breadcrumbItems'));
