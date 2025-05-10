@@ -18,7 +18,7 @@ class ScrapingTaskController extends Controller
     public function index()
     {
         $breadcrumbItems = [
-            // ['name' => __('Dashboard'), 'url' => route('dashboard')], // Asegúrate que la ruta 'dashboard' existe o cámbiala/elimínala
+            ['name' => __('Dashboard'), 'url' => '/dashboard'],
             ['name' => __('Scraping Tasks Manager')],
         ];
         return view('scraping.index', compact('breadcrumbItems'));
@@ -210,7 +210,7 @@ class ScrapingTaskController extends Controller
         }
         $contacts = $task->contacts()->paginate(25);
          $breadcrumbItems = [
-            // ['name' => __('Dashboard'), 'url' => route('dashboard')],
+            ['name' => __('Dashboard'), 'url' => '/dashboard'],
             ['name' => __('Scraping Tasks Manager'), 'url' => route('scraping.tasks.index')],
             ['name' => __('Task Contacts') . ' (ID: ' . $task->id . ')', 'active' => true],
         ];

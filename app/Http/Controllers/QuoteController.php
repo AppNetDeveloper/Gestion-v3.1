@@ -8,6 +8,8 @@ use App\Models\Service;
 use App\Models\Discount;
 use App\Models\Invoice;
 use App\Models\InvoiceItem;
+use App\Models\Project; // Asegúrate que esté importado
+use App\Models\User; // Para notificaciones opcionales
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
 use Yajra\DataTables\Facades\DataTables;
@@ -17,6 +19,9 @@ use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Support\Facades\Mail;
 use App\Mail\QuoteSentMail; // Asegúrate que esta clase Mailable existe
 use Illuminate\Support\Facades\Auth;
+// use Illuminate\Support\Facades\Notification; // Para notificaciones opcionales
+// use App\Notifications\QuoteAcceptedNotification; // Ejemplo de notificación
+// use App\Notifications\QuoteRejectedNotification; // Ejemplo de notificación
 
 class QuoteController extends Controller
 {
@@ -27,13 +32,12 @@ class QuoteController extends Controller
      */
     public function index(Request $request)
     {
-        // Verificar permiso general para ver la lista de presupuestos
         if (!Auth::user()->can('quotes index') && !Auth::user()->hasRole('customer')) {
             abort(403, __('This action is unauthorized.'));
         }
 
         $breadcrumbItems = [
-            ['name' => __('Dashboard'), 'url' => '/dashboard'], // Ajusta URL
+            ['name' => __('Dashboard'), 'url' => '/dashboard'],
             ['name' => __('Quotes'), 'url' => route('quotes.index')],
         ];
         return view('quotes.index', compact('breadcrumbItems'));
@@ -49,17 +53,20 @@ class QuoteController extends Controller
     {
         if ($request->ajax()) {
             $user = Auth::user();
+            $isCustomer = $user->hasRole('customer'); // Definir $isCustomer aquí
+
             $query = Quote::with('client')->latest();
 
-            if ($user->hasRole('customer')) {
+            if ($isCustomer) { // Usar la variable definida
+                // Asumimos que Client tiene una columna user_id
                 $clientProfile = Client::where('user_id', $user->id)->first();
                 if ($clientProfile) {
                     $query->where('client_id', $clientProfile->id);
                 } else {
-                    $query->whereRaw('1 = 0'); // Condición que siempre es falsa
+                    $query->whereRaw('1 = 0'); // No mostrar nada si no hay perfil de cliente
                 }
-            } elseif (!$user->can('quotes index')) { // Si no es cliente y no tiene permiso general
-                 $query->whereRaw('1 = 0'); // No mostrar nada
+            } elseif (!$user->can('quotes index')) {
+                 $query->whereRaw('1 = 0'); // No mostrar nada si no tiene permiso general
             }
 
             $data = $query->get();
@@ -88,48 +95,42 @@ class QuoteController extends Controller
                 ->editColumn('quote_date', function ($row) {
                     return $row->quote_date ? $row->quote_date->format('d/m/Y') : '';
                 })
-                ->addColumn('action', function($row) use ($user) { // Pasar $user al closure
+                ->addColumn('action', function($row) use ($user, $isCustomer) { // *** $isCustomer AÑADIDO AL use() ***
                     $actions = '<div class="flex items-center justify-center space-x-1">';
+                    $isOwner = $isCustomer && $row->client && $row->client->user_id == $user->id;
 
                     // Botón Ver
                     $canView = $user->can('quotes show');
-                    if ($user->hasRole('customer') && $user->can('quotes view_own') && $row->client && $row->client->user_id == $user->id) {
+                    if ($isOwner && $user->can('quotes view_own')) {
                         $canView = true;
                     }
                     if ($canView) {
-                        $actions .= '<a href="'.route('quotes.show', $row->id).'" class="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 p-1" title="'.__('View Quote').'">
-                                        <iconify-icon icon="heroicons:eye" style="font-size: 1.25rem;"></iconify-icon>
-                                    </a>';
+                        $actions .= '<a href="'.route('quotes.show', $row->id).'" class="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 p-1" title="'.__('View Quote').'"><iconify-icon icon="heroicons:eye" style="font-size: 1.25rem;"></iconify-icon></a>';
                     }
 
                     // Botón Editar
                     $canUpdate = $user->can('quotes update');
-                    if ($user->hasRole('customer') && $user->can('quotes view_own') && $row->client && $row->client->user_id == $user->id && in_array($row->status, ['draft', 'sent'])) {
-                        $canUpdate = true; // Cliente puede editar sus borradores/enviados
+                    if ($isOwner && in_array($row->status, ['draft', 'sent'])) {
+                        $canUpdate = true;
                     }
                     if ($canUpdate && !in_array($row->status, ['accepted', 'invoiced', 'rejected', 'expired'])) {
-                         $actions .= '<a href="'.route('quotes.edit', $row->id).'" class="text-indigo-600 hover:text-indigo-800 dark:text-indigo-400 dark:hover:text-indigo-300 p-1" title="'.__('Edit Quote').'">
-                                    <iconify-icon icon="heroicons:pencil-square" style="font-size: 1.25rem;"></iconify-icon>
-                                </a>';
+                         if (!$isCustomer || ($isOwner && in_array($row->status, ['draft', 'sent']))) {
+                             $actions .= '<a href="'.route('quotes.edit', $row->id).'" class="text-indigo-600 hover:text-indigo-800 dark:text-indigo-400 dark:hover:text-indigo-300 p-1" title="'.__('Edit Quote').'"><iconify-icon icon="heroicons:pencil-square" style="font-size: 1.25rem;"></iconify-icon></a>';
+                         }
                     }
 
                     // Botón PDF
                     $canExportPdf = $user->can('quotes export_pdf');
-                     if ($user->hasRole('customer') && $user->can('quotes view_own') && $row->client && $row->client->user_id == $user->id) {
+                     if ($isOwner && $user->can('quotes view_own')) {
                         $canExportPdf = true;
                     }
                     if ($canExportPdf) {
-                        $actions .= '<a href="'.route('quotes.pdf', $row->id).'" target="_blank" class="text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 p-1" title="'.__('Export PDF').'">
-                                        <iconify-icon icon="heroicons:arrow-down-tray" style="font-size: 1.25rem;"></iconify-icon>
-                                    </a>';
+                        $actions .= '<a href="'.route('quotes.pdf', $row->id).'" target="_blank" class="text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 p-1" title="'.__('Export PDF').'"><iconify-icon icon="heroicons:arrow-down-tray" style="font-size: 1.25rem;"></iconify-icon></a>';
                     }
 
-                    // Botón Eliminar (Generalmente no para clientes)
-                    if ($user->can('quotes delete') && !$user->hasRole('customer')) {
-                         $actions .= '<button class="deleteQuote text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300 p-1"
-                                    data-id="'.$row->id.'" title="'.__('Delete Quote').'">
-                                    <iconify-icon icon="heroicons:trash" style="font-size: 1.25rem;"></iconify-icon>
-                                 </button>';
+                    // Botón Eliminar (Solo para admin/empleados, no para clientes)
+                    if ($user->can('quotes delete') && !$isCustomer) { // Usar $isCustomer
+                         $actions .= '<button class="deleteQuote text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300 p-1" data-id="'.$row->id.'" title="'.__('Delete Quote').'"><iconify-icon icon="heroicons:trash" style="font-size: 1.25rem;"></iconify-icon></button>';
                     }
                     $actions .= '</div>';
                     return $actions;
@@ -191,6 +192,10 @@ class QuoteController extends Controller
             'items.*.item_description' => 'required|string|max:255',
             'items.*.quantity' => 'required|integer|min:1',
             'items.*.unit_price' => 'required|numeric|min:0',
+            'subtotal' => 'required|numeric|min:0',
+            'discount_amount' => 'required|numeric|min:0',
+            'tax_amount' => 'required|numeric|min:0',
+            'total_amount' => 'required|numeric|min:0',
         ], [
             'items.required' => __('You must add at least one item to the quote.'),
             'items.min' => __('You must add at least one item to the quote.'),
@@ -207,30 +212,25 @@ class QuoteController extends Controller
         try {
             $quoteData = $request->only([
                 'client_id', 'quote_number', 'quote_date', 'expiry_date', 'status',
-                'terms_and_conditions', 'notes_to_client', 'internal_notes', 'discount_id'
+                'terms_and_conditions', 'notes_to_client', 'internal_notes', 'discount_id',
+                'subtotal', 'discount_amount', 'tax_amount', 'total_amount'
             ]);
-            // Los totales se calculan después de procesar los items
-            $quoteData['subtotal'] = $request->input('subtotal', 0);
-            $quoteData['discount_amount'] = $request->input('discount_amount', 0);
-            $quoteData['tax_amount'] = $request->input('tax_amount', 0);
-            $quoteData['total_amount'] = $request->input('total_amount', 0);
 
             $quote = Quote::create($quoteData);
 
             foreach ($request->input('items', []) as $itemData) {
+                $itemSubtotal = ($itemData['quantity'] ?? 1) * ($itemData['unit_price'] ?? 0);
                 $quote->items()->create([
                     'service_id' => $itemData['service_id'] ?? null,
                     'item_description' => $itemData['item_description'],
                     'quantity' => $itemData['quantity'] ?? 1,
                     'unit_price' => $itemData['unit_price'] ?? 0,
-                    'item_subtotal' => ($itemData['quantity'] ?? 1) * ($itemData['unit_price'] ?? 0),
-                    'line_discount_amount' => $itemData['line_discount_amount'] ?? 0, // Asumir que se envía desde JS
-                    'line_total' => $itemData['line_total'] ?? (($itemData['quantity'] ?? 1) * ($itemData['unit_price'] ?? 0)), // Asumir que se envía desde JS
+                    'item_subtotal' => $itemSubtotal,
+                    'line_discount_amount' => $itemData['line_discount_amount'] ?? 0,
+                    'line_total' => $itemData['line_total'] ?? $itemSubtotal,
                     'sort_order' => $itemData['sort_order'] ?? 0,
                 ]);
             }
-            // No es necesario recalcular y guardar los totales aquí si ya se envían desde el formulario
-            // y se validan/confían. Si no, se recalcularían como en la versión anterior.
 
             DB::commit();
             return redirect()->route('quotes.show', $quote->id)->with('success', __('Quote created successfully!'));
@@ -254,16 +254,13 @@ class QuoteController extends Controller
     {
         $user = Auth::user();
         $canView = $user->can('quotes show');
-        if ($user->hasRole('customer')) {
-            $clientProfile = Client::where('user_id', $user->id)->first();
-            if ($clientProfile && $quote->client_id === $clientProfile->id && $user->can('quotes view_own')) {
-                $canView = true;
-            } else if (!$clientProfile || $quote->client_id !== $clientProfile->id) {
-                 $canView = false; // Cliente intentando ver presupuesto ajeno
-            }
+        $isOwner = $user->hasRole('customer') && $quote->client && $quote->client->user_id == $user->id;
+
+        if ($isOwner && $user->can('quotes view_own')) {
+            $canView = true;
         }
-        if (!$canView) {
-            abort(403, __('This action is unauthorized.'));
+        if (!$canView && !$isOwner) {
+             abort(403, __('This action is unauthorized.'));
         }
 
         $quote->load('client', 'items.service', 'items.discount', 'discount');
@@ -284,22 +281,21 @@ class QuoteController extends Controller
     public function edit(Quote $quote)
     {
         $user = Auth::user();
-        $canUpdate = $user->can('quotes update');
+        $isCustomer = $user->hasRole('customer'); // Definir $isCustomer
+        $isOwner = $isCustomer && $quote->client && $quote->client->user_id == $user->id;
 
-        if ($user->hasRole('customer')) {
-            $clientProfile = Client::where('user_id', $user->id)->first();
-            if (!$clientProfile || $quote->client_id !== $clientProfile->id || !in_array($quote->status, ['draft', 'sent'])) {
-                // Si es cliente pero no es su presupuesto o no está en estado editable por cliente
-                return redirect()->route('quotes.show', $quote->id)->with('error', __('You cannot edit this quote.'));
-            }
-            // Si es su presupuesto y está en draft/sent, el permiso 'quotes update' general no aplica,
-            // pero permitimos la edición basado en la lógica de cliente.
-        } elseif (!$canUpdate) { // Para otros roles, verificar permiso general
-             abort(403, __('This action is unauthorized.'));
+        $canEdit = false;
+        if (!$isCustomer && $user->can('quotes update')) {
+            $canEdit = true;
+        } elseif ($isOwner && in_array($quote->status, ['draft', 'sent'])) {
+            $canEdit = true;
         }
 
-        // Comprobación general de estado para todos los que pueden editar
-         if (in_array($quote->status, ['accepted', 'invoiced', 'rejected', 'expired'])) {
+        if (!$canEdit) {
+            return redirect()->route('quotes.show', $quote->id)->with('error', __('You cannot edit this quote.'));
+        }
+        // Mover esta comprobación para que solo aplique si no es el dueño editando un draft/sent
+        if (in_array($quote->status, ['accepted', 'invoiced', 'rejected', 'expired']) && !($isOwner && in_array($quote->status, ['draft', 'sent']))) {
              return redirect()->route('quotes.show', $quote->id)->with('error', __('This quote cannot be edited because it is already :status.', ['status' => $quote->status]));
          }
 
@@ -326,25 +322,23 @@ class QuoteController extends Controller
      */
     public function update(Request $request, Quote $quote)
     {
-        // Lógica de permisos similar a edit()
         $user = Auth::user();
-        $canUpdateGeneral = $user->can('quotes update');
-        $canUpdateOwn = false;
+        $isCustomer = $user->hasRole('customer'); // Definir $isCustomer
+        $isOwner = $isCustomer && $quote->client && $quote->client->user_id == $user->id;
 
-        if ($user->hasRole('customer')) {
-            $clientProfile = Client::where('user_id', $user->id)->first();
-            if ($clientProfile && $quote->client_id === $clientProfile->id && in_array($quote->status, ['draft', 'sent'])) {
-                $canUpdateOwn = true;
-            }
+        $canUpdate = false;
+        if (!$isCustomer && $user->can('quotes update')) {
+            $canUpdate = true;
+        } elseif ($isOwner && in_array($quote->status, ['draft', 'sent'])) {
+            $canUpdate = true;
         }
 
-        if (!$canUpdateGeneral && !$canUpdateOwn) {
+        if (!$canUpdate) {
             abort(403, __('This action is unauthorized.'));
         }
-        if (in_array($quote->status, ['accepted', 'invoiced', 'rejected', 'expired']) && !$canUpdateOwn) { // Si no es cliente editando su draft/sent
+        if (in_array($quote->status, ['accepted', 'invoiced', 'rejected', 'expired']) && !($isOwner && in_array($quote->status, ['draft', 'sent'])) ) {
              return redirect()->route('quotes.show', $quote->id)->with('error', __('This quote cannot be edited because it is already :status.', ['status' => $quote->status]));
         }
-
 
          $validator = Validator::make($request->all(), [
             'client_id' => 'required|exists:clients,id',
@@ -362,6 +356,10 @@ class QuoteController extends Controller
             'items.*.item_description' => 'required|string|max:255',
             'items.*.quantity' => 'required|integer|min:1',
             'items.*.unit_price' => 'required|numeric|min:0',
+            'subtotal' => 'required|numeric|min:0',
+            'discount_amount' => 'required|numeric|min:0',
+            'tax_amount' => 'required|numeric|min:0',
+            'total_amount' => 'required|numeric|min:0',
         ], [
             'items.required' => __('You must add at least one item to the quote.'),
             'items.min' => __('You must add at least one item to the quote.'),
@@ -378,13 +376,9 @@ class QuoteController extends Controller
         try {
              $quoteData = $request->only([
                 'client_id', 'quote_number', 'quote_date', 'expiry_date', 'status',
-                'terms_and_conditions', 'notes_to_client', 'internal_notes', 'discount_id'
+                'terms_and_conditions', 'notes_to_client', 'internal_notes', 'discount_id',
+                'subtotal', 'discount_amount', 'tax_amount', 'total_amount'
             ]);
-            $quoteData['subtotal'] = $request->input('subtotal', 0);
-            $quoteData['discount_amount'] = $request->input('discount_amount', 0);
-            $quoteData['tax_amount'] = $request->input('tax_amount', 0);
-            $quoteData['total_amount'] = $request->input('total_amount', 0);
-
             $quote->update($quoteData);
 
             $existingItemIds = $quote->items()->pluck('id')->toArray();
@@ -418,8 +412,6 @@ class QuoteController extends Controller
             if (!empty($itemsToDelete)) {
                 $quote->items()->whereIn('id', $itemsToDelete)->delete();
             }
-            // No es necesario recalcular y guardar los totales aquí si ya se envían desde el formulario.
-            // Si no se envían, se deberían recalcular aquí como en el método store.
 
             DB::commit();
             return redirect()->route('quotes.show', $quote->id)->with('success', __('Quote updated successfully!'));
@@ -441,15 +433,10 @@ class QuoteController extends Controller
      */
     public function destroy(Quote $quote)
     {
-        // Lógica de permisos
-        if (!Auth::user()->can('quotes delete')) {
-             // Si es un cliente, normalmente no debería poder borrar.
-            if (Auth::user()->hasRole('customer')) {
-                 abort(403, __('This action is unauthorized.'));
-            }
+        $user = Auth::user();
+        if (!$user->can('quotes delete') || $user->hasRole('customer')) {
             abort(403, __('This action is unauthorized.'));
         }
-        // Un cliente no debería poder borrar presupuestos, incluso los suyos, a menos que se permita explícitamente.
 
         try {
             $quote->delete();
@@ -468,16 +455,14 @@ class QuoteController extends Controller
      */
     public function exportPdf(Quote $quote)
     {
-        // Lógica de permisos similar a show()
         $user = Auth::user();
-        $canView = $user->can('quotes export_pdf'); // Permiso específico para exportar
-        if ($user->hasRole('customer')) {
-            $clientProfile = Client::where('user_id', $user->id)->first();
-            if (!($clientProfile && $quote->client_id === $clientProfile->id && $user->can('quotes view_own'))) { // view_own para ver si puede acceder
-                $canView = false;
-            }
+        $canExport = $user->can('quotes export_pdf');
+        $isOwner = $user->hasRole('customer') && $quote->client && $quote->client->user_id == $user->id;
+
+        if ($isOwner && $user->can('quotes view_own')) { // Clientes pueden exportar sus propios presupuestos si tienen permiso de verlos
+            $canExport = true;
         }
-        if (!$canView) {
+        if (!$canExport) {
             abort(403, __('This action is unauthorized.'));
         }
 
@@ -501,16 +486,10 @@ class QuoteController extends Controller
      */
     public function sendEmail(Request $request, Quote $quote)
     {
-        // Lógica de permisos similar a show()
         $user = Auth::user();
-        $canSend = $user->can('quotes send_email');
-         if ($user->hasRole('customer')) { // Un cliente no debería poder enviar presupuestos por email de esta forma
+        if (!$user->can('quotes send_email') || $user->hasRole('customer')) {
             abort(403, __('This action is unauthorized.'));
         }
-        if (!$canSend) {
-             abort(403, __('This action is unauthorized.'));
-        }
-
 
         if (!$quote->client || !$quote->client->email) {
             return redirect()->route('quotes.show', $quote->id)->with('error', __('Client does not have an email address.'));
@@ -545,15 +524,10 @@ class QuoteController extends Controller
      */
     public function convertToInvoice(Request $request, Quote $quote)
     {
-        // Lógica de permisos
-        if (!Auth::user()->can('quotes convert_to_invoice')) {
+        $user = Auth::user();
+        if (!$user->can('quotes convert_to_invoice') || $user->hasRole('customer')) {
              abort(403, __('This action is unauthorized.'));
         }
-         // Un cliente no debería poder convertir a factura directamente
-         if (Auth::user()->hasRole('customer')) {
-            abort(403, __('This action is unauthorized.'));
-        }
-
 
         if ($quote->status !== 'accepted') {
             return redirect()->route('quotes.show', $quote->id)->with('error', __('Only accepted quotes can be converted to invoices.'));
@@ -593,8 +567,6 @@ class QuoteController extends Controller
                     'item_subtotal' => $quoteItem->item_subtotal,
                     'line_discount_amount' => $quoteItem->line_discount_amount ?? 0,
                     'tax_rate' => $quote->client->vat_rate ?? config('app.vat_rate', 21),
-                    'tax_amount_per_item' => 0, // Recalcular
-                    'line_tax_total' => 0, // Recalcular
                     'line_total' => $quoteItem->line_total,
                     'sort_order' => $quoteItem->sort_order,
                 ]);
@@ -605,13 +577,81 @@ class QuoteController extends Controller
 
             DB::commit();
             Log::info("Quote #{$quote->id} converted to Invoice #{$invoice->id}");
-            // Idealmente redirigir a la vista de la factura: route('invoices.show', $invoice->id)
             return redirect()->route('quotes.show', $quote->id)->with('success', __('Quote successfully converted to invoice! Invoice #') . $invoice->invoice_number);
 
         } catch (\Exception $e) {
             DB::rollBack();
             Log::error('Error converting quote #'.$quote->id.' to invoice: '.$e->getMessage().' at '.$e->getFile().':'.$e->getLine());
             return redirect()->route('quotes.show', $quote->id)->with('error', __('An error occurred while converting the quote to an invoice.'));
+        }
+    }
+
+    /**
+     * Mark the specified quote as accepted by the client.
+     *
+     * @param  \App\Models\Quote  $quote
+     * @return \Illuminate\Http\RedirectResponse
+     */
+    public function accept(Quote $quote)
+    {
+        $user = Auth::user();
+        if (!$user->hasRole('customer') || !$quote->client || $quote->client->user_id !== $user->id) {
+            abort(403, __('This action is unauthorized.'));
+        }
+        if ($quote->status !== 'sent') {
+            return redirect()->route('quotes.show', $quote->id)->with('error', __('This quote cannot be accepted as it is not in "sent" status.'));
+        }
+
+        DB::beginTransaction();
+        try {
+            $quote->status = 'accepted';
+            $quote->save();
+
+            if (Project::where('quote_id', $quote->id)->doesntExist()) {
+                $project = Project::create([
+                    'client_id' => $quote->client_id,
+                    'quote_id' => $quote->id,
+                    'project_title' => __('Project for Quote #') . $quote->quote_number,
+                    'description' => $quote->notes_to_client ?? __('Project based on quote :number', ['number' => $quote->quote_number]),
+                    'status' => 'pending',
+                    'start_date' => now(),
+                ]);
+                Log::info("Project #{$project->id} created automatically for accepted Quote #{$quote->id}");
+            }
+
+            DB::commit();
+            return redirect()->route('quotes.show', $quote->id)->with('success', __('Quote has been accepted. A project may have been created.'));
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Log::error('Error accepting quote #'.$quote->id.': '.$e->getMessage().' at '.$e->getFile().':'.$e->getLine());
+            return redirect()->route('quotes.show', $quote->id)->with('error', __('An error occurred while accepting the quote.'));
+        }
+    }
+
+    /**
+     * Mark the specified quote as rejected by the client.
+     *
+     * @param  \App\Models\Quote  $quote
+     * @return \Illuminate\Http\RedirectResponse
+     */
+    public function reject(Quote $quote)
+    {
+        $user = Auth::user();
+        if (!$user->hasRole('customer') || !$quote->client || $quote->client->user_id !== $user->id) {
+            abort(403, __('This action is unauthorized.'));
+        }
+        if ($quote->status !== 'sent') {
+            return redirect()->route('quotes.show', $quote->id)->with('error', __('This quote cannot be rejected as it is not in "sent" status.'));
+        }
+
+        try {
+            $quote->status = 'rejected';
+            $quote->save();
+            return redirect()->route('quotes.show', $quote->id)->with('success', __('Quote has been rejected.'));
+        } catch (\Exception $e) {
+            Log::error('Error rejecting quote #'.$quote->id.': '.$e->getMessage());
+            return redirect()->route('quotes.show', $quote->id)->with('error', __('An error occurred while rejecting the quote.'));
         }
     }
 }
