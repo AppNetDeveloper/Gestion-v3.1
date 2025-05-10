@@ -16,8 +16,104 @@ use Yajra\DataTables\Facades\DataTables;
 class TaskController extends Controller
 {
     /**
+     * Display a listing of the tasks for the authenticated user.
+     *
+     * @return \Illuminate\View\View
+     */
+    public function myTasks()
+    {
+        $user = Auth::user();
+        // Clientes no deberían tener una vista de "mis tareas" de esta forma,
+        // ellos ven tareas a través de sus proyectos.
+        if ($user->hasRole('customer')) {
+            return redirect()->route('projects.index')->with('info', __('Tasks are viewed within each project.'));
+        }
+
+        // Verificar permiso general para ver tareas (o un permiso específico 'view own tasks' / 'view assigned tasks')
+        if (!$user->can('tasks index') && !$user->can('tasks view_own') && !$user->can('tasks view_assigned')) {
+             abort(403, __('This action is unauthorized.'));
+        }
+
+        $breadcrumbItems = [
+            ['name' => __('Dashboard'), 'url' => '/dashboard'],
+            ['name' => __('My Tasks'), 'url' => route('tasks.my')],
+        ];
+        return view('tasks.my_index', compact('breadcrumbItems'));
+    }
+
+    /**
+     * Fetch data for DataTables for "My Tasks" page.
+     *
+     * @param \Illuminate\Http\Request $request
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function myTasksData(Request $request)
+    {
+        if ($request->ajax()) {
+            $user = Auth::user();
+
+            if ($user->hasRole('customer')) {
+                return DataTables::of(collect([]))->make(true); // Clientes no usan esta vista
+            }
+
+            // Obtener tareas asignadas directamente al usuario
+            $query = $user->tasks()->with(['project.client'])->latest('id');
+
+            return DataTables::of($query)
+                ->addIndexColumn()
+                ->addColumn('project_title', function($row){
+                    return $row->project ? $row->project->project_title : __('N/A');
+                })
+                ->addColumn('client_name', function($row){
+                    return $row->project && $row->project->client ? $row->project->client->name : __('N/A');
+                })
+                ->editColumn('status', function($row) {
+                    $status = ucfirst($row->status ?? 'pending');
+                    $color = 'text-slate-500 dark:text-slate-400';
+                     switch ($row->status) {
+                        case 'in_progress': $color = 'text-blue-500 dark:text-blue-400'; break;
+                        case 'completed': $color = 'text-green-500 dark:text-green-400'; break;
+                        case 'on_hold': $color = 'text-yellow-500 dark:text-yellow-400'; break;
+                        case 'cancelled': $color = 'text-red-500 dark:text-red-400'; break;
+                        case 'pending': $color = 'text-orange-500 dark:text-orange-400'; break;
+                    }
+                    return "<span class='{$color} font-medium'>{$status}</span>";
+                })
+                ->editColumn('priority', function($row){
+                    return ucfirst($row->priority ?? 'medium');
+                })
+                ->editColumn('due_date', function ($row) {
+                    return $row->due_date ? $row->due_date->format('d/m/Y') : '-';
+                })
+                ->addColumn('action', function($row) use ($user){
+                    $actions = '<div class="flex items-center justify-center space-x-1">';
+                    $isAssigned = $row->users->contains($user->id);
+
+                    // Botón Ver Tarea
+                    if ($user->can('tasks show') || $isAssigned) { // Permitir ver si tiene permiso general o está asignado
+                        $actions .= '<a href="'.route('tasks.show', $row->id).'" class="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 p-1" title="'.__('View Task').'"><iconify-icon icon="heroicons:eye" style="font-size: 1.25rem;"></iconify-icon></a>';
+                    }
+
+                    // Botón Editar Tarea
+                    $canEditTask = false;
+                    if ($user->can('tasks update') && !$user->hasRole('customer')) { $canEditTask = true; } // Admin/empleado con permiso general
+                    elseif ($isAssigned && !in_array($row->status, ['completed', 'cancelled'])) { $canEditTask = true; } // Usuario asignado puede editar si no está finalizada
+
+                    if ($canEditTask && !in_array($row->status, ['completed', 'cancelled'])) {
+                         $actions .= '<a href="'.route('tasks.edit', $row->id).'" class="text-indigo-600 hover:text-indigo-800 dark:text-indigo-400 dark:hover:text-indigo-300 p-1" title="'.__('Edit Task').'"><iconify-icon icon="heroicons:pencil-square" style="font-size: 1.25rem;"></iconify-icon></a>';
+                    }
+                    $actions .= '</div>';
+                    return $actions;
+                })
+                ->rawColumns(['action', 'status'])
+                ->make(true);
+        }
+        return abort(403, 'Unauthorized action.');
+    }
+
+
+    /**
      * Display a listing of the tasks for a specific project.
-     * (Esta ruta ahora se usa más para la vista de detalle del proyecto que muestra las tareas)
      *
      * @param  \App\Models\Project  $project
      * @return \Illuminate\Http\RedirectResponse
@@ -32,7 +128,6 @@ class TaskController extends Controller
         }
         if (!$canViewProject) { abort(403, __('This action is unauthorized.')); }
 
-        // Redirigir a la vista de detalle del proyecto, donde se listarán las tareas.
         return redirect()->route('projects.show', $project->id);
     }
 
@@ -49,24 +144,23 @@ class TaskController extends Controller
             $user = Auth::user();
             $isCustomer = $user->hasRole('customer');
 
-            // Verificar si el usuario puede ver las tareas de este proyecto
             $canViewProjectTasks = false;
-            if ($user->can('tasks index')) { // Permiso general para ver tareas
-                if (!$isCustomer) { // Admin/empleado puede ver tareas de cualquier proyecto (si tiene permiso general)
+            if ($user->can('tasks index')) {
+                if (!$isCustomer) {
                     $canViewProjectTasks = true;
-                } elseif ($project->client && $project->client->user_id == $user->id) { // Cliente solo puede ver tareas de sus proyectos
+                } elseif ($project->client && $project->client->user_id == $user->id) {
                     $canViewProjectTasks = true;
                 }
             }
 
             if (!$canViewProjectTasks) {
-                return DataTables::of(collect([]))->make(true); // Devolver vacío si no tiene permiso
+                return DataTables::of(collect([]))->make(true);
             }
 
             $query = $project->tasks()->with('users')->latest('id');
 
             return DataTables::of($query)
-                ->addIndexColumn() // Añade DT_RowIndex
+                ->addIndexColumn()
                 ->addColumn('assigned_users_list', function($row) {
                     return $row->users->isNotEmpty() ? $row->users->pluck('name')->implode(', ') : __('N/A');
                 })
@@ -88,34 +182,22 @@ class TaskController extends Controller
                 ->editColumn('due_date', function ($row) {
                     return $row->due_date ? $row->due_date->format('d/m/Y') : '-';
                 })
-                ->addColumn('action', function($row) use ($user, $isCustomer, $project){ // $project está disponible aquí
+                ->addColumn('action', function($row) use ($user, $isCustomer, $project){
                     $actions = '<div class="flex items-center justify-center space-x-1">';
-                    $isTaskOwnerOrAssigned = $row->users->contains($user->id); // Verificar si el usuario está asignado a la tarea
+                    $isTaskOwnerOrAssigned = $row->users->contains($user->id);
 
-                    // Botón Ver Tarea
-                    // Permitir ver si tiene permiso general, o es cliente dueño del proyecto, o está asignado a la tarea
-                    if ($user->can('tasks show') ||
-                        ($isCustomer && $project->client && $project->client->user_id == $user->id) ||
-                        $isTaskOwnerOrAssigned) {
+                    if ($user->can('tasks show') || ($isCustomer && $project->client && $project->client->user_id == $user->id) || $isTaskOwnerOrAssigned) {
                         $actions .= '<a href="'.route('tasks.show', $row->id).'" class="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 p-1" title="'.__('View Task').'"><iconify-icon icon="heroicons:eye" style="font-size: 1.25rem;"></iconify-icon></a>';
                     }
 
-                    // Botón Editar Tarea (solo admin/empleados con permiso, o si está asignado y la tarea no está finalizada)
                     $canEditTask = false;
-                    if ($user->can('tasks update') && !$isCustomer) {
-                        $canEditTask = true;
-                    } elseif ($isTaskOwnerOrAssigned && !in_array($row->status, ['completed', 'cancelled'])) {
-                        // Permitir a usuarios asignados editar tareas no finalizadas (si se define un permiso 'update own task')
-                        // if ($user->can('update own task')) $canEditTask = true;
-                        // Por ahora, si está asignado puede editar si no está completada/cancelada
-                        $canEditTask = true;
-                    }
+                    if ($user->can('tasks update') && !$isCustomer) { $canEditTask = true; }
+                    elseif ($isTaskOwnerOrAssigned && !in_array($row->status, ['completed', 'cancelled'])) { $canEditTask = true; }
 
                     if ($canEditTask && !in_array($row->status, ['completed', 'cancelled'])) {
                          $actions .= '<a href="'.route('tasks.edit', $row->id).'" class="text-indigo-600 hover:text-indigo-800 dark:text-indigo-400 dark:hover:text-indigo-300 p-1" title="'.__('Edit Task').'"><iconify-icon icon="heroicons:pencil-square" style="font-size: 1.25rem;"></iconify-icon></a>';
                     }
 
-                    // Botón Eliminar Tarea (Solo para admin/empleados con permiso)
                     if ($user->can('tasks delete') && !$isCustomer) {
                          $actions .= '<button class="deleteTask text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300 p-1" data-id="'.$row->id.'" data-project-id="'.$project->id.'" title="'.__('Delete Task').'"><iconify-icon icon="heroicons:trash" style="font-size: 1.25rem;"></iconify-icon></button>';
                     }
@@ -146,7 +228,7 @@ class TaskController extends Controller
         })->orderBy('name')->pluck('name', 'id');
 
         $breadcrumbItems = [
-            ['name' => __('Dashboard'), 'url' => route('dashboard')],
+            ['name' => __('Dashboard'), 'url' => '/dashboard'],
             ['name' => __('Projects'), 'url' => route('projects.index')],
             ['name' => $project->project_title, 'url' => route('projects.show', $project->id)],
             ['name' => __('Create Task'), 'url' => route('projects.tasks.create', $project->id)],
@@ -231,12 +313,12 @@ class TaskController extends Controller
         $isOwnerOrAssigned = false;
 
         if ($user->hasRole('customer') && $project && $project->client && $project->client->user_id == $user->id) {
-            $isOwnerOrAssigned = true; // Cliente dueño del proyecto
+            $isOwnerOrAssigned = true;
         } elseif ($task->users->contains($user->id)) {
-            $isOwnerOrAssigned = true; // Usuario asignado a la tarea
+            $isOwnerOrAssigned = true;
         }
 
-        if ($user->can('tasks show') || ($isOwnerOrAssigned && $user->can('tasks view_own'))) { // Asumiendo 'tasks view_own' para ambos casos
+        if ($user->can('tasks show') || ($isOwnerOrAssigned && $user->can('tasks view_own'))) {
             $canView = true;
         }
 
@@ -247,7 +329,7 @@ class TaskController extends Controller
         $task->load('project.client', 'users', 'timeHistories');
 
         $breadcrumbItems = [
-            ['name' => __('Dashboard'), 'url' => route('dashboard')],
+            ['name' => __('Dashboard'), 'url' => '/dashboard'],
             ['name' => __('Projects'), 'url' => route('projects.index')],
             ['name' => $task->project->project_title, 'url' => route('projects.show', $task->project->id)],
             ['name' => __('Task Details'), 'url' => route('tasks.show', $task->id)],
@@ -268,8 +350,6 @@ class TaskController extends Controller
         $canUpdate = $user->can('tasks update');
         $isAssigned = $task->users->contains($user->id);
 
-        // Permitir editar si es admin/empleado con permiso, o si está asignado y la tarea no está finalizada
-        // (Podrías tener un permiso 'update own task' para ser más granular)
         if ( !($canUpdate && !$user->hasRole('customer')) && !($isAssigned && !in_array($task->status, ['completed', 'cancelled'])) ) {
              abort(403, __('This action is unauthorized.'));
         }
@@ -282,7 +362,7 @@ class TaskController extends Controller
         $task->load('users');
 
         $breadcrumbItems = [
-            ['name' => __('Dashboard'), 'url' => route('dashboard')],
+            ['name' => __('Dashboard'), 'url' => '/dashboard'],
             ['name' => __('Projects'), 'url' => route('projects.index')],
             ['name' => $project->project_title, 'url' => route('projects.show', $project->id)],
             ['name' => __('Edit Task'), 'url' => route('tasks.edit', $task->id)],
@@ -378,7 +458,6 @@ class TaskController extends Controller
         DB::beginTransaction();
         try {
             $task->users()->detach();
-            // $task->timeHistories()->delete(); // Si tienes esta relación y no usas onDelete cascade
             $task->delete();
             DB::commit();
             Log::info("Task #{$task->id} deleted from Project #{$projectId}");

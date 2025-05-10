@@ -441,9 +441,14 @@ Route::middleware(['auth'])->group(function () {
       Route::get('projects/data', [ProjectController::class, 'data'])->name('projects.data'); // Para DataTables AJAX
       Route::resource('projects', ProjectController::class);// <-- NUEVA RUTA
 
-          // Tasks (Anidadas bajo proyectos)
-    Route::get('projects/{project}/tasks/data', [TaskController::class, 'data'])->name('projects.tasks.data'); // <-- NUEVA RUTA PARA DATATABLES DE TAREAS
+
+    // Tasks (Anidadas bajo proyectos y rutas para tareas del usuario)
+    Route::get('projects/{project}/tasks/data', [TaskController::class, 'data'])->name('projects.tasks.data');
     Route::resource('projects.tasks', TaskController::class)->shallow();
+
+    // *** NUEVA RUTA PARA "MIS TAREAS" ***
+    Route::get('/my-tasks', [TaskController::class, 'myTasks'])->name('tasks.my');
+    Route::get('/my-tasks/data', [TaskController::class, 'myTasksData'])->name('tasks.my.data'); // Para DataTables de "Mis Tareas"
 });
 
 // Grupo de rutas públicas
