@@ -18,6 +18,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Intervention\Image\Facades\Image;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\HasOne; // <-- Importar HasOne
 
 class User extends Authenticatable implements MustVerifyEmail, HasMedia
 {
@@ -189,6 +190,17 @@ class User extends Authenticatable implements MustVerifyEmail, HasMedia
         return $this->belongsToMany(ShiftDay::class, 'shift_day_user', 'user_id', 'shift_day_id')
                     ->using(ShiftDayUser::class)
                     ->withTimestamps();
+    }
+
+        /**
+     * Get the client profile associated with the user.
+     * Un usuario (si es un cliente) tiene un perfil de cliente.
+     */
+    public function clientProfile(): HasOne // <-- NUEVA RELACIÓN
+    {
+        return $this->hasOne(Client::class);
+        // Si un usuario pudiera ser contacto de MÚLTIPLES clientes (menos común para este caso):
+        // return $this->hasMany(Client::class);
     }
 
     // En app/Models/User.php

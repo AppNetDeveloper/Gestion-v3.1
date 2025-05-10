@@ -616,6 +616,13 @@
         "Quote updated successfully!": "¡Presupuesto actualizado correctamente!",
         "An error occurred while updating the quote.": "Ocurrió un error al actualizar el presupuesto.",
         "Quote deleted successfully!": "¡Presupuesto eliminado correctamente!",
-        "You must add at least one item to the quote.": "Debes añadir al menos una línea al presupuesto."
+        "You must add at least one item to the quote.": "Debes añadir al menos una línea al presupuesto.",
+        "Welcome to :app_name, :name!": "¡Bienvenido/a a :AppNet Developer",
+        "Your account has been created successfully.": "Tu cuenta ha sido creada correctamente.",
+        "Here are your login details:": "Aquí tienes tus datos de acceso:",
+        "We recommend changing your password after your first login.": "Te recomendamos cambiar tu contraseña después de tu primer inicio de sesión.",
+        "Login to Your Account": "Acceder a Tu Cuenta",
+        "If you have any questions, please contact us.": "Si tienes alguna pregunta, por favor, contáctanos.",
+        "Thanks,": "Gracias,"
     }
 
