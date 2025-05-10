@@ -79,7 +79,7 @@
 
     @push('scripts')
         {{-- Cargar jQuery PRIMERO si no está globalmente --}}
-        {{-- <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script> --}}
+        <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
         <script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
         <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
         <script src="https://code.iconify.design/iconify-icon/1.0.7/iconify-icon.min.js"></script>
@@ -109,7 +109,7 @@
                     },
                     columns: [
                         { data: 'title', name: 'title', className: 'table-td' },
-                        { data: 'project_title', name: 'project.project_title', className: 'table-td' }, // Asume que 'project_title' se añade en el controlador
+                        { data: 'project_title', name: 'project.project_title', className: 'table-td' },
                         { data: 'client_name', name: 'project.client.name', className: 'table-td' }, // Asume que 'client_name' se añade en el controlador
                         { data: 'priority', name: 'priority', className: 'table-td' },
                         { data: 'status', name: 'status', className: 'table-td' },
@@ -131,10 +131,8 @@
                     }
                 });
 
-                // No se necesita el handler de 'deleteTask' aquí, ya que las tareas
-                // se eliminan desde la vista del proyecto o desde su propia vista de detalle/edición.
-                // Si quieres añadirlo, asegúrate de que la ruta y el data-project-id sean correctos.
             });
         </script>
     @endpush
 </x-app-layout>
+
