@@ -22,9 +22,15 @@ return new class extends Migration
             $table->enum('type', ['percentage', 'fixed_amount'])->default('percentage');
             $table->decimal('value', 8, 2); // Valor del descuento (ej: 10.00 para 10% o 5.00 para 5€)
 
-            // Relaciones opcionales (un descuento puede ser general o específico)
+            // Relaciones opcionales
+            // Clave foránea para services
             $table->foreignId('service_id')->nullable()->constrained('services')->onDelete('set null');
-            $table->foreignId('client_id')->nullable()->constrained('clients')->onDelete('set null');
+
+            // Clave foránea para clients (definición más explícita)
+            $table->unsignedBigInteger('client_id')->nullable(); // Columna para la FK
+            $table->foreign('client_id')
+                  ->references('id')->on('clients') // Referencia a la tabla clients, columna id
+                  ->onDelete('set null'); // Acción en caso de borrado del cliente
 
             $table->date('start_date')->nullable(); // Fecha de inicio de validez del descuento
             $table->date('end_date')->nullable();   // Fecha de fin de validez del descuento
@@ -49,6 +55,20 @@ return new class extends Migration
      */
     public function down()
     {
+        // Al revertir, primero eliminar la clave foránea si es necesario, luego la tabla
+        Schema::table('discounts', function (Blueprint $table) {
+            // Verificar si la restricción existe antes de intentar eliminarla
+            // El nombre de la restricción por defecto sería 'discounts_client_id_foreign'
+            // o puedes obtenerlo de information_schema si es necesario.
+            // Por simplicidad, intentamos eliminarla. Si no existe, no debería dar error grave.
+            if (Schema::hasColumn('discounts', 'client_id')) { // Asegurar que la columna existe
+                try {
+                    $table->dropForeign(['client_id']); // Laravel intenta encontrar la FK por el nombre de la columna
+                } catch (\Exception $e) {
+                    // No hacer nada si la FK no existe o hay otro problema al eliminarla
+                }
+            }
+        });
         Schema::dropIfExists('discounts');
     }
 };

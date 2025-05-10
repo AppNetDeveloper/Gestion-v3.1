@@ -11,39 +11,21 @@ return new class extends Migration
      *
      * @return void
      */
-    public function up()
+    public function up(): void
     {
-        Schema::create('discounts', function (Blueprint $table) {
-            $table->id(); // Columna ID autoincremental y clave primaria
-            $table->string('name'); // Nombre descriptivo del descuento, ej: "Descuento VIP"
-            $table->text('description')->nullable(); // Descripción más detallada (opcional)
-
-            // Tipo de descuento: 'percentage' (porcentaje) o 'fixed_amount' (cantidad fija)
-            $table->enum('type', ['percentage', 'fixed_amount'])->default('percentage');
-            $table->decimal('value', 8, 2); // Valor del descuento (ej: 10.00 para 10% o 5.00 para 5€)
-
-            // Relaciones opcionales (un descuento puede ser general o específico)
-            $table->foreignId('service_id')->nullable()->constrained('services')->onDelete('set null');
-            // Si se elimina un servicio, el descuento no se elimina, pero service_id se pone a null.
-            // Considera 'cascade' si quieres que el descuento se elimine con el servicio.
-
-            $table->foreignId('client_id')->nullable()->constrained('clients')->onDelete('set null');
-            // Si se elimina un cliente, el descuento no se elimina, pero client_id se pone a null.
-            // Considera 'cascade' si quieres que el descuento se elimine con el cliente.
-
-            $table->date('start_date')->nullable(); // Fecha de inicio de validez del descuento
-            $table->date('end_date')->nullable();   // Fecha de fin de validez del descuento
-
-            $table->boolean('is_active')->default(true); // Para activar o desactivar el descuento
-
-            $table->integer('minimum_quantity')->nullable(); // Cantidad mínima de ítems para aplicar (opcional)
-            $table->decimal('minimum_purchase_amount', 8, 2)->nullable(); // Importe mínimo de compra para aplicar (opcional)
-
-            $table->string('code')->nullable()->unique(); // Código promocional único para aplicar el descuento (opcional)
-            $table->integer('usage_limit')->nullable(); // Límite de veces que se puede usar el descuento (opcional)
-            $table->integer('used_count')->default(0); // Contador de veces que se ha usado (si hay límite)
-
-            $table->timestamps(); // Columnas created_at y updated_at
+        Schema::create('clients', function (Blueprint $table) {
+            $table->id();
+            $table->string('name');
+            $table->string('email')->unique()->nullable();
+            $table->string('phone')->nullable();
+            $table->string('vat_number')->nullable()->unique();
+            // El campo vat_rate se añadirá en una migración posterior
+            $table->text('address')->nullable();
+            $table->string('city')->nullable();
+            $table->string('postal_code')->nullable();
+            $table->string('country')->nullable();
+            $table->text('notes')->nullable();
+            $table->timestamps();
         });
     }
 
@@ -52,8 +34,8 @@ return new class extends Migration
      *
      * @return void
      */
-    public function down()
+    public function down(): void
     {
-        Schema::dropIfExists('discounts');
+        Schema::dropIfExists('clients');
     }
 };
