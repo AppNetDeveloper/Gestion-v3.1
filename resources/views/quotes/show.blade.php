@@ -17,11 +17,15 @@
         <div class="card-body p-6">
 
             {{-- Botones de Acción --}}
-            <div class="flex flex-wrap justify-end space-x-3 mb-6"> {{-- flex-wrap para mejor responsive --}}
-                <a href="{{ route('quotes.edit', $quote->id) }}" class="btn btn-outline-secondary btn-sm inline-flex items-center">
-                    <iconify-icon icon="heroicons:pencil-square" class="text-lg mr-1"></iconify-icon>
-                    {{ __('Edit') }}
-                </a>
+            <div class="flex flex-wrap justify-end items-center space-x-3 mb-6"> {{-- items-center para alinear verticalmente --}}
+                {{-- MODIFICACIÓN: Mostrar botón Editar solo si el estado no es 'accepted' (o 'invoiced', etc.) --}}
+                @if (!in_array($quote->status, ['accepted', 'invoiced', 'rejected', 'expired']))
+                    <a href="{{ route('quotes.edit', $quote->id) }}" class="btn btn-outline-secondary btn-sm inline-flex items-center">
+                        <iconify-icon icon="heroicons:pencil-square" class="text-lg mr-1"></iconify-icon>
+                        {{ __('Edit') }}
+                    </a>
+                @endif
+
                 <button type="button" onclick="window.print()" class="btn btn-outline-secondary btn-sm inline-flex items-center">
                     <iconify-icon icon="heroicons:printer" class="text-lg mr-1"></iconify-icon>
                     {{ __('Print') }}
@@ -30,8 +34,6 @@
                     <iconify-icon icon="heroicons:arrow-down-tray" class="text-lg mr-1"></iconify-icon>
                     {{ __('Export PDF') }}
                 </a>
-                {{-- Botón Enviar por Email --}}
-                {{-- Usamos un formulario para enviar la petición POST --}}
                 <form action="{{ route('quotes.send', $quote->id) }}" method="POST" class="inline">
                     @csrf
                     <button type="submit" class="btn btn-outline-secondary btn-sm inline-flex items-center">
@@ -39,7 +41,28 @@
                         {{ __('Send Email') }}
                     </button>
                 </form>
-                {{-- Aquí podrías añadir más botones --}}
+
+                {{-- Botón Convertir a Factura (solo si está aceptado y no facturado previamente) --}}
+                @if ($quote->status == 'accepted')
+                    {{-- Aquí podrías añadir una comprobación para ver si ya existe una factura para este quote_id --}}
+                    @php
+                        $hasInvoice = \App\Models\Invoice::where('quote_id', $quote->id)->exists();
+                    @endphp
+                    @if(!$hasInvoice)
+                        <form action="{{ route('quotes.convertToInvoice', $quote->id) }}" method="POST" class="inline">
+                            @csrf
+                            <button type="submit" class="btn btn-success btn-sm inline-flex items-center"> {{-- Clase Bootstrap para éxito (verde) --}}
+                                <iconify-icon icon="heroicons:receipt-percent" class="text-lg mr-1"></iconify-icon>
+                                {{ __('Convert to Invoice') }}
+                            </button>
+                        </form>
+                    @else
+                        <span class="btn btn-sm inline-flex items-center text-slate-500" title="{{ __('Invoice already generated') }}">
+                            <iconify-icon icon="heroicons:check-circle" class="text-lg mr-1 text-green-500"></iconify-icon>
+                            {{ __('Invoiced') }}
+                        </span>
+                    @endif
+                @endif
             </div>
 
             {{-- Detalles del Presupuesto --}}
@@ -86,6 +109,7 @@
                             switch ($quote->status) {
                                 case 'sent': $color = 'text-blue-500'; break;
                                 case 'accepted': $color = 'text-green-500'; break;
+                                case 'invoiced': $color = 'text-purple-500'; break; // Nuevo color para facturado
                                 case 'rejected':
                                 case 'expired': $color = 'text-red-500'; break;
                                 case 'draft': $color = 'text-yellow-500'; break;
