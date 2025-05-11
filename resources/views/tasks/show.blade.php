@@ -21,14 +21,14 @@
         $isDueSoon = false;
 
         if ($task->due_date && $isTaskPendingOrInProgress) {
-            $dueDate = \Carbon\Carbon::parse($task->due_date)->startOfDay();
+            $dueDateCarbon = \Carbon\Carbon::parse($task->due_date)->startOfDay();
             $today = \Carbon\Carbon::now()->startOfDay();
 
-            if ($dueDate->isPast()) {
+            if ($dueDateCarbon->lt($today)) {
                 $isOverdue = true;
             } else {
-                $daysToDisplay = $dueDate->diffInDays($today);
-                if ($daysToDisplay <= 3) {
+                $daysToDisplay = $today->diffInDays($dueDateCarbon, false);
+                 if ($daysToDisplay <= 3 && $daysToDisplay >= 0) {
                     $isDueSoon = true;
                 }
             }
@@ -38,7 +38,7 @@
     @if ($isOverdue)
         <x-alert :message="__('Warning: This task is overdue!')" :type="'danger'" class="mb-4" />
     @elseif ($isDueSoon)
-        <x-alert :message="__('Notice: This task is due soon (in :days days).', ['days' => $daysToDisplay])" :type="'warning'" class="mb-4" />
+        <x-alert :message="__('Notice: This task is due in :days days.', ['days' => $daysToDisplay])" :type="'warning'" class="mb-4" />
     @endif
 
     @if ($task->estimated_hours && $task->logged_hours && $task->logged_hours > $task->estimated_hours && $isTaskPendingOrInProgress)
@@ -151,7 +151,7 @@
 
             {{-- Sección Control de Tiempo --}}
             @php
-                $activeTimeLogForCurrentUser = $task->getActiveTimeLogForCurrentUser();
+                // $activeTimeLog ya se pasa desde el controlador
                 $canCurrentUserLogTime = (Auth::user()->can('tasks log_time') || $task->users->contains(Auth::user())) && !Auth::user()->hasRole('customer');
             @endphp
 
@@ -198,10 +198,14 @@
                 </div>
                 <div class="card-body p-6">
                     <ul id="timeLogList" class="space-y-3">
-                        @forelse ($task->timeHistories()->whereNotNull('end_time')->orderBy('start_time', 'desc')->get() as $entry)
+                        {{-- *** CORRECCIÓN AQUÍ: Iterar sobre la colección ya cargada y filtrada en el controlador si es necesario *** --}}
+                        {{-- O, si $task->timeHistories ya está filtrado y ordenado en el controlador, simplemente iterar sobre él. --}}
+                        {{-- Por ahora, filtramos y ordenamos aquí, pero asegurándonos de que 'user' esté cargado. --}}
+                        @forelse ($task->timeHistories->whereNotNull('end_time')->sortByDesc('start_time') as $entry)
                             <li class="time-log-entry border-b border-slate-100 dark:border-slate-700 pb-3 last:border-b-0" data-entry-id="{{ $entry->id }}">
                                 <div class="text-sm text-slate-600 dark:text-slate-300">
-                                    <span class="font-medium">{{ $entry->user->name ?? __('Unknown User') }}</span>
+                                    {{-- Acceder a user->name solo si user existe --}}
+                                    <span class="font-medium">{{ $entry->user?->name ?? __('Unknown User') }}</span>
                                     - {{ $entry->start_time->format('d/m/y H:i') }}
                                     @if($entry->end_time)
                                         - {{ $entry->end_time->format('H:i') }}
@@ -213,7 +217,7 @@
                                 @if($entry->description)
                                 <p class="text-xs text-slate-500 dark:text-slate-400 mt-1 whitespace-pre-wrap">{{ $entry->description }}</p>
                                 @endif
-                                @if(Auth::id() == $entry->user_id || Auth::user()->can('tasks update'))
+                                @if(Auth::id() == $entry->user_id || (Auth::check() && Auth::user()->can('tasks update')))
                                 <div class="mt-1 text-xs">
                                     <a href="{{ route('task_time_entries.edit', $entry->id) }}" class="text-blue-500 hover:underline mr-2">{{ __('Edit') }}</a>
                                     <button type="button" class="deleteTimeEntryBtn text-red-500 hover:underline" data-entry-id="{{ $entry->id }}">{{ __('Delete') }}</button>
@@ -238,22 +242,19 @@
     @endpush
 
     @push('scripts')
-        {{-- *** Cargar jQuery PRIMERO *** --}}
         <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
-        {{-- Cargar Select2 DESPUÉS de jQuery --}}
         <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
-        {{-- Otros scripts --}}
         <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
         <script src="https://code.iconify.design/iconify-icon/1.0.7/iconify-icon.min.js"></script>
 
         <script>
             $(function() { // Document ready
-                const taskId = @json($task->id);
+                const taskId = {{ Js::from($task->id) }};
                 console.log('Task ID for timer:', taskId);
 
                 let timerInterval;
-                let activeTimeLogId = @json($activeTimeLog?->id);
-                let timerStartTime = @json($activeTimeLog?->start_time?->toIso8601String());
+                let activeTimeLogId = {{ Js::from($activeTimeLog?->id) }};
+                let timerStartTime = {{ Js::from($activeTimeLog?->start_time?->toIso8601String()) }};
 
                 console.log('Initial activeTimeLogId:', activeTimeLogId);
                 console.log('Initial timerStartTime:', timerStartTime);
@@ -291,28 +292,28 @@
 
                 function renderTimeLogEntry(entry) {
                     console.log('Rendering new time log entry:', entry);
-                    const localeForJs = @json(str_replace('_', '-', app()->getLocale()));
+                    const localeForJs = {{ Js::from(str_replace('_', '-', app()->getLocale())) }};
                     const startTimeFormatted = new Date(entry.start_time).toLocaleString(localeForJs, { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' });
-                    const endTimeFormatted = entry.end_time ? new Date(entry.end_time).toLocaleString(localeForJs, { hour: '2-digit', minute: '2-digit' }) : @json(__('In progress'));
+                    const endTimeFormatted = entry.end_time ? new Date(entry.end_time).toLocaleString(localeForJs, { hour: '2-digit', minute: '2-digit' }) : {{ Js::from(__('In progress')) }};
                     const durationFormatted = entry.duration_minutes ? (entry.duration_minutes / 60).toFixed(2) + 'h' : '';
                     const entryDescription = entry.description ? $('<div/>').text(entry.description).html() : '';
 
                     let actionsHtml = '';
-                    const currentUserId = @json(Auth::id());
-                    const userCanUpdateTasks = @json(Auth::check() && Auth::user()->can('tasks update'));
+                    const currentUserId = {{ Js::from(Auth::id()) }};
+                    const userCanUpdateTasks = {{ Js::from(Auth::check() && Auth::user()->can('tasks update')) }};
 
                     if (currentUserId && (currentUserId == entry.user_id || userCanUpdateTasks)) {
                         actionsHtml = `
                             <div class="mt-1 text-xs">
-                                <a href="/task-time-entries/${entry.id}/edit" class="text-blue-500 hover:underline mr-2">${@json(__('Edit'))}</a>
-                                <button type="button" class="deleteTimeEntryBtn text-red-500 hover:underline" data-entry-id="${entry.id}">${@json(__('Delete'))}</button>
+                                <a href="/task-time-entries/${entry.id}/edit" class="text-blue-500 hover:underline mr-2">${{ Js::from(__('Edit')) }}</a>
+                                <button type="button" class="deleteTimeEntryBtn text-red-500 hover:underline" data-entry-id="${entry.id}">${{ Js::from(__('Delete')) }}</button>
                             </div>`;
                     }
 
                     const entryHtml = `
                         <li class="time-log-entry border-b border-slate-100 dark:border-slate-700 pb-3 last:border-b-0" data-entry-id="${entry.id}">
                             <div class="text-sm text-slate-600 dark:text-slate-300">
-                                <span class="font-medium">${entry.user ? entry.user.name : @json(__('Unknown User'))}</span>
+                                <span class="font-medium">${entry.user ? entry.user.name : {{ Js::from(__('Unknown User')) }}}</span>
                                 - ${startTimeFormatted}
                                 ${entry.end_time ? '- ' + endTimeFormatted : ''}
                                 ${entry.duration_minutes ? '(<span class="text-indigo-600 dark:text-indigo-400">' + durationFormatted + '</span>)' : ''}
@@ -343,14 +344,14 @@
                                 $('#time_entry_description').val('');
                                 $('#timeTrackerControls').html(`
                                     <p class="mb-2 text-sm text-slate-600 dark:text-slate-300">
-                                        ${@json(__('Timer started at:'))} <span id="timerStartTimeFormatted">${response.start_time_formatted}</span>
+                                        {{ Js::from(__('Timer started at:')) }} <span id="timerStartTimeFormatted">${response.start_time_formatted}</span>
                                     </p>
                                     <p class="mb-4 text-lg font-semibold text-blue-600 dark:text-blue-400">
-                                        ${@json(__('Time Elapsed:'))} <span id="elapsedTimeDisplay">00:00:00</span>
+                                        {{ Js::from(__('Time Elapsed:')) }} <span id="elapsedTimeDisplay">00:00:00</span>
                                     </p>
                                     <button type="button" id="stopTimerBtn" data-task-id="${taskId}" class="btn btn-danger inline-flex items-center">
                                         <iconify-icon icon="heroicons:stop-circle-solid" class="text-lg mr-1"></iconify-icon>
-                                        ${@json(__('Stop Timer'))}
+                                        {{ Js::from(__('Stop Timer')) }}
                                     </button>
                                 `);
                                 activeTimeLogId = response.time_entry_id;
@@ -358,12 +359,12 @@
                                 startElapsedTimeInterval();
                                 $('#timeTrackerMessage').text(response.success).addClass('text-green-500');
                             } else {
-                                $('#timeTrackerMessage').text(response.error || @json(__('An error occurred.'))).addClass('text-red-500');
+                                $('#timeTrackerMessage').text(response.error || {{ Js::from(__('An error occurred.')) }}).addClass('text-red-500');
                             }
                         },
                         error: function(xhr) {
                             console.error('Start timer AJAX error:', xhr);
-                            const errorMsg = xhr.responseJSON && xhr.responseJSON.error ? xhr.responseJSON.error : @json(__('An error occurred.'));
+                            const errorMsg = xhr.responseJSON && xhr.responseJSON.error ? xhr.responseJSON.error : {{ Js::from(__('An error occurred.')) }};
                             $('#timeTrackerMessage').text(errorMsg).addClass('text-red-500');
                         }
                     });
@@ -384,7 +385,7 @@
                                 $('#timeTrackerControls').html(`
                                     <button type="button" id="startTimerBtn" data-task-id="${taskId}" class="btn btn-success inline-flex items-center">
                                         <iconify-icon icon="heroicons:play-circle-solid" class="text-lg mr-1"></iconify-icon>
-                                        ${@json(__('Start Timer'))}
+                                        ${{ Js::from(__('Start Timer')) }}
                                     </button>
                                 `);
                                 stopElapsedTimeInterval();
@@ -396,12 +397,12 @@
                                     renderTimeLogEntry(response.time_entry);
                                 }
                             } else {
-                                $('#timeTrackerMessage').text(response.error || @json(__('An error occurred.'))).addClass('text-red-500');
+                                $('#timeTrackerMessage').text(response.error || {{ Js::from(__('An error occurred.')) }}).addClass('text-red-500');
                             }
                         },
                         error: function(xhr) {
                              console.error('Stop timer AJAX error:', xhr);
-                             const errorMsg = xhr.responseJSON && xhr.responseJSON.error ? xhr.responseJSON.error : @json(__('An error occurred.'));
+                             const errorMsg = xhr.responseJSON && xhr.responseJSON.error ? xhr.responseJSON.error : {{ Js::from(__('An error occurred.')) }};
                             $('#timeTrackerMessage').text(errorMsg).addClass('text-red-500');
                         }
                     });
@@ -411,12 +412,12 @@
                     const entryId = $(this).data('entry-id');
                     console.log('Delete time entry button clicked for entry ID:', entryId);
                     Swal.fire({
-                        title: @json(__('Are you sure?')),
-                        text: @json(__('This will delete the time entry permanently.')),
+                        title: {{ Js::from(__('Are you sure?')) }},
+                        text: {{ Js::from(__('This will delete the time entry permanently.')) }},
                         icon: 'warning',
                         showCancelButton: true,
-                        confirmButtonText: @json(__('Delete')),
-                        cancelButtonText: @json(__('Cancel')),
+                        confirmButtonText: {{ Js::from(__('Delete')) }},
+                        cancelButtonText: {{ Js::from(__('Cancel')) }},
                         confirmButtonColor: '#e11d48',
                     }).then((result) => {
                         if (result.isConfirmed) {
@@ -428,7 +429,7 @@
                                 success: function(response) {
                                     console.log('Delete time entry success response:', response);
                                     if (response.success) {
-                                        Swal.fire(@json(__('Deleted!')), response.success, 'success');
+                                        Swal.fire({{ Js::from(__('Deleted!')) }}, response.success, 'success');
                                         $(`.time-log-entry[data-entry-id="${entryId}"]`).remove();
                                         if ($('#timeLogList .time-log-entry').length === 0) {
                                             $('#noTimeEntries').show();
@@ -437,13 +438,13 @@
                                             $('#taskLoggedHours').text(parseFloat(response.logged_hours_task || 0).toFixed(2) + 'h');
                                         }
                                     } else {
-                                        Swal.fire(@json(__('Error')), response.error || @json(__('An error occurred.')), 'error');
+                                        Swal.fire({{ Js::from(__('Error')) }}, response.error || {{ Js::from(__('An error occurred.')) }}, 'error');
                                     }
                                 },
                                 error: function(xhr) {
                                     console.error('Delete time entry AJAX error:', xhr);
-                                    const errorMsg = xhr.responseJSON && xhr.responseJSON.error ? xhr.responseJSON.error : @json(__('An error occurred.'));
-                                    Swal.fire(@json(__('Error')), errorMsg, 'error');
+                                    const errorMsg = xhr.responseJSON && xhr.responseJSON.error ? xhr.responseJSON.error : {{ Js::from(__('An error occurred.')) }};
+                                    Swal.fire({{ Js::from(__('Error')) }}, errorMsg, 'error');
                                 }
                             });
                         }
@@ -454,3 +455,4 @@
         </script>
     @endpush
 </x-app-layout>
+

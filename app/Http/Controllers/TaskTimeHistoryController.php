@@ -4,7 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Task;
 use App\Models\TaskTimeHistory;
-use Carbon\Carbon; // Para manipulación de fechas y tiempos
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -51,7 +51,7 @@ class TaskTimeHistoryController extends Controller
                 'user_id' => $user->id,
                 'start_time' => now(),
                 'log_date' => now()->format('Y-m-d'),
-                'description' => $request->input('description'), // *** CAMBIADO de 'notes' a 'description' ***
+                'description' => $request->input('description'),
             ]);
 
             if ($task->status == 'pending') {
@@ -97,12 +97,24 @@ class TaskTimeHistoryController extends Controller
 
         DB::beginTransaction();
         try {
-            $activeEntry->end_time = now();
+            $endTime = Carbon::now(); // Usar una instancia de Carbon para end_time
+            $activeEntry->end_time = $endTime;
+
             $startTime = Carbon::parse($activeEntry->start_time);
-            $endTime = Carbon::parse($activeEntry->end_time);
-            $activeEntry->duration_minutes = $endTime->diffInMinutes($startTime);
-            $activeEntry->description = $request->input('description', $activeEntry->description); // *** CAMBIADO de 'notes' a 'description' ***
-            // log_date ya se estableció al crear la entrada
+
+            // Asegurar que endTime sea siempre posterior o igual a startTime
+            if ($endTime->lt($startTime)) {
+                // Esto no debería pasar si el flujo es correcto, pero como salvaguarda:
+                Log::warning("EndTime ({$endTime}) was before StartTime ({$startTime}) for TaskTimeHistory ID {$activeEntry->id}. Setting duration to 0.");
+                $durationMinutes = 0;
+            } else {
+                // diffInMinutes devuelve la diferencia absoluta por defecto si el primer argumento es anterior al segundo.
+                // Para estar seguros, podemos usar abs() o pasar true como segundo argumento.
+                $durationMinutes = $startTime->diffInMinutes($endTime, true);
+            }
+
+            $activeEntry->duration_minutes = $durationMinutes;
+            $activeEntry->description = $request->input('description', $activeEntry->description);
             $activeEntry->save();
 
             $this->updateTaskLoggedHours($task);
@@ -113,7 +125,7 @@ class TaskTimeHistoryController extends Controller
                 'success' => __('Timer stopped successfully!'),
                 'duration_minutes' => $activeEntry->duration_minutes,
                 'logged_hours_task' => $task->fresh()->logged_hours,
-                'time_entry' => $activeEntry->load('user:id,name')
+                'time_entry' => $activeEntry->load('user:id,name') // Cargar usuario para la vista
             ]);
         } catch (\Exception $e) {
             DB::rollBack();
@@ -138,7 +150,7 @@ class TaskTimeHistoryController extends Controller
         $task = $timeEntry->task->load('project');
 
         $breadcrumbItems = [
-            ['name' => __('Dashboard'), 'url' => route('dashboard')],
+            ['name' => __('Dashboard'), 'url' => '/dashboard'],
             ['name' => __('Projects'), 'url' => route('projects.index')],
             ['name' => $task->project->project_title, 'url' => route('projects.show', $task->project->id)],
             ['name' => $task->title, 'url' => route('tasks.show', $task->id)],
@@ -166,7 +178,7 @@ class TaskTimeHistoryController extends Controller
             'start_time' => 'required|date_format:Y-m-d\TH:i',
             'end_time' => 'required|date_format:Y-m-d\TH:i|after_or_equal:start_time',
             'log_date' => 'required|date_format:Y-m-d',
-            'description' => 'nullable|string|max:1000', // *** CAMBIADO de 'notes' a 'description' ***
+            'description' => 'nullable|string|max:1000',
         ]);
 
         if ($validator->fails()) {
@@ -181,12 +193,20 @@ class TaskTimeHistoryController extends Controller
             $startTime = Carbon::parse($request->input('start_time'));
             $endTime = Carbon::parse($request->input('end_time'));
 
+            // Asegurar que endTime sea siempre posterior o igual a startTime
+            if ($endTime->lt($startTime)) {
+                 return redirect()->route('task_time_entries.edit', $timeEntry->id)
+                        ->withErrors(['end_time' => __('End time cannot be before start time.')])
+                        ->withInput();
+            }
+            $durationMinutes = $startTime->diffInMinutes($endTime, true);
+
             $timeEntry->update([
                 'start_time' => $startTime,
                 'end_time' => $endTime,
-                'duration_minutes' => $endTime->diffInMinutes($startTime),
-                'log_date' => $request->input('log_date'),
-                'description' => $request->input('description'), // *** CAMBIADO de 'notes' a 'description' ***
+                'duration_minutes' => $durationMinutes,
+                'log_date' => Carbon::parse($request->input('log_date'))->format('Y-m-d'),
+                'description' => $request->input('description'),
             ]);
 
             $this->updateTaskLoggedHours($timeEntry->task);
@@ -230,7 +250,7 @@ class TaskTimeHistoryController extends Controller
             if (request()->ajax()) {
                 return response()->json([
                     'success' => __('Time entry deleted successfully!'),
-                    'logged_hours_task' => $task->fresh()->logged_hours
+                    'logged_hours_task' => $task->fresh()->logged_hours // Devolver horas actualizadas
                 ]);
             }
             return redirect()->route('tasks.show', $task->id)->with('success', __('Time entry deleted successfully!'));
@@ -252,11 +272,14 @@ class TaskTimeHistoryController extends Controller
      */
     protected function updateTaskLoggedHours(Task $task)
     {
+        // Sumar todas las duraciones completadas (con end_time y duration_minutes > 0) para esta tarea
         $totalMinutes = TaskTimeHistory::where('task_id', $task->id)
             ->whereNotNull('end_time')
+            ->where('duration_minutes', '>', 0) // Solo sumar duraciones positivas
             ->sum('duration_minutes');
 
         $task->logged_hours = $totalMinutes > 0 ? round($totalMinutes / 60, 2) : 0;
         $task->save();
+        Log::info("Updated logged hours for task #{$task->id} to: {$task->logged_hours}");
     }
 }

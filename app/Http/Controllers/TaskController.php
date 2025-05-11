@@ -6,6 +6,7 @@ use App\Models\Task;
 use App\Models\Project;
 use App\Models\User;
 use App\Models\Client; // Importar Client para la lógica de customer
+use App\Models\TaskTimeHistory; // Importar TaskTimeHistory
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Validator;
@@ -24,21 +25,15 @@ class TaskController extends Controller
     public function myTasks()
     {
         $user = Auth::user();
-        // Clientes no deberían tener una vista de "mis tareas" de esta forma,
-        // ellos ven tareas a través de sus proyectos.
         if ($user->hasRole('customer')) {
             return redirect()->route('projects.index')->with('info', __('Tasks are viewed within each project.'));
         }
-
-        // Si no es super-admin, verificar permisos
-        // Un usuario necesita poder listar tareas en general O ver sus propias tareas O ver tareas asignadas
         if (!$user->hasRole('super-admin') &&
             !$user->can('tasks index') &&
             !$user->can('tasks view_own') &&
             !$user->can('tasks view_assigned')) {
              abort(403, __('This action is unauthorized.'));
         }
-
 
         $breadcrumbItems = [
             ['name' => __('Dashboard'), 'url' => '/dashboard'],
@@ -59,42 +54,33 @@ class TaskController extends Controller
             $user = Auth::user();
 
             if ($user->hasRole('customer')) {
-                return DataTables::of(collect([]))->make(true); // Clientes no usan esta vista
+                return DataTables::of(collect([]))->make(true);
             }
 
             $query = Task::query()
-                ->select('tasks.*') // Seleccionar explícitamente columnas de tasks
-                ->with(['project' => function ($query) {
-                    $query->select(['id', 'project_title', 'client_id']);
-                }, 'project.client' => function ($query) {
-                    $query->select(['id', 'name']);
-                }, 'users' => function($query) { // Cargar usuarios asignados para el botón de acción
-                    $query->select('users.id', 'users.name');
-                }]);
-
-            // Si no es super-admin, filtrar por tareas asignadas al usuario
-            // El super-admin verá todas las tareas en esta vista por defecto.
-            if (!$user->hasRole('super-admin')) {
-                $query->whereHas('users', function ($q) use ($user) {
+                ->select('tasks.*')
+                ->with([
+                    'project' => function ($query) {
+                        $query->select(['id', 'project_title', 'client_id']);
+                    },
+                    'project.client' => function ($query) {
+                        $query->select(['id', 'name']);
+                    },
+                    'users' => function($query) {
+                        $query->select('users.id', 'users.name');
+                    }
+                ])
+                ->whereHas('users', function ($q) use ($user) {
                     $q->where('user_id', $user->id);
-                });
-            }
-            // Si quisieras que el super-admin también vea solo las suyas en "Mis Tareas":
-            // else { // Es super-admin
-            //     $query->whereHas('users', function ($q) use ($user) {
-            //         $q->where('user_id', $user->id);
-            //     });
-            // }
-
-
-            $query->latest('tasks.id');
+                })
+                ->latest('tasks.id');
 
             return DataTables::of($query)
                 ->addIndexColumn()
                 ->addColumn('project_title', function($row){
                     return $row->project ? $row->project->project_title : __('N/A');
                 })
-                ->addColumn('client_name', function($row){ // Cliente del proyecto de la tarea
+                ->addColumn('client_name', function($row){
                     return $row->project && $row->project->client ? $row->project->client->name : __('N/A');
                 })
                 ->editColumn('status', function($row) {
@@ -310,6 +296,7 @@ class TaskController extends Controller
                 'start_date', 'due_date', 'estimated_hours'
             ]);
             $taskData['project_id'] = $project->id;
+            $taskData['created_by_user_id'] = Auth::id();
 
             $task = Task::create($taskData);
 
@@ -320,7 +307,7 @@ class TaskController extends Controller
             }
 
             DB::commit();
-            Log::info("Task #{$task->id} created for Project #{$project->id}");
+            Log::info("Task #{$task->id} created for Project #{$project->id} by User #".Auth::id());
             return redirect()->route('projects.show', $project->id)->with('success', __('Task created successfully!'));
 
         } catch (\Exception $e) {
@@ -360,10 +347,18 @@ class TaskController extends Controller
             abort(403, __('This action is unauthorized.'));
         }
 
-        $task->load('project.client', 'users', 'timeHistories');
+        // *** CORRECCIÓN AQUÍ: Eager load timeHistories y la relación user de cada timeHistory ***
+        $task->load([
+            'project.client',
+            'users', // Usuarios asignados a la tarea
+            'timeHistories' => function ($query) {
+                $query->with('user:id,name') // Cargar el usuario (solo id y name) para cada entrada de tiempo
+                      ->orderBy('start_time', 'desc');
+            }
+        ]);
 
-        $activeTimeLog = $task->getActiveTimeLogForCurrentUser(); // O getActiveTimeLogForUser(Auth::user())
-        
+        $activeTimeLog = $task->getActiveTimeLogForCurrentUser();
+
         $breadcrumbItems = [
             ['name' => __('Dashboard'), 'url' => '/dashboard'],
             ['name' => __('Projects'), 'url' => route('projects.index')],
@@ -494,6 +489,7 @@ class TaskController extends Controller
         DB::beginTransaction();
         try {
             $task->users()->detach();
+            $task->timeHistories()->delete();
             $task->delete();
             DB::commit();
             Log::info("Task #{$task->id} deleted from Project #{$projectId}");
