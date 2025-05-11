@@ -1,7 +1,6 @@
 <x-app-layout>
     <div class="mb-6">
         {{-- Breadcrumb --}}
-        {{-- Asegúrate de pasar $breadcrumbItems y $project desde ProjectController@show --}}
         <x-breadcrumb :breadcrumb-items="$breadcrumbItems ?? []" :page-title="__('Project Details') . ': ' . $project->project_title" />
     </div>
 
@@ -14,12 +13,12 @@
     @endif
     {{-- Alert end --}}
 
-    <div class="card bg-white dark:bg-slate-800 shadow-xl rounded-lg">
+    <div class="card bg-white dark:bg-slate-800 shadow-xl rounded-lg mb-6">
         <div class="card-body p-6">
 
-            {{-- Botones de Acción --}}
+            {{-- Botones de Acción del Proyecto --}}
             <div class="flex flex-wrap justify-end items-center space-x-3 mb-6">
-                @can('projects update') {{-- Solo mostrar si tiene permiso general de actualizar proyectos --}}
+                @can('projects update')
                     @if (!in_array($project->status, ['completed', 'cancelled']))
                         <a href="{{ route('projects.edit', $project->id) }}" class="btn btn-outline-secondary btn-sm inline-flex items-center">
                             <iconify-icon icon="heroicons:pencil-square" class="text-lg mr-1"></iconify-icon>
@@ -27,11 +26,6 @@
                         </a>
                     @endif
                 @endcan
-                {{-- Aquí podrías añadir más botones, como "Añadir Tarea" en el futuro --}}
-                {{-- <a href="{{-- route('projects.tasks.create', $project->id) --}}" class="btn btn-primary btn-sm inline-flex items-center">
-                    <iconify-icon icon="heroicons:plus-solid" class="text-lg mr-1"></iconify-icon>
-                    {{ __('Add Task') }}
-                </a> --}}
             </div>
 
             {{-- Detalles del Proyecto --}}
@@ -70,11 +64,11 @@
                         $status = ucfirst($project->status);
                         $color = 'text-slate-500 dark:text-slate-400';
                         switch ($project->status) {
-                            case 'in_progress': $color = 'text-blue-500'; break;
-                            case 'completed': $color = 'text-green-500'; break;
-                            case 'on_hold': $color = 'text-yellow-500'; break;
-                            case 'cancelled': $color = 'text-red-500'; break;
-                            case 'pending': $color = 'text-orange-500'; break;
+                            case 'in_progress': $color = 'text-blue-500 dark:text-blue-400'; break;
+                            case 'completed': $color = 'text-green-500 dark:text-green-400'; break;
+                            case 'on_hold': $color = 'text-yellow-500 dark:text-yellow-400'; break;
+                            case 'cancelled': $color = 'text-red-500 dark:text-red-400'; break;
+                            case 'pending': $color = 'text-orange-500 dark:text-orange-400'; break;
                         }
                     @endphp
                     <span class="font-semibold {{ $color }}">{{ __($status) }}</span>
@@ -109,51 +103,162 @@
                     <p class="text-sm text-slate-500 dark:text-slate-400 whitespace-pre-wrap">{{ $project->description }}</p>
                 </div>
             @endif
-
-            {{-- Sección de Tareas (Placeholder por ahora) --}}
-            <hr class="my-6 border-slate-200 dark:border-slate-700">
-            <div class="flex justify-between items-center mb-4">
-                <h3 class="text-xl font-semibold text-slate-700 dark:text-slate-200">{{ __('Tasks') }}</h3>
-                @can('tasks create') {{-- Asumiendo permiso para crear tareas --}}
-                    {{-- <a href="{{-- route('projects.tasks.create', $project->id) --}}" class="btn btn-outline-primary btn-sm">
-                        {{ __('Add New Task') }}
-                    </a> --}}
-                @endcan
-            </div>
-            <div id="projectTasksContainer">
-                {{-- Aquí se listarán las tareas del proyecto (ej. con DataTables o un bucle @foreach) --}}
-                <p class="text-sm text-slate-500 dark:text-slate-400">{{ __('Task management will be implemented here.') }}</p>
-                {{--
-                @if($project->tasks && $project->tasks->count() > 0)
-                    <ul>
-                        @foreach($project->tasks as $task)
-                            <li>{{ $task->title }} - {{ $task->status }}</li>
-                        @endforeach
-                    </ul>
-                @else
-                    <p>{{ __('No tasks assigned to this project yet.') }}</p>
-                @endif
-                --}}
-            </div>
-
-             {{-- Notas Internas (si aplica y hay permiso) --}}
-            @if($project->internal_notes && Auth::user()->can('projects show')) {{-- O un permiso más específico --}}
-                <hr class="my-6 border-slate-200 dark:border-slate-700">
-                <div>
-                    <h4 class="text-slate-600 dark:text-slate-300 font-medium text-sm mb-2">{{ __('Internal Notes') }}</h4>
-                    <p class="text-sm text-slate-500 dark:text-slate-400 whitespace-pre-wrap bg-slate-50 dark:bg-slate-700 p-3 rounded-md">{{ $project->internal_notes }}</p>
-                </div>
-            @endif
-
         </div>
     </div>
 
+    {{-- Sección de Tareas --}}
+    <div class="card bg-white dark:bg-slate-800 shadow-xl rounded-lg mt-6">
+        <div class="card-header flex justify-between items-center p-6 border-b border-slate-200 dark:border-slate-700">
+            <h3 class="text-xl font-semibold text-slate-700 dark:text-slate-200">{{ __('Tasks') }}</h3>
+            @can('tasks create') {{-- Solo usuarios con permiso pueden crear tareas --}}
+                 {{-- El cliente no debería poder crear tareas desde aquí --}}
+                @if(!Auth::user()->hasRole('customer'))
+                    <a href="{{ route('projects.tasks.create', $project->id) }}" class="btn btn-primary btn-sm inline-flex items-center">
+                        <iconify-icon icon="heroicons:plus-solid" class="text-lg mr-1"></iconify-icon>
+                        {{ __('Add New Task') }}
+                    </a>
+                @endif
+            @endcan
+        </div>
+        <div class="card-body p-6">
+            <div class="overflow-x-auto">
+                <table id="projectTasksTable" class="w-full border-collapse dataTable">
+                    <thead class="bg-slate-100 dark:bg-slate-700">
+                        <tr>
+                            <th class="table-th">{{ __('Title') }}</th>
+                            <th class="table-th">{{ __('Assigned To') }}</th>
+                            <th class="table-th">{{ __('Priority') }}</th>
+                            <th class="table-th">{{ __('Status') }}</th>
+                            <th class="table-th">{{ __('Due Date') }}</th>
+                            <th class="table-th text-center">{{ __('Action') }}</th>
+                        </tr>
+                    </thead>
+                    <tbody class="bg-white dark:bg-slate-800 divide-y divide-slate-200 dark:divide-slate-700">
+                        {{-- Los datos se cargarán vía AJAX --}}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+
+     {{-- Notas Internas (si aplica y hay permiso) --}}
+    @if($project->internal_notes && Auth::user()->can('projects show'))
+        <div class="card bg-white dark:bg-slate-800 shadow-xl rounded-lg mt-6">
+            <div class="card-body p-6">
+                <h4 class="text-slate-600 dark:text-slate-300 font-medium text-sm mb-2">{{ __('Internal Notes') }}</h4>
+                <p class="text-sm text-slate-500 dark:text-slate-400 whitespace-pre-wrap bg-slate-50 dark:bg-slate-700 p-3 rounded-md">{{ $project->internal_notes }}</p>
+            </div>
+        </div>
+    @endif
+
+
     @push('styles')
-        {{-- Añadir estilos específicos si es necesario --}}
+        <link rel="stylesheet" href="https://cdn.datatables.net/1.13.6/css/jquery.dataTables.min.css">
+        <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css">
+        <style>
+            table.dataTable th, table.dataTable td { white-space: nowrap; }
+            .table-th { padding-left: 1rem; padding-right: 1rem; padding-top: 0.75rem; padding-bottom: 0.75rem; text-align: left; font-size: 0.75rem; line-height: 1rem; font-weight: 500; text-transform: uppercase; letter-spacing: 0.05em; color: #64748b; }
+            .dark .table-th { color: #94a3b8; }
+            .table-td { padding-left: 1rem; padding-right: 1rem; padding-top: 0.75rem; padding-bottom: 0.75rem; font-size: 0.875rem; line-height: 1.25rem; vertical-align: middle;}
+            table.dataTable#projectTasksTable { border-spacing: 0; }
+            table.dataTable#projectTasksTable th, table.dataTable#projectTasksTable td { padding: 0.75rem 1rem; vertical-align: middle; }
+            table.dataTable#projectTasksTable tbody tr:hover { background-color: #f9fafb; }
+            .dark table.dataTable#projectTasksTable tbody tr:hover { background-color: #1f2937; }
+            /* ... (otros estilos de DataTables que ya tenías) ... */
+        </style>
     @endpush
 
     @push('scripts')
+        <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+        <script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
+        <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
         <script src="https://code.iconify.design/iconify-icon/1.0.7/iconify-icon.min.js"></script>
-        {{-- Añadir scripts específicos si es necesario --}}
+        <script>
+            $(function() {
+                if (typeof $.fn.DataTable === 'undefined') {
+                    console.error('DataTables plugin is not loaded.');
+                    $('#projectTasksTable tbody').html('<tr><td colspan="6" class="text-center py-10 text-red-500">{{ __("DataTable library not loaded.") }}</td></tr>');
+                    return;
+                }
+
+                const projectTasksDataTable = $('#projectTasksTable').DataTable({
+                    processing: true,
+                    serverSide: true,
+                    ajax: {
+                        url: '{{ route("projects.tasks.data", $project->id) }}',
+                        type: 'GET',
+                        error: function (jqXHR, textStatus, errorThrown) {
+                            console.error("AJAX error details for tasks:", jqXHR);
+                            let errorMsg = "{{ __('Error loading tasks. Please try again.') }}";
+                            if (jqXHR.responseJSON && jqXHR.responseJSON.message) {
+                                errorMsg += "<br><small>Server Error: " + $('<div/>').text(jqXHR.responseJSON.message).html() + "</small>";
+                            }
+                             $('#projectTasksTable tbody').html(`<tr><td colspan="6" class="text-center py-10 text-red-500">${errorMsg}</td></tr>`);
+                        }
+                    },
+                    columns: [
+                        { data: 'title', name: 'title', className: 'table-td' },
+                        { data: 'assigned_users_list', name: 'users.name', className: 'table-td', orderable: false, searchable: false },
+                        { data: 'priority', name: 'priority', className: 'table-td' },
+                        { data: 'status', name: 'status', className: 'table-td' },
+                        { data: 'due_date', name: 'due_date', className: 'table-td' },
+                        { data: 'action', name: 'action', orderable: false, searchable: false, className: 'table-td text-center' }
+                    ],
+                    order: [[4, "asc"]], // Ordenar por fecha de vencimiento ascendente
+                    dom: "<'flex flex-col md:flex-row md:justify-between gap-4 mb-4'<'md:w-1/2'l><'md:w-1/2'f>>" + "<'overflow-x-auto't>" + "<'flex flex-col md:flex-row md:justify-between gap-4 mt-4'<'md:w-1/2'i><'md:w-1/2'p>>",
+                    language: {
+                        url: "//cdn.datatables.net/plug-ins/1.13.6/i18n/{{ app()->getLocale() === 'es' ? 'Spanish' : 'English' }}.json",
+                        search: "_INPUT_",
+                        searchPlaceholder: "{{ __('Search tasks...') }}",
+                        lengthMenu: "{{ __('Show') }} _MENU_ {{ __('entries') }}"
+                    },
+                    initComplete: function(settings, json) {
+                        const $wrapper = $('#projectTasksTable_wrapper');
+                        $wrapper.find('.dataTables_filter input').addClass('inputField px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md dark:bg-slate-900 focus:ring-indigo-500 focus:border-indigo-500 dark:focus:ring-indigo-500 dark:focus:border-indigo-500 transition');
+                        $wrapper.find('.dataTables_length select').addClass('inputField px-3 py-2 pr-8 border border-slate-300 dark:border-slate-600 rounded-md dark:bg-slate-900 focus:ring-indigo-500 focus:border-indigo-500 dark:focus:ring-indigo-500 dark:focus:border-indigo-500 transition appearance-none');
+                    }
+                });
+
+                // Handler para eliminar una tarea
+                $('#projectTasksTable').on('click', '.deleteTask', function () {
+                    const taskId = $(this).data('id');
+                    // const projectId = $(this).data('project-id'); // No es necesario si la ruta de delete es shallow
+                    Swal.fire({
+                        title: '{{ __("Are you sure?") }}',
+                        text: '{{ __("This will delete the task permanently.") }}',
+                        icon: 'warning',
+                        showCancelButton: true,
+                        confirmButtonText: '{{ __("Delete") }}',
+                        cancelButtonText: '{{ __("Cancel") }}',
+                        confirmButtonColor: '#e11d48',
+                        cancelButtonColor: '#64748b',
+                    }).then((result) => {
+                        if (result.isConfirmed) {
+                            fetch(`/tasks/${taskId}`, { // Ruta shallow
+                                method: 'DELETE',
+                                headers: {
+                                    'Content-Type': 'application/json',
+                                    'X-CSRF-TOKEN': '{{ csrf_token() }}'
+                                }
+                            })
+                            .then(response => response.json())
+                            .then(data => {
+                                if (data.success) {
+                                    Swal.fire('{{ __("Deleted!") }}', data.success, 'success');
+                                    projectTasksDataTable.ajax.reload(null, false);
+                                } else {
+                                    Swal.fire('{{ __("Error") }}', data.error || '{{ __("An error occurred") }}', 'error');
+                                }
+                            })
+                            .catch(error => {
+                                console.error('Delete task error:', error);
+                                Swal.fire('{{ __("Error") }}', '{{ __("An error occurred while deleting the task.") }}', 'error');
+                            });
+                        }
+                    });
+                });
+            });
+        </script>
     @endpush
 </x-app-layout>

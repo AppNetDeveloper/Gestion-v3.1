@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Task;
 use App\Models\Project;
 use App\Models\User;
+use App\Models\Client; // Importar Client para la lógica de customer
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Validator;
@@ -29,10 +30,15 @@ class TaskController extends Controller
             return redirect()->route('projects.index')->with('info', __('Tasks are viewed within each project.'));
         }
 
-        // Verificar permiso general para ver tareas (o un permiso específico 'view own tasks' / 'view assigned tasks')
-        if (!$user->can('tasks index') && !$user->can('tasks view_own') && !$user->can('tasks view_assigned')) {
+        // Si no es super-admin, verificar permisos
+        // Un usuario necesita poder listar tareas en general O ver sus propias tareas O ver tareas asignadas
+        if (!$user->hasRole('super-admin') &&
+            !$user->can('tasks index') &&
+            !$user->can('tasks view_own') &&
+            !$user->can('tasks view_assigned')) {
              abort(403, __('This action is unauthorized.'));
         }
+
 
         $breadcrumbItems = [
             ['name' => __('Dashboard'), 'url' => '/dashboard'],
@@ -56,15 +62,39 @@ class TaskController extends Controller
                 return DataTables::of(collect([]))->make(true); // Clientes no usan esta vista
             }
 
-            // Obtener tareas asignadas directamente al usuario
-            $query = $user->tasks()->with(['project.client'])->latest('id');
+            $query = Task::query()
+                ->select('tasks.*') // Seleccionar explícitamente columnas de tasks
+                ->with(['project' => function ($query) {
+                    $query->select(['id', 'project_title', 'client_id']);
+                }, 'project.client' => function ($query) {
+                    $query->select(['id', 'name']);
+                }, 'users' => function($query) { // Cargar usuarios asignados para el botón de acción
+                    $query->select('users.id', 'users.name');
+                }]);
+
+            // Si no es super-admin, filtrar por tareas asignadas al usuario
+            // El super-admin verá todas las tareas en esta vista por defecto.
+            if (!$user->hasRole('super-admin')) {
+                $query->whereHas('users', function ($q) use ($user) {
+                    $q->where('user_id', $user->id);
+                });
+            }
+            // Si quisieras que el super-admin también vea solo las suyas en "Mis Tareas":
+            // else { // Es super-admin
+            //     $query->whereHas('users', function ($q) use ($user) {
+            //         $q->where('user_id', $user->id);
+            //     });
+            // }
+
+
+            $query->latest('tasks.id');
 
             return DataTables::of($query)
                 ->addIndexColumn()
                 ->addColumn('project_title', function($row){
                     return $row->project ? $row->project->project_title : __('N/A');
                 })
-                ->addColumn('client_name', function($row){
+                ->addColumn('client_name', function($row){ // Cliente del proyecto de la tarea
                     return $row->project && $row->project->client ? $row->project->client->name : __('N/A');
                 })
                 ->editColumn('status', function($row) {
@@ -88,16 +118,20 @@ class TaskController extends Controller
                 ->addColumn('action', function($row) use ($user){
                     $actions = '<div class="flex items-center justify-center space-x-1">';
                     $isAssigned = $row->users->contains($user->id);
+                    $isCustomer = $user->hasRole('customer');
 
-                    // Botón Ver Tarea
-                    if ($user->can('tasks show') || $isAssigned) { // Permitir ver si tiene permiso general o está asignado
+                    $canViewTask = false;
+                    if ($user->can('tasks show')) $canViewTask = true;
+                    elseif ($isCustomer && $row->project && $row->project->client && $row->project->client->user_id == $user->id && $user->can('projects view_own')) $canViewTask = true;
+                    elseif ($isAssigned && $user->can('tasks view_own')) $canViewTask = true;
+
+                    if ($canViewTask) {
                         $actions .= '<a href="'.route('tasks.show', $row->id).'" class="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 p-1" title="'.__('View Task').'"><iconify-icon icon="heroicons:eye" style="font-size: 1.25rem;"></iconify-icon></a>';
                     }
 
-                    // Botón Editar Tarea
                     $canEditTask = false;
-                    if ($user->can('tasks update') && !$user->hasRole('customer')) { $canEditTask = true; } // Admin/empleado con permiso general
-                    elseif ($isAssigned && !in_array($row->status, ['completed', 'cancelled'])) { $canEditTask = true; } // Usuario asignado puede editar si no está finalizada
+                    if ($user->can('tasks update') && !$isCustomer) { $canEditTask = true; }
+                    elseif ($isAssigned && !in_array($row->status, ['completed', 'cancelled'])) { $canEditTask = true; }
 
                     if ($canEditTask && !in_array($row->status, ['completed', 'cancelled'])) {
                          $actions .= '<a href="'.route('tasks.edit', $row->id).'" class="text-indigo-600 hover:text-indigo-800 dark:text-indigo-400 dark:hover:text-indigo-300 p-1" title="'.__('Edit Task').'"><iconify-icon icon="heroicons:pencil-square" style="font-size: 1.25rem;"></iconify-icon></a>';
@@ -157,7 +191,7 @@ class TaskController extends Controller
                 return DataTables::of(collect([]))->make(true);
             }
 
-            $query = $project->tasks()->with('users')->latest('id');
+            $query = $project->tasks()->select('tasks.*')->with('users')->latest('tasks.id');
 
             return DataTables::of($query)
                 ->addIndexColumn()
