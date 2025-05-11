@@ -19,10 +19,10 @@ class RoleSeeder extends Seeder
         $roles = [
             'super-admin',
             'admin',
-            'user', // Rol genérico, podrías definir permisos base
-            'employee', // Empleado interno
-            'manager', // Gerente/Supervisor
-            'customer', // Cliente final
+            'user',
+            'employee',
+            'manager',
+            'customer',
         ];
 
         foreach ($roles as $roleName) {
@@ -35,14 +35,13 @@ class RoleSeeder extends Seeder
         $superAdminWeb->syncPermissions($allWebPermissions);
 
         // Asignación de permisos al rol 'admin'
-        // El admin tendrá la mayoría de los permisos, excepto quizás los de super-admin muy específicos
         $adminWeb = Role::where(['name' => 'admin', 'guard_name' => 'web'])->firstOrFail();
         $adminPermissions = [
             // User Management
             'user index', 'user create', 'user update', 'user delete', 'user show',
-            // Role & Permission Management (quizás no todos los admins deberían tener esto)
-            'role index', 'role update', 'role show',
-            'permission index', 'permission update', 'permission show',
+            // Role & Permission Management
+            'role index', 'role create', 'role update', 'role delete', 'role show', // Admins pueden necesitar crear roles
+            'permission index', 'permission create', 'permission update', 'permission delete', 'permission show', // Admins pueden necesitar crear permisos
             // Menu Items
             'menu users_list', 'menu role_permission', 'menu role_permission_permissions', 'menu role_permission_roles', 'menu database_backup',
             // Company Data
@@ -57,13 +56,18 @@ class RoleSeeder extends Seeder
             'labcalendar index', 'labcalendar create', 'labcalendar update', 'labcalendar delete', 'labcalendar show',
             'calendarindividual index', 'calendarindividual create', 'calendarindividual update', 'calendarindividual delete', 'calendarindividual show',
 
-            // *** NUEVOS MÓDULOS DE GESTIÓN PARA ADMIN ***
+            // MÓDULOS DE GESTIÓN PARA ADMIN
             'services index', 'services create', 'services update', 'services delete', 'services show', 'menu services',
             'clients index', 'clients create', 'clients update', 'clients delete', 'clients show', 'menu clients',
-            'quotes index', 'quotes create', 'quotes update', 'quotes delete', 'quotes show', 'quotes send_email', 'quotes export_pdf', 'quotes convert_to_invoice', 'menu quotes',
-            'projects index', 'projects create', 'projects update', 'projects delete', 'projects show', 'menu projects',
+            'quotes index', 'quotes create', 'quotes update', 'quotes delete', 'quotes show', 'quotes send_email', 'quotes export_pdf', 'quotes convert_to_invoice', 'quotes accept', 'quotes reject', 'menu quotes', // Añadido accept y reject
+            'projects index', 'projects create', 'projects update', 'projects delete', 'projects show', 'projects assign_users', 'menu projects',
             'tasks index', 'tasks create', 'tasks update', 'tasks delete', 'tasks show', 'tasks assign_users', 'tasks log_time', 'menu tasks',
             'invoices index', 'invoices create', 'invoices update', 'invoices delete', 'invoices show', 'invoices send_email', 'invoices export_pdf', 'menu invoices',
+
+            // *** PERMISOS DE TIME HISTORY PARA ADMIN ***
+            'time_entries edit all',
+            'time_entries delete all',
+            'time_entries view all',
         ];
         $adminWeb->syncPermissions($adminPermissions);
 
@@ -71,16 +75,23 @@ class RoleSeeder extends Seeder
         // Asignación de permisos al rol 'employee' (Empleado Interno)
         $employeeWeb = Role::where(['name' => 'employee', 'guard_name' => 'web'])->firstOrFail();
         $employeePermissions = [
-            'user index', // Ver lista de usuarios (quizás solo ciertos tipos)
+            // 'user index', // Quizás solo ver su propio perfil o ciertos usuarios
             'timecontrolstatus index', // Fichar
-            // Permisos para gestionar el trabajo
-            'clients index', 'clients create', 'clients update', 'clients show', 'menu clients',
-            'quotes index', 'quotes create', 'quotes update', 'quotes show', 'quotes send_email', 'quotes export_pdf', 'quotes convert_to_invoice', 'menu quotes',
-            'projects index', 'projects create', 'projects update', 'projects show', 'menu projects',
-            'tasks index', 'tasks create', 'tasks update', 'tasks show', 'tasks assign_users', 'tasks log_time', 'menu tasks',
-            'invoices index', 'invoices create', 'invoices update', 'invoices show', 'invoices send_email', 'invoices export_pdf', 'menu invoices',
-            // Podrían tener permisos para ver sus propios servicios/tareas asignadas
-            'services index', 'services show', // Ver servicios que pueden ofrecer
+
+            // Permisos para gestionar el trabajo asignado
+            'clients index', 'clients show', // Ver clientes
+            'quotes index', 'quotes show', 'quotes view_own', 'quotes export_pdf', // Ver sus presupuestos
+            'projects index', 'projects show', 'projects view_own', // Ver sus proyectos
+            'tasks index', 'tasks show', 'tasks view_own', 'tasks view_assigned', // Ver sus tareas
+            'tasks log_time', // Registrar tiempo en sus tareas
+            'invoices index', 'invoices show', 'invoices view_own', 'invoices export_pdf', // Ver sus facturas
+
+            // *** PERMISOS DE TIME HISTORY PARA EMPLOYEE ***
+            'time_entries edit own',
+            'time_entries delete own',
+
+            // Menús relevantes
+            'menu quotes', 'menu projects', 'menu tasks', 'menu invoices',
         ];
         $employeeWeb->syncPermissions($employeePermissions);
 
@@ -88,37 +99,20 @@ class RoleSeeder extends Seeder
         // Asignación de permisos al rol 'customer' (Cliente)
         $customerWeb = Role::where(['name' => 'customer', 'guard_name' => 'web'])->firstOrFail();
         $customerPermissions = [
-            // Permisos existentes que ya tenías
-            'user index', // Para ver su propio perfil
+            // 'user index', // Para ver su propio perfil (si UserPolicy lo permite)
+            // Permisos existentes que ya tenías (revisar si siguen siendo necesarios)
             'servermonitor create', 'servermonitor update', 'servermonitor delete', 'servermonitor show', 'servermonitor index',
             'calendarindividual create', 'calendarindividual update', 'calendarindividual delete', 'calendarindividual show', 'calendarindividual index',
-            // 'scrapingtasks index', 'scrapingtasks create', 'scrapingtasks store', 'scrapingtasks update', 'scrapingtasks delete', 'scrapingtasks show_contacts', 'menu scrapingtasks',
 
-            // *** NUEVOS PERMISOS PARA CLIENTES ***
-            'quotes index',         // Ver su lista de presupuestos
-            'quotes show',          // Ver detalle de un presupuesto
-            'quotes view_own',      // (Crucial para lógica de "solo los míos")
-            'quotes export_pdf',    // Descargar sus PDF
-            // 'quotes update',     // Si permites que acepten/rechacen online
-
-            'projects index',       // Ver su lista de proyectos
-            'projects show',        // Ver detalle de un proyecto
-            'projects view_own',    // (Crucial)
-
-            'tasks index',          // Ver tareas de sus proyectos
-            'tasks show',           // Ver detalle de una tarea
-            'tasks view_own',       // (Crucial, o tasks view_assigned)
-
-            'invoices index',       // Ver su lista de facturas
-            'invoices show',        // Ver detalle de una factura
-            'invoices view_own',    // (Crucial)
-            'invoices export_pdf',  // Descargar sus PDF
+            // PERMISOS PARA CLIENTES
+            'quotes index', 'quotes show', 'quotes view_own', 'quotes export_pdf', 'quotes accept', 'quotes reject',
+            'projects index', 'projects show', 'projects view_own',
+            'tasks index', 'tasks show', 'tasks view_own', // Clientes ven tareas de sus proyectos
+            'invoices index', 'invoices show', 'invoices view_own', 'invoices export_pdf',
 
             // Menús relevantes para clientes
-            'menu quotes',
-            'menu projects',
+            'menu quotes', 'menu projects', 'menu invoices',
             // 'menu tasks', // Quizás las tareas se ven dentro de proyectos
-            'menu invoices',
         ];
         $customerWeb->syncPermissions($customerPermissions);
 
@@ -129,9 +123,19 @@ class RoleSeeder extends Seeder
 
         // Rol 'manager' (puedes definirlo con más permisos que employee, menos que admin)
         $managerWeb = Role::where(['name' => 'manager', 'guard_name' => 'web'])->firstOrFail();
-        // $managerWeb->syncPermissions([...]); // Similar a admin pero quizás sin gestión de usuarios/roles
+        $managerPermissions = array_merge($employeePermissions, [ // Hereda de empleado y añade más
+            'projects create', 'projects update', 'projects delete', // Gestionar todos los proyectos
+            'tasks create', 'tasks update', 'tasks delete', 'tasks assign_users', // Gestionar todas las tareas
+            'quotes create', 'quotes update', 'quotes delete', 'quotes send_email', 'quotes convert_to_invoice', // Gestionar todos los presupuestos
+            'clients create', 'clients update', 'clients delete', // Gestionar todos los clientes
+            'time_entries view all', // Ver todo el historial de tiempos
+            'time_entries edit all', // Editar cualquier entrada
+            'time_entries delete all', // Eliminar cualquier entrada
+        ]);
+        $managerWeb->syncPermissions(array_unique($managerPermissions));
+
 
         app()->make(\Spatie\Permission\PermissionRegistrar::class)->forgetCachedPermissions();
-        $this->command->info('Roles and permissions (including new modules) synced successfully.');
+        $this->command->info('Roles and permissions (including TaskTimeHistory) synced successfully.');
     }
 }

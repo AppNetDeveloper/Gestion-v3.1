@@ -95,15 +95,12 @@ class PermissionSeeder extends Seeder
             ['name' => 'scrapingtasks show_contacts',  'module_name' => 'scrapingtasks'],
             ['name' => 'menu scrapingtasks', 'module_name' => 'menu'],
 
-
-            // *** NUEVOS PERMISOS PARA MÓDULOS DE GESTIÓN ***
-
             // Services (Servicios)
             ['name' => 'services index',  'module_name' => 'services'],
             ['name' => 'services create', 'module_name' => 'services'],
             ['name' => 'services update', 'module_name' => 'services'],
             ['name' => 'services delete', 'module_name' => 'services'],
-            ['name' => 'services show',   'module_name' => 'services'], // Por si hay vista detalle
+            ['name' => 'services show',   'module_name' => 'services'],
 
             // Clients (Clientes)
             ['name' => 'clients index',  'module_name' => 'clients'],
@@ -121,45 +118,54 @@ class PermissionSeeder extends Seeder
             ['name' => 'quotes send_email', 'module_name' => 'quotes'],
             ['name' => 'quotes export_pdf', 'module_name' => 'quotes'],
             ['name' => 'quotes convert_to_invoice', 'module_name' => 'quotes'],
-            ['name' => 'quotes view_own', 'module_name' => 'quotes'], // Para que clientes vean solo los suyos
+            ['name' => 'quotes view_own', 'module_name' => 'quotes'],
+            ['name' => 'quotes accept', 'module_name' => 'quotes'], // Permiso para aceptar
+            ['name' => 'quotes reject', 'module_name' => 'quotes'], // Permiso para rechazar
 
-            // Projects (Proyectos) - Aún no implementado, pero definimos permisos
+            // Projects (Proyectos)
             ['name' => 'projects index',  'module_name' => 'projects'],
             ['name' => 'projects create', 'module_name' => 'projects'],
             ['name' => 'projects update', 'module_name' => 'projects'],
             ['name' => 'projects delete', 'module_name' => 'projects'],
             ['name' => 'projects show',   'module_name' => 'projects'],
             ['name' => 'projects view_own', 'module_name' => 'projects'],
+            ['name' => 'projects assign_users', 'module_name' => 'projects'], // Para asignar usuarios a proyectos
 
-            // Tasks (Tareas) - Aún no implementado, pero definimos permisos
-            ['name' => 'tasks index',  'module_name' => 'tasks'],
+            // Tasks (Tareas)
+            ['name' => 'tasks index',  'module_name' => 'tasks'], // Listar tareas (general o de un proyecto)
             ['name' => 'tasks create', 'module_name' => 'tasks'],
             ['name' => 'tasks update', 'module_name' => 'tasks'],
             ['name' => 'tasks delete', 'module_name' => 'tasks'],
             ['name' => 'tasks show',   'module_name' => 'tasks'],
-            ['name' => 'tasks assign_users', 'module_name' => 'tasks'],
-            ['name' => 'tasks log_time', 'module_name' => 'tasks'],
-            ['name' => 'tasks view_own', 'module_name' => 'tasks'], // Para que usuarios vean sus tareas
-            ['name' => 'tasks view_assigned', 'module_name' => 'tasks'], // Para que usuarios vean tareas asignadas
+            ['name' => 'tasks assign_users', 'module_name' => 'tasks'], // Asignar usuarios a tareas
+            ['name' => 'tasks log_time', 'module_name' => 'tasks'],     // Iniciar/detener temporizador
+            ['name' => 'tasks view_own', 'module_name' => 'tasks'],     // Ver sus propias tareas asignadas
+            ['name' => 'tasks view_assigned', 'module_name' => 'tasks'],// Ver tareas asignadas (similar a view_own)
 
-            // Invoices (Facturas) - Aún no implementado, pero definimos permisos
+            // *** NUEVOS PERMISOS PARA TASK TIME HISTORY ***
+            ['name' => 'time_entries edit own', 'module_name' => 'time_history'],
+            ['name' => 'time_entries delete own', 'module_name' => 'time_history'],
+            ['name' => 'time_entries edit all', 'module_name' => 'time_history'], // Para managers/admins
+            ['name' => 'time_entries delete all', 'module_name' => 'time_history'], // Para managers/admins
+            ['name' => 'time_entries view all', 'module_name' => 'time_history'], // Para ver historial de todos
+
+            // Invoices (Facturas)
             ['name' => 'invoices index',  'module_name' => 'invoices'],
-            ['name' => 'invoices create', 'module_name' => 'invoices'], // Normalmente se generan desde quotes/projects
-            ['name' => 'invoices update', 'module_name' => 'invoices'], // Editar estado, pago, etc.
-            ['name' => 'invoices delete', 'module_name' => 'invoices'], // Anular/borrar
+            ['name' => 'invoices create', 'module_name' => 'invoices'],
+            ['name' => 'invoices update', 'module_name' => 'invoices'],
+            ['name' => 'invoices delete', 'module_name' => 'invoices'],
             ['name' => 'invoices show',   'module_name' => 'invoices'],
             ['name' => 'invoices send_email', 'module_name' => 'invoices'],
             ['name' => 'invoices export_pdf', 'module_name' => 'invoices'],
             ['name' => 'invoices view_own', 'module_name' => 'invoices'],
 
-            // *** NUEVOS PERMISOS PARA MENÚS (si los necesitas) ***
+            // Menus
             ['name' => 'menu services', 'module_name' => 'menu'],
             ['name' => 'menu clients', 'module_name' => 'menu'],
             ['name' => 'menu quotes', 'module_name' => 'menu'],
             ['name' => 'menu projects', 'module_name' => 'menu'],
-            ['name' => 'menu tasks', 'module_name' => 'menu'],
+            ['name' => 'menu tasks', 'module_name' => 'menu'], // Para "Mis Tareas"
             ['name' => 'menu invoices', 'module_name' => 'menu'],
-
         ];
 
         foreach ($permissions as $permissionData) {
@@ -177,6 +183,6 @@ class PermissionSeeder extends Seeder
         }
 
          app()->make(\Spatie\Permission\PermissionRegistrar::class)->forgetCachedPermissions();
-         $this->command->info('Permissions (including new management modules) created or verified successfully.');
+         $this->command->info('Permissions (including TaskTimeHistory) created or verified successfully.');
     }
 }
