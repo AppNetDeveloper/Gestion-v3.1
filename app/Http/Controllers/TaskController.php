@@ -362,13 +362,15 @@ class TaskController extends Controller
 
         $task->load('project.client', 'users', 'timeHistories');
 
+        $activeTimeLog = $task->getActiveTimeLogForCurrentUser(); // O getActiveTimeLogForUser(Auth::user())
+        
         $breadcrumbItems = [
             ['name' => __('Dashboard'), 'url' => '/dashboard'],
             ['name' => __('Projects'), 'url' => route('projects.index')],
             ['name' => $task->project->project_title, 'url' => route('projects.show', $task->project->id)],
             ['name' => __('Task Details'), 'url' => route('tasks.show', $task->id)],
         ];
-        return view('tasks.show', compact('task', 'breadcrumbItems'));
+        return view('tasks.show', compact('task', 'activeTimeLog',  'breadcrumbItems'));
     }
 
     /**

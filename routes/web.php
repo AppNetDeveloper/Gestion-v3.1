@@ -49,7 +49,7 @@ use App\Http\Controllers\ClientController;  // Importar Controlador de Clientes
 use App\Http\Controllers\QuoteController;   // Importar Controlador de Presupuestos
 use App\Http\Controllers\ProjectController; // <-- Importar ProjectController
 use App\Http\Controllers\TaskController; // <-- Importar TaskController
-
+use App\Http\Controllers\TaskTimeHistoryController; // <-- Importar TaskTimeHistoryController
 
 require __DIR__ . '/auth.php';
 
@@ -449,6 +449,19 @@ Route::middleware(['auth'])->group(function () {
     // *** NUEVA RUTA PARA "MIS TAREAS" ***
     Route::get('/my-tasks', [TaskController::class, 'myTasks'])->name('tasks.my');
     Route::get('/my-tasks/data', [TaskController::class, 'myTasksData'])->name('tasks.my.data'); // Para DataTables de "Mis Tareas"
+
+    // *** NUEVAS RUTAS PARA TASK TIME HISTORY (CONTADOR DE TIEMPO) ***
+    // Task Time History (Contador de Tiempo y Gestión de Entradas)
+    // Iniciar contador para una tarea
+    Route::post('/tasks/{task}/time-history/start', [TaskTimeHistoryController::class, 'startTimer'])->name('tasks.time.start');
+    // Detener contador para una tarea
+    Route::post('/tasks/{task}/time-history/stop', [TaskTimeHistoryController::class, 'stopTimer'])->name('tasks.time.stop');
+
+    // Rutas para editar, actualizar y eliminar entradas de tiempo específicas
+    // El listado (index) y creación (create/store para entradas manuales) se manejarían en la vista de la tarea (tasks.show)
+    Route::get('/task-time-entries/{timeEntry}/edit', [TaskTimeHistoryController::class, 'editEntry'])->name('task_time_entries.edit');
+    Route::put('/task-time-entries/{timeEntry}', [TaskTimeHistoryController::class, 'updateEntry'])->name('task_time_entries.update');
+    Route::delete('/task-time-entries/{timeEntry}', [TaskTimeHistoryController::class, 'destroyEntry'])->name('task_time_entries.destroy');
 });
 
 // Grupo de rutas públicas

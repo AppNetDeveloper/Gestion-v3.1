@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Facades\Auth; // Necesario para getActiveTimeLogForCurrentUser
 
 class Task extends Model
 {
@@ -18,18 +19,19 @@ class Task extends Model
      * @var array<int, string>
      */
     protected $fillable = [
-        'project_id', // Clave foránea para la tabla projects
+        'project_id',
         'title',
         'description',
         'status',
         'priority',
         'start_date',
         'due_date',
-        'completed_date',
+        'completed_date', // Cambiado de completion_date para coincidir con tu modelo
         'estimated_hours',
         'logged_hours',
-        // 'parent_task_id', // Descomentar si se implementan dependencias de tareas
+        // 'parent_task_id', // Mantener comentado si no se usa aún
         'sort_order',
+        'created_by_user_id', // <-- AÑADIDO: Quién creó la tarea
     ];
 
     /**
@@ -59,24 +61,27 @@ class Task extends Model
      */
     public function users(): BelongsToMany
     {
-        // Especificamos la tabla pivote 'task_user'
-        // y las claves foráneas si no siguen las convenciones de Laravel exactamente.
-        // En este caso, Laravel debería inferirlas correctamente como task_id y user_id.
         return $this->belongsToMany(User::class, 'task_user');
     }
 
     /**
-     * Get the time history records for the task.
-     * Renombrado a 'timeHistories' para consistencia.
+     * Get the user who created the task.
+     */
+    public function creator(): BelongsTo // <-- NUEVA RELACIÓN (Opcional)
+    {
+        return $this->belongsTo(User::class, 'created_by_user_id');
+    }
+
+    /**
+     * Get all of the time history entries for the task.
      */
     public function timeHistories(): HasMany
     {
-        return $this->hasMany(TaskTimeHistory::class);
+        return $this->hasMany(TaskTimeHistory::class)->orderBy('start_time', 'desc');
     }
 
     /**
      * Get the parent task (if this task is a subtask).
-     * Descomentar si se implementa la funcionalidad de tareas padre/hija.
      */
     public function parentTask(): BelongsTo
     {
@@ -85,10 +90,39 @@ class Task extends Model
 
     /**
      * Get the child tasks (if this task is a parent task).
-     * Descomentar si se implementa la funcionalidad de tareas padre/hija.
      */
     public function childTasks(): HasMany
     {
         return $this->hasMany(Task::class, 'parent_task_id');
+    }
+
+    /**
+     * Get the active time log for the currently authenticated user for this task.
+     *
+     * @return TaskTimeHistory|null
+     */
+    public function getActiveTimeLogForCurrentUser(): ?TaskTimeHistory // <-- NUEVO MÉTODO
+    {
+        if (!Auth::check()) {
+            return null;
+        }
+        return $this->timeHistories()
+                    ->where('user_id', Auth::id())
+                    ->whereNull('end_time')
+                    ->first();
+    }
+
+    /**
+     * Get the active time log for a specific user for this task.
+     *
+     * @param User $user
+     * @return TaskTimeHistory|null
+     */
+    public function getActiveTimeLogForUser(User $user): ?TaskTimeHistory // <-- NUEVO MÉTODO
+    {
+        return $this->timeHistories()
+                    ->where('user_id', $user->id)
+                    ->whereNull('end_time')
+                    ->first();
     }
 }

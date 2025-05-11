@@ -28,8 +28,8 @@ class TaskTimeHistory extends Model
         'start_time',
         'end_time',
         'duration_minutes',
-        'log_date',
-        'description',
+        'log_date',       // Campo que tienes
+        'description',    // Campo que tienes para las notas
     ];
 
     /**
@@ -38,10 +38,10 @@ class TaskTimeHistory extends Model
      * @var array<string, string>
      */
     protected $casts = [
-        'start_time' => 'datetime', // Se maneja como objeto Carbon/DateTime
-        'end_time' => 'datetime',   // Se maneja como objeto Carbon/DateTime
+        'start_time' => 'datetime',
+        'end_time' => 'datetime',
         'duration_minutes' => 'integer',
-        'log_date' => 'date',       // Se maneja como objeto Carbon/Date
+        'log_date' => 'date',
     ];
 
     /**
