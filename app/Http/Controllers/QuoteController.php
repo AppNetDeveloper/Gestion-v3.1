@@ -654,4 +654,63 @@ class QuoteController extends Controller
             return redirect()->route('quotes.show', $quote->id)->with('error', __('An error occurred while rejecting the quote.'));
         }
     }
+        /**
+     * Get detailed information for a specific quote, formatted for use in invoice creation.
+     *
+     * @param  \App\Models\Quote  $quote
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function getDetailsForInvoice(Quote $quote)
+    {
+        // Verificar permisos: ¿Quién puede obtener estos detalles?
+        // Por ahora, asumimos que si se puede crear una factura, se pueden obtener estos detalles.
+        // Podrías añadir una comprobación de permisos más específica si es necesario.
+        if (!Auth::user()->can('invoices create') && !Auth::user()->can('quotes show')) {
+             return response()->json(['error' => __('This action is unauthorized.')], 403);
+        }
+
+        // Cargar las relaciones necesarias para asegurar que todos los datos estén disponibles
+        $quote->load(['client', 'items' => function ($query) {
+            $query->with('service:id,name,default_price,unit'); // Cargar servicio si existe
+        }, 'discount']); // Cargar el descuento global del presupuesto, si existe
+
+        // Formatear los items del presupuesto para que sean fácilmente consumibles por el JS de la factura
+        $formattedItems = $quote->items->map(function ($item) use ($quote) {
+            // La tasa de IVA para la línea de la factura se tomará del cliente del presupuesto
+            $clientVatRate = $quote->client?->vat_rate ?? config('app.vat_rate', 21);
+            $itemSubtotal = $item->quantity * $item->unit_price;
+            // Aquí no aplicamos descuentos de línea del presupuesto a la factura directamente,
+            // la factura podría tener su propia lógica de descuentos por línea si es necesario.
+            // El impuesto se calculará en el frontend de la factura basado en la tasa.
+            return [
+                'id' => null, // Será un nuevo InvoiceItem
+                'quote_item_id' => $item->id, // Para trazabilidad
+                'service_id' => $item->service_id,
+                'item_description' => $item->item_description,
+                'quantity' => $item->quantity,
+                'unit_price' => $item->unit_price,
+                'item_subtotal' => $itemSubtotal, // Subtotal de la línea antes de impuestos
+                'tax_rate' => $clientVatRate, // Tasa de IVA por defecto para esta línea
+                // 'line_discount_amount' => $item->line_discount_amount ?? 0, // Si los items de presupuesto tienen descuentos
+                // 'line_total' => $item->line_total, // Se recalculará en la factura
+            ];
+        });
+
+        return response()->json([
+            'success' => true,
+            'quote_id' => $quote->id,
+            'client_id' => $quote->client_id,
+            'client_vat_rate' => $quote->client?->vat_rate ?? config('app.vat_rate', 21),
+            'currency' => $quote->currency ?? 'EUR',
+            'payment_terms' => $quote->terms_and_conditions, // O un campo específico de términos de pago del presupuesto
+            'notes_to_client' => $quote->notes_to_client,
+            'items' => $formattedItems,
+            // Pasar los totales del presupuesto como referencia, pero la factura los recalculará
+            'quote_subtotal' => $quote->subtotal,
+            'quote_discount_id' => $quote->discount_id, // Para preseleccionar si la factura hereda el descuento
+            'quote_discount_amount' => $quote->discount_amount,
+            'quote_tax_amount' => $quote->tax_amount, // Impuesto total del presupuesto
+            'quote_total_amount' => $quote->total_amount,
+        ]);
+    }
 }

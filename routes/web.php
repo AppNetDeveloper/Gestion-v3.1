@@ -50,6 +50,7 @@ use App\Http\Controllers\QuoteController;   // Importar Controlador de Presupues
 use App\Http\Controllers\ProjectController; // <-- Importar ProjectController
 use App\Http\Controllers\TaskController; // <-- Importar TaskController
 use App\Http\Controllers\TaskTimeHistoryController; // <-- Importar TaskTimeHistoryController
+use App\Http\Controllers\InvoiceController; // <-- Importar InvoiceController
 
 require __DIR__ . '/auth.php';
 
@@ -462,6 +463,16 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/task-time-entries/{timeEntry}/edit', [TaskTimeHistoryController::class, 'editEntry'])->name('task_time_entries.edit');
     Route::put('/task-time-entries/{timeEntry}', [TaskTimeHistoryController::class, 'updateEntry'])->name('task_time_entries.update');
     Route::delete('/task-time-entries/{timeEntry}', [TaskTimeHistoryController::class, 'destroyEntry'])->name('task_time_entries.destroy');
+
+    // *** NUEVAS RUTAS PARA INVOICES (FACTURAS) ***
+    Route::get('invoices/data', [InvoiceController::class, 'data'])->name('invoices.data'); // Para DataTables AJAX
+    // (Opcional) Rutas específicas para acciones como marcar pagada, enviar por email, etc.
+    // Route::post('invoices/{invoice}/mark-as-paid', [InvoiceController::class, 'markAsPaid'])->name('invoices.markAsPaid');
+    // Route::post('invoices/{invoice}/send-email', [InvoiceController::class, 'sendEmail'])->name('invoices.sendEmail');
+    // Route::get('invoices/{invoice}/pdf', [InvoiceController::class, 'exportPdf'])->name('invoices.pdf');
+    Route::resource('invoices', InvoiceController::class);
+    Route::get('/quotes/{quote}/details-for-invoice', [QuoteController::class, 'getDetailsForInvoice'])->name('quotes.detailsForInvoice');
+
 });
 
 // Grupo de rutas públicas
