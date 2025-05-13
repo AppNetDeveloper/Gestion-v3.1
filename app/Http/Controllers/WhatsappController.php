@@ -10,7 +10,7 @@ use App\Models\Contact; // Asegúrate que el modelo Contact existe y está impor
 use App\Models\AutoProcess; // Asegúrate que el modelo AutoProcess existe y está importado
 // Session no se usa si devuelves JSON
 
-class WhatsAppController extends Controller
+class WhatsappController extends Controller
 {
     /**
      * Muestra el listado de contactos y, si se selecciona, la conversación para el usuario logueado.
