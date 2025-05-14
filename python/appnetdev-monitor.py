@@ -4,7 +4,7 @@ import time
 
 # Configuración de la API
 API_URL = "http://127.0.0.1/api/server-monitor"  # Reemplaza con la URL real de la API
-API_TOKEN = ""  # Reemplaza con el token asignado en la tabla host_lists
+API_TOKEN = "27f187ad3cc706ea6402f25106969f0eb5a13690a0addf4de572b7314f6793e2"  # Reemplaza con el token asignado en la tabla host_lists
 
 def collect_metrics():
     """

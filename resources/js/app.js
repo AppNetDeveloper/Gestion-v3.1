@@ -37,6 +37,7 @@ import "tw-elements";
 
 // SimpleBar (scrollbars personalizados)
 import SimpleBar from "simplebar";
+// Fix: Changed SimpleBar CSS import path
 import "simplebar/dist/simplebar.css";
 window.SimpleBar = SimpleBar;
 

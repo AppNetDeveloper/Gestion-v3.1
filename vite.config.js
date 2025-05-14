@@ -1,7 +1,12 @@
-// vite.config.(mjs | js) con "type": "module" en package.json
+// vite.config.js
+import { defineConfig } from "vite";
+import laravel from "laravel-vite-plugin";
 
-import { defineConfig } from "vite"
-import laravel from "laravel-vite-plugin"
+// Para tener __dirname en ESM:
+import { fileURLToPath } from "url";
+import { dirname, resolve } from "path";
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
 export default defineConfig({
   plugins: [
@@ -28,8 +33,41 @@ export default defineConfig({
     }),
   ],
   resolve: {
-    alias: {
-      'jquery': 'jquery/dist/jquery.min.js' // Alias para jQuery
-    }
-  }
+    alias: [
+      // 1) Import CSS de SimpleBar: ruta física absoluta
+      {
+        find: /^simplebar\/dist\/simplebar\.css$/,
+        replacement: resolve(
+          __dirname,
+          "node_modules/simplebar/dist/simplebar.css"
+        ),
+      },
+      // 2) Import JS de SimpleBar: bundle ESM real
+      {
+        find: /^simplebar$/,
+        replacement: resolve(
+          __dirname,
+          "node_modules/simplebar/dist/index.mjs"
+        ),
+      },
+      // 3) Tu alias de jQuery
+      {
+        find: "jquery",
+        replacement: "jquery/dist/jquery.min.js",
+      },
+    ],
+  },
+  optimizeDeps: {
+    include: [
+      // para dev, que Vite preprocese ambos antes de servir
+      "simplebar/dist/index.mjs",
+      "simplebar/dist/simplebar.css",
+    ],
+  },
+  build: {
+    commonjsOptions: {
+      include: [/node_modules/],
+      transformMixedEsModules: true,
+    },
+  },
 });

@@ -65,7 +65,7 @@
                         @error('invoice_date') <p class="mt-1 text-xs text-red-500">{{ $message }}</p> @enderror
                     </div>
 
-                     {{-- Fecha Vencimiento --}}
+                    {{-- Fecha Vencimiento --}}
                     <div>
                         <label for="due_date" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
                             {{ __('Due Date') }} <span class="text-red-500">*</span>
@@ -76,7 +76,7 @@
                     </div>
 
                     {{-- Estado --}}
-                     <div>
+                    <div>
                         <label for="status" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
                             {{ __('Status') }} <span class="text-red-500">*</span>
                         </label>
@@ -101,7 +101,7 @@
                         @error('currency') <p class="mt-1 text-xs text-red-500">{{ $message }}</p> @enderror
                     </div>
 
-                     {{-- Presupuesto Asociado (Opcional) --}}
+                    {{-- Presupuesto Asociado (Opcional) --}}
                     <div>
                         <label for="quote_id" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
                             {{ __('Associated Quote') }} ({{ __('Optional') }})
@@ -117,7 +117,7 @@
                         @error('quote_id') <p class="mt-1 text-xs text-red-500">{{ $message }}</p> @enderror
                     </div>
 
-                     {{-- Proyecto Asociado (Opcional) --}}
+                    {{-- Proyecto Asociado (Opcional) --}}
                     <div>
                         <label for="project_id" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
                             {{ __('Associated Project') }} ({{ __('Optional') }})
@@ -257,7 +257,7 @@
     @push('styles')
         <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
         <style>
-            /* ... (Estilos Select2 como en quotes.create) ... */
+            /* … (estilos Select2) … */
             .select2-container--default .select2-selection--single { background-color: transparent !important; border: 1px solid #e2e8f0 !important; border-radius: 0.375rem !important; height: calc(1.5em + 0.75rem + 2px + 0.75rem) !important; padding-top: 0.75rem; padding-bottom: 0.75rem; }
             .dark .select2-container--default .select2-selection--single { border: 1px solid #475569 !important; background-color: #0f172a !important; }
             .select2-container--default .select2-selection--single .select2-selection__rendered { color: #0f172a !important; line-height: 1.5rem !important; padding-left: 0.75rem !important; padding-right: 2rem !important; }
@@ -277,8 +277,9 @@
     @endpush
 
     @push('scripts')
-        {{-- NO cargar jQuery aquí si ya está globalmente en app.js --}}
-        {{-- <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script> --}}
+        {{-- jQuery DEBE ir antes que Select2 --}}
+        <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+
         <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
         <script src="https://code.iconify.design/iconify-icon/1.0.7/iconify-icon.min.js"></script>
         <script>
@@ -289,26 +290,15 @@
             let currentClientVatRate = defaultVatRate;
 
             $(function() {
-                console.log('jQuery version:', $ ? $.fn.jquery : 'Not loaded');
-                console.log('Select2 function type:', typeof $.fn.select2);
-
                 if (typeof $.fn.select2 !== 'undefined') {
-                    console.log('Select2 IS defined, attempting to initialize...');
-                    $('.select2-client, .select2-quote, .select2-project, .select2-discount').each(function() {
-                        const $select = $(this);
-                        try {
-                            $select.select2({
-                                placeholder: $select.find('option[disabled]').text() || $select.find('option[value=""]').text() || 'Select an option',
-                                allowClear: true,
-                                width: '100%'
-                            });
-                            console.log('Select2 initialized for:', $select.attr('id') || $select.attr('name'));
-                        } catch (e) {
-                            console.error('Error initializing Select2 for:', $select.attr('id') || $select.attr('name'), e);
-                        }
+                    $('.select2-client, .select2-quote, .select2-project, .select2-discount').select2({
+                        placeholder: function() {
+                            const $el = $(this).find('option[disabled], option[value=""]').first();
+                            return $el.length ? $el.text() : 'Select an option';
+                        },
+                        allowClear: true,
+                        width: '100%'
                     });
-                } else {
-                    console.warn('Select2 plugin is NOT loaded or $.fn.select2 is undefined.');
                 }
 
                 $('#client_id').on('change', function() {
@@ -329,11 +319,10 @@
                     }
                     $quoteSelect.val(currentQuoteVal).trigger('change.select2');
 
-
                     const $projectSelect = $('#project_id');
                     const currentProjectVal = $projectSelect.val();
                     $projectSelect.empty().append(new Option(@json(__('None')), '', true, true));
-                     if (clientId) {
+                    if (clientId) {
                         allAvailableProjects.forEach(function(project) {
                             if (project.client_id == clientId) {
                                 $projectSelect.append(new Option(`${project.project_title} - ${project.client?.name || ''}`, project.id, false, project.id == currentProjectVal));
@@ -342,11 +331,9 @@
                     }
                     $projectSelect.val(currentProjectVal).trigger('change.select2');
 
-
                     $('#invoiceItemsContainer .invoice-item-row').each(function() {
-                        // Al cambiar cliente, actualizar la tasa de IVA por defecto de las líneas si no tienen una específica
                         const $taxRateInput = $(this).find('.item-tax-rate');
-                        if (!$taxRateInput.data('custom-rate-set')) { // Marcar si el usuario ya puso una tasa
+                        if (!$taxRateInput.data('custom-rate-set')) {
                             $taxRateInput.val(currentClientVatRate.toFixed(2));
                         }
                         updateLineTotal($(this));
@@ -354,36 +341,31 @@
                     calculateOverallTotals();
                 }).trigger('change');
 
-                $('#quote_id').on('select2:select', function (e) {
+                $('#quote_id').on('select2:select', function () {
                     const quoteId = $(this).val();
                     if (quoteId) {
-                        $.ajax({
-                            url: `/quotes/${quoteId}/details-for-invoice`,
-                            type: 'GET',
-                            success: function(response) {
-                                if (response.success) {
-                                    if ($('#client_id').val() != response.client_id) {
-                                        $('#client_id').val(response.client_id).trigger('change.select2');
-                                    } else {
-                                        currentClientVatRate = parseFloat(response.client_vat_rate) || defaultVatRate;
-                                        $('#clientVatRateDisplay').text(currentClientVatRate.toFixed(2));
-                                    }
-                                    $('#payment_terms').val(response.payment_terms || '');
-                                    $('#notes_to_client').val(response.notes_to_client || '');
+                        $.get(`/quotes/${quoteId}/details-for-invoice`, function (response) {
+                            if (response.success) {
+                                if ($('#client_id').val() != response.client_id) {
+                                    $('#client_id').val(response.client_id).trigger('change.select2');
+                                } else {
+                                    currentClientVatRate = parseFloat(response.client_vat_rate) || defaultVatRate;
+                                    $('#clientVatRateDisplay').text(currentClientVatRate.toFixed(2));
+                                }
+                                $('#payment_terms').val(response.payment_terms || '');
+                                $('#notes_to_client').val(response.notes_to_client || '');
 
-                                    if(response.quote_discount_id) {
-                                        $('#discount_id_invoice').val(response.quote_discount_id).trigger('change.select2');
-                                    } else {
-                                        $('#discount_id_invoice').val("").trigger('change.select2');
-                                    }
+                                $('#discount_id_invoice').val(response.quote_discount_id || '').trigger('change.select2');
 
-                                    itemsContainer.empty();
-                                    itemIndex = 0;
-                                    response.items.forEach(function(item) { addInvoiceItemRow(item); });
-                                    calculateOverallTotals();
-                                } else { Swal.fire('Error', response.error || 'Could not load quote details.', 'error'); }
-                            },
-                            error: function() { Swal.fire('Error', 'Error fetching quote details.', 'error'); }
+                                itemsContainer.empty();
+                                itemIndex = 0;
+                                response.items.forEach(function(item) { addInvoiceItemRow(item); });
+                                calculateOverallTotals();
+                            } else {
+                                alert(response.error || 'Could not load quote details.');
+                            }
+                        }).fail(function () {
+                            alert('Error fetching quote details.');
                         });
                     } else {
                         itemsContainer.empty(); itemIndex = 0; addInvoiceItemRow(); calculateOverallTotals();
@@ -396,8 +378,7 @@
                 let itemIndex = 0;
 
                 function addInvoiceItemRow(itemData = null) {
-                    const currentIndex = itemIndex;
-                    const newItemHtml = itemTemplateHtml.replace(/__INDEX__/g, currentIndex);
+                    const newItemHtml = itemTemplateHtml.replace(/__INDEX__/g, itemIndex);
                     const $newRow = $(newItemHtml);
 
                     if (itemData) {
@@ -419,7 +400,7 @@
                 function initializeRowEvents($row) {
                     $row.find('.item-quantity, .item-price, .item-tax-rate').on('input change', function() {
                         if ($(this).hasClass('item-tax-rate')) {
-                            $(this).data('custom-rate-set', true); // Marcar que el usuario cambió la tasa
+                            $(this).data('custom-rate-set', true);
                         }
                         updateLineTotal($row);
                         calculateOverallTotals();
@@ -427,7 +408,7 @@
                     $row.find('.remove-item-btn').on('click', function() {
                         $(this).closest('.invoice-item-row').remove();
                         calculateOverallTotals();
-                         if ($('#invoiceItemsContainer .invoice-item-row').length === 0) {
+                        if ($('#invoiceItemsContainer .invoice-item-row').length === 0) {
                             addInvoiceItemRow();
                         }
                     });
@@ -438,61 +419,54 @@
                     const price = parseFloat($row.find('.item-price').val()) || 0;
                     const taxRate = parseFloat($row.find('.item-tax-rate').val()) || 0;
                     const lineSubtotal = quantity * price;
-                    const lineTaxAmount = lineSubtotal * (taxRate / 100);
-                    const lineTotal = lineSubtotal + lineTaxAmount;
+                    const lineTax = lineSubtotal * (taxRate / 100);
+                    const lineTotal = lineSubtotal + lineTax;
                     $row.find('.item-total').text(lineTotal.toFixed(2) + ' €');
                 }
 
                 function calculateOverallTotals() {
-                    let overallSubtotal = 0;
-                    let overallTaxAmount = 0;
+                    let subtotal = 0;
+                    let taxTotal = 0;
 
                     $('#invoiceItemsContainer .invoice-item-row').each(function() {
-                        const $row = $(this);
-                        const quantity = parseFloat($row.find('.item-quantity').val()) || 0;
-                        const price = parseFloat($row.find('.item-price').val()) || 0;
-                        const taxRate = parseFloat($row.find('.item-tax-rate').val()) || 0;
-                        const lineSubtotal = quantity * price;
-                        const lineTaxAmount = lineSubtotal * (taxRate / 100);
-                        overallSubtotal += lineSubtotal;
-                        overallTaxAmount += lineTaxAmount;
+                        const qty = parseFloat($(this).find('.item-quantity').val()) || 0;
+                        const price = parseFloat($(this).find('.item-price').val()) || 0;
+                        const rate = parseFloat($(this).find('.item-tax-rate').val()) || 0;
+                        const lineSubtotal = qty * price;
+                        subtotal += lineSubtotal;
+                        taxTotal += lineSubtotal * (rate / 100);
                     });
 
                     let discountAmount = 0;
-                    const selectedDiscountOption = $('#discount_id_invoice').find('option:selected');
-                    if (selectedDiscountOption.length && selectedDiscountOption.val()) {
-                        const discountType = selectedDiscountOption.data('type');
-                        const discountValue = parseFloat(selectedDiscountOption.data('value')) || 0;
-                        if (discountType === 'percentage') {
-                            discountAmount = overallSubtotal * (discountValue / 100);
-                        } else {
-                            discountAmount = discountValue;
-                        }
-                        discountAmount = Math.min(overallSubtotal, discountAmount);
+                    const $discOption = $('#discount_id_invoice').find('option:selected');
+                    if ($discOption.val()) {
+                        const discType = $discOption.data('type');
+                        const discVal = parseFloat($discOption.data('value')) || 0;
+                        discountAmount = discType === 'percentage' ? subtotal * (discVal / 100) : discVal;
+                        discountAmount = Math.min(subtotal, discountAmount);
                     }
 
-                    const taxableBase = overallSubtotal - discountAmount;
-                    const totalAmount = taxableBase + overallTaxAmount;
+                    const total = subtotal - discountAmount + taxTotal;
 
-                    $('#invoiceSubtotal').text(overallSubtotal.toFixed(2) + ' €');
+                    $('#invoiceSubtotal').text(subtotal.toFixed(2) + ' €');
                     $('#invoiceDiscountAmount').text(discountAmount.toFixed(2) + ' €');
-                    $('#invoiceTaxes').text(overallTaxAmount.toFixed(2) + ' €');
-                    $('#invoiceTotal').text(totalAmount.toFixed(2) + ' €');
+                    $('#invoiceTaxes').text(taxTotal.toFixed(2) + ' €');
+                    $('#invoiceTotal').text(total.toFixed(2) + ' €');
                     $('#clientVatRateDisplay').text(currentClientVatRate.toFixed(2));
 
-                    $('#inputSubtotal').val(overallSubtotal.toFixed(2));
+                    $('#inputSubtotal').val(subtotal.toFixed(2));
                     $('#inputDiscountAmount').val(discountAmount.toFixed(2));
-                    $('#inputTaxAmount').val(overallTaxAmount.toFixed(2));
-                    $('#inputTotalAmount').val(totalAmount.toFixed(2));
+                    $('#inputTaxAmount').val(taxTotal.toFixed(2));
+                    $('#inputTotalAmount').val(total.toFixed(2));
                 }
 
                 $('#discount_id_invoice').on('change', calculateOverallTotals);
-                addItemBtn.on('click', function() { addInvoiceItemRow(); });
+                addItemBtn.on('click', addInvoiceItemRow);
 
                 if ($('#invoiceItemsContainer .invoice-item-row').length === 0) {
                     addInvoiceItemRow();
                 } else {
-                     $('#invoiceItemsContainer .invoice-item-row').each(function() {
+                    $('#invoiceItemsContainer .invoice-item-row').each(function() {
                         initializeRowEvents($(this));
                         updateLineTotal($(this));
                     });
