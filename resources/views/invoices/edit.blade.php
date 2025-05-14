@@ -340,12 +340,21 @@
                     const discountsList = @json($discounts);
                     const existingItems = @json($invoiceItems ?? []);
 
+                    /* ---------- Vat desde back ---------- */
                     const defaultVatRate = {{ config('app.vat_rate',21) }};
-                    /* --- VAT actual --- */
-                    let currentVatRate = parseFloat($('#client_id option:selected').data('vat-rate')) || defaultVatRate;
-                    if (isNaN(currentVatRate)) currentVatRate = defaultVatRate;
+
+                    function readVat($option){
+                        const v = parseFloat($option.data('vat-rate'));
+                        return isNaN(v) ? defaultVatRate : v;   // 👈 NO reemplaza el 0
+                    }
+
+                    let currentVatRate = readVat($('#client_id option:selected'));
+
                     $('#clientVatRateDisplay').text(currentVatRate.toFixed(2));
                     $('#inputClientVatRate').val(currentVatRate);
+                    console.log('[INIT] option:selected data-vat-rate =',
+                                $('#client_id option:selected').data('vat-rate'),
+                                '→ currentVatRate =', currentVatRate);
                     /* ------------ Select2 helpers ------------ */
                     function initSelect2($el){
                         if ($.fn.select2){
@@ -355,8 +364,18 @@
                     $('.select2-main').each(function(){ initSelect2($(this)); });
 
                     /* ------------ Cliente cambia ------------ */
-                    $('#client_id').on('change select2:select', function(){
-                        currentVatRate = parseFloat($(this).find(':selected').data('vat-rate')) || defaultVatRate;
+                    $('#client_id').on('change select2:select', function () {
+
+                    // lee el atributo
+                    let vat = parseFloat($(this).find(':selected').data('vat-rate'));
+
+                        // solo usa el valor por defecto si ES NaN (undefined, null, etc.),
+                        // pero NO si el valor real es 0
+                        if (isNaN(vat)) vat = defaultVatRate;
+                        currentVatRate = vat;
+
+                        console.log('currentVatRate:', currentVatRate);   // 0, 7, 15, 21…
+
                         $('#clientVatRateDisplay').text(currentVatRate.toFixed(2));
                         $('#inputClientVatRate').val(currentVatRate);
 
@@ -366,6 +385,7 @@
 
                         recalcTotals();
                     });
+
 
                     function reloadSelect(sel, list, cid, label){
                         const $s = $(sel);
