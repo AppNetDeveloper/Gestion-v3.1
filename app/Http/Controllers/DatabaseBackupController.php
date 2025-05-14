@@ -15,7 +15,7 @@ use Spatie\Backup\BackupDestination\BackupDestination;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 use Spatie\Backup\Tasks\Monitor\BackupDestinationStatus;
 use Spatie\Backup\Tasks\Monitor\BackupDestinationStatusFactory;
-
+use Spatie\Backup\Config\MonitoredBackupsConfig;
 use Illuminate\Support\Facades\Storage;
 use League\Flysystem\UnableToReadFile;
 
@@ -80,18 +80,25 @@ class DatabaseBackupController extends Controller
 
     public function backupList(): array
     {
-        return BackupDestinationStatusFactory::createForMonitorConfig(config('backup.monitor_backups'))
-            ->map(function (BackupDestinationStatus $backupDestinationStatus) {
+        // ➊ Convertimos el array a MonitoredBackupsConfig
+        $monitoredConfig = MonitoredBackupsConfig::fromArray(
+            config('backup.monitor_backups')
+        );
+
+        // ➋ Obtenemos los estados con la nueva firma
+        return BackupDestinationStatusFactory::createForMonitorConfig($monitoredConfig)
+            ->map(function (BackupDestinationStatus $status) {
+                $destination = $status->backupDestination();
+
                 return [
-                    'name' => $backupDestinationStatus->backupDestination()->backupName(),
-                    'disk' => $backupDestinationStatus->backupDestination()->diskName(),
-                    'reachable' => $backupDestinationStatus->backupDestination()->isReachable(),
-                    'healthy' => $backupDestinationStatus->isHealthy(),
-                    'amount' => $backupDestinationStatus->backupDestination()->backups()->count(),
-                    'newest' => $backupDestinationStatus->backupDestination()->newestBackup()
-                        ? $backupDestinationStatus->backupDestination()->newestBackup()->date()->diffForHumans()
-                        : 'No backups present',
-                    'usedStorage' => Format::humanReadableSize($backupDestinationStatus->backupDestination()->usedStorage()),
+                    'name'        => $destination->backupName(),
+                    'disk'        => $destination->diskName(),
+                    'reachable'   => $destination->isReachable(),
+                    'healthy'     => $status->isHealthy(),
+                    'amount'      => $destination->backups()->count(),
+                    'newest'      => optional($destination->newestBackup())
+                                        ?->date()?->diffForHumans() ?? 'Sin copias',
+                    'usedStorage' => Format::humanReadableSize($destination->usedStorage()),
                 ];
             })
             ->values()

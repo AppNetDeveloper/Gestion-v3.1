@@ -16,7 +16,7 @@
                 // *** CAMBIA 'dashboard.unified' por el nombre real de tu ruta principal/dashboard ***
                 $homeUrl = route('dashboard'); // O 'home', etc.
             } catch (\Exception $e) {
-                 \Illuminate\Support\Facades\Log::warning("Breadcrumb: Ruta 'dashboard' no encontrada.");
+                 
             }
         @endphp
         <li class="inline-block relative top-[3px] text-base text-primary-500 font-Inter">

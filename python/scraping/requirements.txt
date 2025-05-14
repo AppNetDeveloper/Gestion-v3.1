@@ -3,3 +3,12 @@ uvicorn
 googlesearch-python
 beautifulsoup4
 requests
+duckduckgo-search          # si también la necesitas
+playwright                  # idem
+httpx                       # idem
+pathlib                     # idem (sólo en Python <3.4)
+fastapi
+uvicorn
+googlesearch-python
+beautifulsoup4
+requests
