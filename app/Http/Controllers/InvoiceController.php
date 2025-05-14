@@ -15,6 +15,7 @@ use Illuminate\Support\Facades\Validator;
 use Yajra\DataTables\Facades\DataTables;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule; // Para reglas de validación
+use App\Models\Service;
 
 class InvoiceController extends Controller
 {
@@ -137,13 +138,13 @@ class InvoiceController extends Controller
                                     ->get(['id', 'project_title', 'client_id']);
 
         $discounts = Discount::where('is_active', true)->orderBy('name')->get(); // <-- OBTENER DESCUENTOS
-
+        $services = Service::orderBy('name')->get(['id', 'name', 'default_price', 'unit', 'description']);
         $breadcrumbItems = [
             ['name' => __('Dashboard'), 'url' => '/dashboard'],
             ['name' => __('Invoices'), 'url' => route('invoices.index')],
             ['name' => __('Create'), 'url' => route('invoices.create')],
         ];
-        return view('invoices.create', compact('breadcrumbItems', 'clients', 'availableQuotes', 'availableProjects', 'discounts')); // <-- PASAR DISCOUNTS
+        return view('invoices.create', compact('breadcrumbItems', 'clients', 'availableQuotes', 'availableProjects', 'discounts', 'services')); // <-- PASAR DISCOUNTS
     }
 
     /**
@@ -323,6 +324,7 @@ class InvoiceController extends Controller
                                     ->orderBy('project_title')->get(['id', 'project_title', 'client_id']);
 
         $invoice->load('items');
+        $services = Service::orderBy('name')->get(['id', 'name', 'default_price', 'unit', 'description']);
 
         $breadcrumbItems = [
             ['name' => __('Dashboard'), 'url' => '/dashboard'],
@@ -330,7 +332,7 @@ class InvoiceController extends Controller
             ['name' => $invoice->invoice_number, 'url' => route('invoices.show', $invoice->id)],
             ['name' => __('Edit'), 'url' => route('invoices.edit', $invoice->id)],
         ];
-        return view('invoices.edit', compact('invoice', 'breadcrumbItems', 'clients', 'availableQuotes', 'availableProjects'));
+        return view('invoices.edit', compact('invoice', 'breadcrumbItems', 'clients', 'availableQuotes', 'availableProjects', 'services'));
     }
 
     /**

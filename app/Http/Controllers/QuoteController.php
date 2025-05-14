@@ -713,4 +713,27 @@ class QuoteController extends Controller
             'quote_total_amount' => $quote->total_amount,
         ]);
     }
+
+    public function detailsForInvoice(Quote $quote, Request $request)
+    {
+        // Asegúrate de validar permisos según tu política
+        $quote->load(['items.service','client']);
+
+        $items = $quote->items->map(fn ($i) => [
+            'service_id'       => $i->service_id,
+            'item_description' => $i->item_description,
+            'quantity'         => $i->quantity,
+            'unit_price'       => $i->unit_price,
+        ]);
+
+        return response()->json([
+            'success'           => true,
+            'client_id'         => $quote->client_id,
+            'client_vat_rate'   => $quote->client->vat_rate ?? config('app.vat_rate',21),
+            'quote_discount_id' => $quote->discount_id,      // o null
+            'payment_terms'     => $quote->payment_terms,
+            'notes_to_client'   => $quote->notes_to_client,
+            'items'             => $items,
+        ]);
+    }
 }

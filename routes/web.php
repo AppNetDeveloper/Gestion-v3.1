@@ -437,7 +437,7 @@ Route::middleware(['auth'])->group(function () {
     Route::get('quotes/{quote}/pdf', [QuoteController::class, 'exportPdf'])->name('quotes.pdf');
     Route::post('quotes/{quote}/send', [QuoteController::class, 'sendEmail'])->name('quotes.send');
     Route::post('quotes/{quote}/convert-to-invoice', [QuoteController::class, 'convertToInvoice'])->name('quotes.convertToInvoice');
-
+    Route::get('/quotes/{quote}/details-for-invoice', [\App\Http\Controllers\QuoteController::class,'detailsForInvoice'])->middleware(['auth']);
       // Rutas para Projects (Proyectos)
       Route::get('projects/data', [ProjectController::class, 'data'])->name('projects.data'); // Para DataTables AJAX
       Route::resource('projects', ProjectController::class);// <-- NUEVA RUTA
