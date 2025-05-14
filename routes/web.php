@@ -437,7 +437,8 @@ Route::middleware(['auth'])->group(function () {
     Route::get('quotes/{quote}/pdf', [QuoteController::class, 'exportPdf'])->name('quotes.pdf');
     Route::post('quotes/{quote}/send', [QuoteController::class, 'sendEmail'])->name('quotes.send');
     Route::post('quotes/{quote}/convert-to-invoice', [QuoteController::class, 'convertToInvoice'])->name('quotes.convertToInvoice');
-    Route::get('/quotes/{quote}/details-for-invoice', [\App\Http\Controllers\QuoteController::class,'detailsForInvoice'])->middleware(['auth']);
+#    Route::get('/quotes/{quote}/details-for-invoice', [QuoteController::class,'detailsForInvoice'])->middleware(['auth']);
+    Route::get('/quotes/{quote}/details-for-invoice', [QuoteController::class, 'getDetailsForInvoice'])->name('quotes.detailsForInvoice');
       // Rutas para Projects (Proyectos)
       Route::get('projects/data', [ProjectController::class, 'data'])->name('projects.data'); // Para DataTables AJAX
       Route::resource('projects', ProjectController::class);// <-- NUEVA RUTA
@@ -471,7 +472,9 @@ Route::middleware(['auth'])->group(function () {
     // Route::post('invoices/{invoice}/send-email', [InvoiceController::class, 'sendEmail'])->name('invoices.sendEmail');
     // Route::get('invoices/{invoice}/pdf', [InvoiceController::class, 'exportPdf'])->name('invoices.pdf');
     Route::resource('invoices', InvoiceController::class);
-    Route::get('/quotes/{quote}/details-for-invoice', [QuoteController::class, 'getDetailsForInvoice'])->name('quotes.detailsForInvoice');
+
+    Route::get('invoices/{invoice}/pdf', [InvoiceController::class, 'exportPdf'])->name('invoices.pdf');
+    Route::post('invoices/{invoice}/send-email', [InvoiceController::class, 'sendEmail'])->name('invoices.sendEmail');
 
 });
 

@@ -13,6 +13,24 @@ return [
    |
    */
     'frontend_url' => env('FRONTEND_URL', 'http://localhost:3000'),
+    
+    /*
+    |--------------------------------------------------------------------------
+    | Company Information
+    |--------------------------------------------------------------------------
+    |
+    | Datos de tu empresa para mostrarlos en facturas, correos, etc.
+    |
+    */
+
+    'company_name' => env('APP_COMPANY_NAME', 'Your Company LLC'),
+    'company_address' => env('APP_COMPANY_ADDRESS', "123 Business Rd.\nSuite 100"),
+    'company_city_zip_country' => env('APP_COMPANY_CITY_ZIP_COUNTRY', 'Businesstown, NY 10001, USA'),
+    'company_phone' => env('APP_COMPANY_PHONE', '(555) 123-4567'),
+    'company_email' => env('APP_COMPANY_EMAIL', 'contact@example.com'),
+    'company_vat' => env('APP_COMPANY_VAT', null),
+    'company_logo_path' => env('APP_COMPANY_LOGO_PATH', 'images/logo.png'), // Ruta relativa a public
+
     /*
     |--------------------------------------------------------------------------
     | Api Version

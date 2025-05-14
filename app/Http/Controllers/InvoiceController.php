@@ -16,6 +16,10 @@ use Yajra\DataTables\Facades\DataTables;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule; // Para reglas de validación
 use App\Models\Service;
+use Barryvdh\DomPDF\Facade\Pdf;
+use App\Mail\InvoiceSentMail;
+use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Storage; // Para manejo de archivos
 
 class InvoiceController extends Controller
 {
@@ -464,6 +468,121 @@ class InvoiceController extends Controller
             DB::rollBack();
             Log::error('Error deleting invoice: '.$e->getMessage());
             return response()->json(['error' => __('An error occurred while deleting the invoice.')], 500);
+        }
+    }
+    /**
+     * Export the invoice to PDF.
+     *
+     * @param  \App\Models\Invoice  $invoice
+     * @return \Illuminate\Http\Response
+     */
+    public function exportPdf(Invoice $invoice)
+    {
+        $user = Auth::user();
+        $canView = $user->can('invoices export_pdf'); // O un permiso más general como 'invoices show'
+        $isOwner = $user->hasRole('customer') && $invoice->client && $invoice->client->user_id == $user->id;
+
+        if ($isOwner && $user->can('invoices view_own')) { // Clientes pueden descargar sus propias facturas
+            $canView = true;
+        }
+        if (!$canView && !$isOwner) {
+             abort(403, __('This action is unauthorized.'));
+        }
+
+        $invoice->load('client', 'items.service'); // Cargar relaciones necesarias para el PDF
+
+        // Datos de la empresa (ejemplo, podrías tenerlos en config o una tabla de settings)
+        $companyData = [
+            'name' => config('app.company_name', 'Your Company Name'),
+            'address' => config('app.company_address', '123 Main St'),
+            'city_zip_country' => config('app.company_city_zip_country', 'Anytown, 12345, USA'),
+            'phone' => config('app.company_phone', '+1 234 567 890'),
+            'email' => config('app.company_email', 'contact@yourcompany.com'),
+            'vat' => config('app.company_vat', 'ES12345678X'),
+            'logo_path' => public_path('images/logo_color.png') // Asegúrate que esta ruta sea correcta
+        ];
+        if (!file_exists($companyData['logo_path'])) {
+            $companyData['logo_path'] = null; // Evitar error si el logo no existe
+            Log::warning('Company logo not found for PDF export: ' . public_path('images/logo_color.png'));
+        }
+
+
+        try {
+            // Pasar $invoice y $companyData a la vista del PDF
+            $pdf = Pdf::loadView('invoices.pdf_template', compact('invoice', 'companyData'));
+            return $pdf->download('invoice-' . $invoice->invoice_number . '.pdf');
+        } catch (\Exception $e) {
+            Log::error("Error generating PDF for invoice #{$invoice->id}: " . $e->getMessage());
+            return back()->with('error', __('Could not generate PDF. Please check logs.'));
+        }
+    }
+    /**
+     * Send the invoice email to the client.
+     *
+     * @param  \Illuminate\Http\Request  $request
+     * @param  \App\Models\Invoice  $invoice
+     * @return \Illuminate\Http\RedirectResponse
+     */
+    public function sendEmail(Request $request, Invoice $invoice)
+    {
+        $user = Auth::user();
+        if (!$user->can('invoices send_email') || $user->hasRole('customer')) { // Clientes no pueden enviar facturas
+            abort(403, __('This action is unauthorized.'));
+        }
+
+        if (!$invoice->client || !$invoice->client->email) {
+            return back()->with('error', __('Client does not have an email address.'));
+        }
+
+        $invoice->load('client', 'items.service');
+
+        $companyData = [
+            'name' => config('app.company_name', 'Your Company Name'),
+            'address' => config('app.company_address', "123 Main St\nAnytown, USA"),
+            'city_zip_country' => config('app.company_city_zip_country', 'Anytown, 12345, USA'),
+            'phone' => config('app.company_phone', '+1 234 567 890'),
+            'email' => config('app.company_email', 'contact@yourcompany.com'),
+            'vat' => config('app.company_vat', null),
+            'logo_path' => config('app.company_logo_path') ? public_path(config('app.company_logo_path')) : null,
+        ];
+         if ($companyData['logo_path'] && !file_exists($companyData['logo_path'])) {
+            $companyData['logo_path'] = null;
+        }
+
+        try {
+            // Generar el PDF y guardarlo temporalmente
+            $pdf = Pdf::loadView('invoices.pdf_template', compact('invoice', 'companyData'));
+            $pdfFileName = 'invoice-' . $invoice->invoice_number . '.pdf';
+            // Guardar en storage/app/temp o un disco temporal configurado
+            Storage::put('temp/' . $pdfFileName, $pdf->output());
+            Storage::disk(config('filesystems.default'))->put($pdfFileName, $pdf->output());
+            // or use a different disk like this
+            // Storage::disk('local')->put($pdfFileName, $pdf->output());
+            $pdfPath = storage_path('app/temp/' . $pdfFileName);
+
+            Mail::to($invoice->client->email)->send(new InvoiceSentMail($invoice, $companyData, $pdfPath));
+
+            // Eliminar el archivo PDF temporal después de enviarlo
+            if (Storage::exists('temp/' . $pdfFileName)) {
+                Storage::delete('temp/' . $pdfFileName);
+            }
+
+            // Actualizar estado de la factura si estaba en borrador
+            if ($invoice->status == 'draft') {
+                $invoice->status = 'sent';
+                $invoice->sent_at = now(); // Opcional: campo para registrar cuándo se envió
+                $invoice->save();
+            }
+
+            return back()->with('success', __('Invoice sent successfully to client!'));
+
+        } catch (\Exception $e) {
+            Log::error("Error sending invoice #{$invoice->id} email: " . $e->getMessage() . "\n" . $e->getTraceAsString());
+            // Asegurarse de eliminar el PDF temporal si algo falla
+            if (isset($pdfFileName) && Storage::exists('temp/' . $pdfFileName)) {
+                Storage::delete('temp/' . $pdfFileName);
+            }
+            return back()->with('error', __('An error occurred while sending the email. Please check logs.'));
         }
     }
 }

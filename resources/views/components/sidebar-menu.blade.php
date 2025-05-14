@@ -105,7 +105,7 @@
             @endcan
             @can('menu invoices')
                 <li class="{{ request()->routeIs('invoices.*') ? 'active' : '' }}">
-                    <a href="{{-- route('invoices.index') --}}" class="navItem">
+                    <a href="{{ route('invoices.index') }}" class="navItem">
                         <span class="flex items-center">
                             <iconify-icon class="nav-icon" icon="heroicons-outline:receipt-percent"></iconify-icon>
                             <span>{{ __('Invoices') }}</span>
@@ -113,8 +113,6 @@
                     </a>
                 </li>
             @endcan
-
-
             @can('servermonitor show')
                 <li><a href="{{ route('servermonitor.index') }}" class="navItem {{ request()->routeIs('servermonitor.index') ? 'active' : '' }}"><span class="flex items-center"><iconify-icon class="nav-icon" icon="solar:server-outline"></iconify-icon><span>{{ __('Server Monitor') }}</span></span></a></li>
             @endcan
