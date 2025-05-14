@@ -88,5 +88,10 @@ as_root playwright install --with-deps
 
 # ------------- 6. Fin --------------------------------------------------------
 deactivate
+
+python3 -m venv venv-email
+source venv-email/bin/activate
+pip install -r requirements.txt
+
 info "¡Entorno listo! Actívalo cuando quieras con:"
 printf "    source %s/bin/activate\n" "$VENV_DIR"
