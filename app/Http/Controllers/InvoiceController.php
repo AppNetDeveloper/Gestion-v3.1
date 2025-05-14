@@ -307,8 +307,9 @@ class InvoiceController extends Controller
         if (!Auth::user()->can('invoices update') || Auth::user()->hasRole('customer')) {
             abort(403, __('This action is unauthorized.'));
         }
-        if (in_array($invoice->status, ['paid', 'cancelled'])) {
-            return redirect()->route('invoices.show', $invoice->id)->with('error', __('This invoice cannot be edited.'));
+        // *** MODIFICACIÓN AQUÍ: Solo permitir editar si es 'draft' ***
+        if ($invoice->status !== 'draft') {
+            return redirect()->route('invoices.show', $invoice->id)->with('error', __('This invoice cannot be edited because it is not in draft status.'));
         }
 
         $clients = Client::orderBy('name')->pluck('name', 'id');
