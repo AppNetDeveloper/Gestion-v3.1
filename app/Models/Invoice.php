@@ -34,6 +34,7 @@ class Invoice extends Model
         'internal_notes',
         'verifactu_id', // Para Veri*factu
         'verifactu_qr_code_data', // Para Veri*factu
+        'discount_id'
     ];
 
     /**

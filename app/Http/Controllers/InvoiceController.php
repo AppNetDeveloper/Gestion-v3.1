@@ -221,6 +221,7 @@ class InvoiceController extends Controller
                     $calculatedDiscountAmount = min($subtotalForDiscount, $calculatedDiscountAmount); // No exceder el subtotal
                 }
             }
+            $invoiceData['discount_id']   = $request->input('discount_id_invoice'); // 👈
             $invoiceData['discount_amount'] = $request->input('discount_amount', $calculatedDiscountAmount); // Usar el del input si existe, si no el calculado
 
 
@@ -304,40 +305,85 @@ class InvoiceController extends Controller
      */
     public function edit(Invoice $invoice)
     {
-        if (!Auth::user()->can('invoices update') || Auth::user()->hasRole('customer')) {
+        /* ----------- 1) Autorización ----------- */
+        $user = Auth::user();
+        if (!$user->can('invoices update') || $user->hasRole('customer')) {
             abort(403, __('This action is unauthorized.'));
         }
-        // *** MODIFICACIÓN AQUÍ: Solo permitir editar si es 'draft' ***
+    
+        // Solo editar borradores (ajusta si quieres otra lógica)
         if ($invoice->status !== 'draft') {
-            return redirect()->route('invoices.show', $invoice->id)->with('error', __('This invoice cannot be edited because it is not in draft status.'));
+            return redirect()
+                ->route('invoices.show', $invoice->id)
+                ->with('error', __('This invoice cannot be edited because it is not in draft status.'));
         }
-
-        $clients = Client::orderBy('name')->pluck('name', 'id');
+    
+        /* ----------- 2) Datos para selects ----------- */
+        // → clientes con vat_rate para el JS
+        $clients = Client::orderBy('name')
+                         ->get(['id', 'name', 'vat_rate']);
+    
+        // → presupuestos: permitir el ya asignado o los aceptados sin factura
         $availableQuotes = Quote::where('status', 'accepted')
-                                ->with('client:id,name')
-                                ->where(function($query) use ($invoice){
-                                    $query->whereDoesntHave('invoices')
-                                          ->orWhere('id', $invoice->quote_id);
-                                })
-                                ->orderBy('quote_number')->get(['id', 'quote_number', 'client_id', 'total_amount']);
+            ->with('client:id,name')
+            ->where(function ($q) use ($invoice) {
+                $q->whereDoesntHave('invoices')
+                  ->orWhere('id', $invoice->quote_id);
+            })
+            ->orderBy('quote_number')
+            ->get(['id', 'quote_number', 'client_id', 'total_amount']);
+    
+        // → proyectos: idem
         $availableProjects = Project::whereIn('status', ['completed', 'in_progress'])
-                                    ->with('client:id,name')
-                                    ->where(function($query) use ($invoice){
-                                        $query->whereDoesntHave('invoices')
-                                              ->orWhere('id', $invoice->project_id);
-                                    })
-                                    ->orderBy('project_title')->get(['id', 'project_title', 'client_id']);
-
-        $invoice->load('items');
-        $services = Service::orderBy('name')->get(['id', 'name', 'default_price', 'unit', 'description']);
-
+            ->with('client:id,name')
+            ->where(function ($q) use ($invoice) {
+                $q->whereDoesntHave('invoices')
+                  ->orWhere('id', $invoice->project_id);
+            })
+            ->orderBy('project_title')
+            ->get(['id', 'project_title', 'client_id']);
+    
+        // → descuentos activos
+        $discounts = Discount::where('is_active', true)
+                             ->orderBy('name')
+                             ->get();
+    
+        // → catálogo de servicios
+        $services = Service::orderBy('name')
+                           ->get(['id', 'name', 'default_price', 'unit', 'description']);
+    
+        /* ----------- 3) Items ya guardados ----------- */
+        $invoice->load('items'); // items + relaciones si las quieres
+        $invoiceItems = $invoice->items->map(function ($item) {
+            return [
+                'id'               => $item->id,
+                'service_id'       => $item->service_id,
+                'item_description' => $item->item_description,
+                'quantity'         => (float) $item->quantity,
+                'unit_price'       => (float) $item->unit_price,
+                'tax_rate'         => (float) $item->tax_rate,
+            ];
+        });
+    
+        /* ----------- 4) Migas de pan ----------- */
         $breadcrumbItems = [
             ['name' => __('Dashboard'), 'url' => '/dashboard'],
-            ['name' => __('Invoices'), 'url' => route('invoices.index')],
+            ['name' => __('Invoices'),  'url' => route('invoices.index')],
             ['name' => $invoice->invoice_number, 'url' => route('invoices.show', $invoice->id)],
             ['name' => __('Edit'), 'url' => route('invoices.edit', $invoice->id)],
         ];
-        return view('invoices.edit', compact('invoice', 'breadcrumbItems', 'clients', 'availableQuotes', 'availableProjects', 'services'));
+    
+        /* ----------- 5) Render ----------- */
+        return view('invoices.edit', compact(
+            'invoice',
+            'breadcrumbItems',
+            'clients',
+            'availableQuotes',
+            'availableProjects',
+            'discounts',
+            'services',
+            'invoiceItems'     // 👈 se usará en el JS del Blade
+        ));
     }
 
     /**
