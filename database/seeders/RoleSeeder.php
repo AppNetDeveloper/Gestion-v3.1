@@ -8,20 +8,15 @@ use Spatie\Permission\Models\Role;
 
 class RoleSeeder extends Seeder
 {
-    /**
-     * Run the database seeds.
-     *
-     * @return void
-     */
     public function run(): void
     {
         // Definición de roles
         $roles = [
             'super-admin',
             'admin',
-            'user',
-            'employee',
             'manager',
+            'employee',
+            'user',
             'customer',
         ];
 
@@ -29,113 +24,115 @@ class RoleSeeder extends Seeder
             Role::firstOrCreate(['name' => $roleName, 'guard_name' => 'web']);
         }
 
-        // Obtener todos los permisos para el super-admin
+        // 1. Super Admin: TODOS los permisos (incluidos WhatsApp/Telegram general y menú)
         $allWebPermissions = Permission::where('guard_name', 'web')->get();
         $superAdminWeb = Role::where(['name' => 'super-admin', 'guard_name' => 'web'])->firstOrFail();
         $superAdminWeb->syncPermissions($allWebPermissions);
 
-        // Asignación de permisos al rol 'admin'
+        // 2. Admin: Permisos de gestión completos (puedes ajustar según necesidades)
         $adminWeb = Role::where(['name' => 'admin', 'guard_name' => 'web'])->firstOrFail();
         $adminPermissions = [
-            // User Management
+            // Gestión de usuarios, roles y permisos
             'user index', 'user create', 'user update', 'user delete', 'user show',
-            // Role & Permission Management
-            'role index', 'role create', 'role update', 'role delete', 'role show', // Admins pueden necesitar crear roles
-            'permission index', 'permission create', 'permission update', 'permission delete', 'permission show', // Admins pueden necesitar crear permisos
-            // Menu Items
+            'role index', 'role create', 'role update', 'role delete', 'role show',
+            'permission index', 'permission create', 'permission update', 'permission delete', 'permission show',
+
+            // Menús administrativos
             'menu users_list', 'menu role_permission', 'menu role_permission_permissions', 'menu role_permission_roles', 'menu database_backup',
-            // Company Data
+            'menu services', 'menu clients', 'menu quotes', 'menu projects', 'menu tasks', 'menu invoices',
+            'menu whatsapp-general', 'menu telegram-general',
+
+            // Módulos empresa
             'company index', 'company create', 'company update', 'company delete', 'company show',
-            // Time Control
+
+            // Control horario, servidores, calendario
             'timecontrolstatus index', 'timecontrolstatus create', 'timecontrolstatus update', 'timecontrolstatus delete', 'timecontrolstatus show',
-            // Scraping
             'scrapingtasks index', 'scrapingtasks create', 'scrapingtasks store', 'scrapingtasks update', 'scrapingtasks delete', 'scrapingtasks show_contacts', 'menu scrapingtasks',
-            // Server Monitor (Global)
             'servermonitorbusynes index', 'servermonitorbusynes create', 'servermonitorbusynes update', 'servermonitorbusynes delete', 'servermonitorbusynes show',
-            // Calendars
-            'labcalendar index', 'labcalendar create', 'labcalendar update', 'labcalendar delete', 'labcalendar show',
-            'calendarindividual index', 'calendarindividual create', 'calendarindividual update', 'calendarindividual delete', 'calendarindividual show',
+            'servermonitor index', 'servermonitor create', 'servermonitor update', 'servermonitor delete', 'servermonitor show', 'menu servermonitor', 'menu servermonitorbusynes',
+            'database_backup viewAny', 'database_backup create', 'database_backup delete', 'database_backup download',
 
-            // MÓDULOS DE GESTIÓN PARA ADMIN
-            'services index', 'services create', 'services update', 'services delete', 'services show', 'menu services',
-            'clients index', 'clients create', 'clients update', 'clients delete', 'clients show', 'menu clients',
-            'quotes index', 'quotes create', 'quotes update', 'quotes delete', 'quotes show', 'quotes send_email', 'quotes export_pdf', 'quotes convert_to_invoice', 'quotes accept', 'quotes reject', 'menu quotes', // Añadido accept y reject
-            'projects index', 'projects create', 'projects update', 'projects delete', 'projects show', 'projects assign_users', 'menu projects',
-            'tasks index', 'tasks create', 'tasks update', 'tasks delete', 'tasks show', 'tasks assign_users', 'tasks log_time', 'menu tasks',
-            'invoices index', 'invoices create', 'invoices update', 'invoices delete', 'invoices show', 'invoices send_email', 'invoices export_pdf', 'menu invoices',
+            // Calendarios
+            'labcalendar index', 'labcalendar create', 'labcalendar update', 'labcalendar delete', 'labcalendar show', 'menu labcalendar',
+            'calendarindividual index', 'calendarindividual create', 'calendarindividual update', 'calendarindividual delete', 'calendarindividual show', 'menu calendarindividual',
 
-            // *** PERMISOS DE TIME HISTORY PARA ADMIN ***
-            'time_entries edit all',
-            'time_entries delete all',
-            'time_entries view all',
+            // Módulos de gestión
+            'services index', 'services create', 'services update', 'services delete', 'services show',
+            'clients index', 'clients create', 'clients update', 'clients delete', 'clients show',
+            'quotes index', 'quotes create', 'quotes update', 'quotes delete', 'quotes show', 'quotes send_email', 'quotes export_pdf', 'quotes convert_to_invoice', 'quotes accept', 'quotes reject',
+            'projects index', 'projects create', 'projects update', 'projects delete', 'projects show', 'projects assign_users',
+            'tasks index', 'tasks create', 'tasks update', 'tasks delete', 'tasks show', 'tasks assign_users', 'tasks log_time',
+            'invoices index', 'invoices create', 'invoices update', 'invoices delete', 'invoices show', 'invoices send_email', 'invoices export_pdf',
+
+            // Time History
+            'time_entries edit all', 'time_entries delete all', 'time_entries view all',
+
+            // WhatsApp General Empresa (canal general)
+            'whatsapp-general index', 'whatsapp-general show', 'whatsapp-general create', 'whatsapp-general update', 'whatsapp-general delete',
+
+            // Telegram General Empresa (canal general)
+            'telegram-general index', 'telegram-general show', 'telegram-general create', 'telegram-general update', 'telegram-general delete',
         ];
         $adminWeb->syncPermissions($adminPermissions);
 
+        // 3. Manager: Más que employee, menos que admin (puedes ampliar si quieres)
+        $managerWeb = Role::where(['name' => 'manager', 'guard_name' => 'web'])->firstOrFail();
+        $managerPermissions = array_merge([
+            // Acceso WhatsApp/Telegram general SI LO DESEAS
+            'menu whatsapp-general', 'whatsapp-general index', 'whatsapp-general show',
+            'menu telegram-general', 'telegram-general index', 'telegram-general show',
 
-        // Asignación de permisos al rol 'employee' (Empleado Interno)
+            // Proyectos/Tareas/Gestión
+            'projects create', 'projects update', 'projects delete',
+            'tasks create', 'tasks update', 'tasks delete', 'tasks assign_users',
+            'quotes create', 'quotes update', 'quotes delete', 'quotes send_email', 'quotes convert_to_invoice',
+            'clients create', 'clients update', 'clients delete',
+            'time_entries view all', 'time_entries edit all', 'time_entries delete all',
+        ], [
+            // Hereda de employee
+            'timecontrolstatus index',
+            'clients index', 'clients show',
+            'quotes index', 'quotes show', 'quotes view_own', 'quotes export_pdf',
+            'projects index', 'projects show', 'projects view_own',
+            'tasks index', 'tasks show', 'tasks view_own', 'tasks view_assigned', 'tasks log_time',
+            'invoices index', 'invoices show', 'invoices view_own', 'invoices export_pdf',
+            'time_entries edit own', 'time_entries delete own',
+            'menu quotes', 'menu projects', 'menu tasks', 'menu invoices',
+        ]);
+        $managerWeb->syncPermissions(array_unique($managerPermissions));
+
+        // 4. Employee: Acceso solo a sus propios datos/tareas
         $employeeWeb = Role::where(['name' => 'employee', 'guard_name' => 'web'])->firstOrFail();
         $employeePermissions = [
-            // 'user index', // Quizás solo ver su propio perfil o ciertos usuarios
-            'timecontrolstatus index', // Fichar
-
-            // Permisos para gestionar el trabajo asignado
-            'clients index', 'clients show', // Ver clientes
-            'quotes index', 'quotes show', 'quotes view_own', 'quotes export_pdf', // Ver sus presupuestos
-            'projects index', 'projects show', 'projects view_own', // Ver sus proyectos
-            'tasks index', 'tasks show', 'tasks view_own', 'tasks view_assigned', // Ver sus tareas
-            'tasks log_time', // Registrar tiempo en sus tareas
-            'invoices index', 'invoices show', 'invoices view_own', 'invoices export_pdf', // Ver sus facturas
-
-            // *** PERMISOS DE TIME HISTORY PARA EMPLOYEE ***
-            'time_entries edit own',
-            'time_entries delete own',
-
-            // Menús relevantes
+            'timecontrolstatus index',
+            'clients index', 'clients show',
+            'quotes index', 'quotes show', 'quotes view_own', 'quotes export_pdf',
+            'projects index', 'projects show', 'projects view_own',
+            'tasks index', 'tasks show', 'tasks view_own', 'tasks view_assigned', 'tasks log_time',
+            'invoices index', 'invoices show', 'invoices view_own', 'invoices export_pdf',
+            'time_entries edit own', 'time_entries delete own',
             'menu quotes', 'menu projects', 'menu tasks', 'menu invoices',
         ];
         $employeeWeb->syncPermissions($employeePermissions);
 
-
-        // Asignación de permisos al rol 'customer' (Cliente)
-        $customerWeb = Role::where(['name' => 'customer', 'guard_name' => 'web'])->firstOrFail();
-        $customerPermissions = [
-            // 'user index', // Para ver su propio perfil (si UserPolicy lo permite)
-            // Permisos existentes que ya tenías (revisar si siguen siendo necesarios)
-            'servermonitor create', 'servermonitor update', 'servermonitor delete', 'servermonitor show', 'servermonitor index',
-            'calendarindividual create', 'calendarindividual update', 'calendarindividual delete', 'calendarindividual show', 'calendarindividual index',
-
-            // PERMISOS PARA CLIENTES
-            'quotes index', 'quotes show', 'quotes view_own', 'quotes export_pdf', 'quotes accept', 'quotes reject',
-            'projects index', 'projects show', 'projects view_own',
-            'tasks index', 'tasks show', 'tasks view_own', // Clientes ven tareas de sus proyectos
-            'invoices index', 'invoices show', 'invoices view_own', 'invoices export_pdf',
-
-            // Menús relevantes para clientes
-            'menu quotes', 'menu projects', 'menu invoices',
-            // 'menu tasks', // Quizás las tareas se ven dentro de proyectos
-        ];
-        $customerWeb->syncPermissions($customerPermissions);
-
-
-        // Rol 'user' (genérico, puedes dejarlo sin permisos específicos o darle unos básicos)
+        // 5. User: Básico o vacío (lo puedes personalizar)
         $userWeb = Role::where(['name' => 'user', 'guard_name' => 'web'])->firstOrFail();
         // $userWeb->syncPermissions([]);
 
-        // Rol 'manager' (puedes definirlo con más permisos que employee, menos que admin)
-        $managerWeb = Role::where(['name' => 'manager', 'guard_name' => 'web'])->firstOrFail();
-        $managerPermissions = array_merge($employeePermissions, [ // Hereda de empleado y añade más
-            'projects create', 'projects update', 'projects delete', // Gestionar todos los proyectos
-            'tasks create', 'tasks update', 'tasks delete', 'tasks assign_users', // Gestionar todas las tareas
-            'quotes create', 'quotes update', 'quotes delete', 'quotes send_email', 'quotes convert_to_invoice', // Gestionar todos los presupuestos
-            'clients create', 'clients update', 'clients delete', // Gestionar todos los clientes
-            'time_entries view all', // Ver todo el historial de tiempos
-            'time_entries edit all', // Editar cualquier entrada
-            'time_entries delete all', // Eliminar cualquier entrada
-        ]);
-        $managerWeb->syncPermissions(array_unique($managerPermissions));
-
+        // 6. Customer: Acceso a lo suyo
+        $customerWeb = Role::where(['name' => 'customer', 'guard_name' => 'web'])->firstOrFail();
+        $customerPermissions = [
+            'servermonitor create', 'servermonitor update', 'servermonitor delete', 'servermonitor show', 'servermonitor index',
+            'calendarindividual create', 'calendarindividual update', 'calendarindividual delete', 'calendarindividual show', 'calendarindividual index',
+            'quotes index', 'quotes show', 'quotes view_own', 'quotes export_pdf', 'quotes accept', 'quotes reject',
+            'projects index', 'projects show', 'projects view_own',
+            'tasks index', 'tasks show', 'tasks view_own',
+            'invoices index', 'invoices show', 'invoices view_own', 'invoices export_pdf',
+            'menu quotes', 'menu projects', 'menu invoices',
+        ];
+        $customerWeb->syncPermissions($customerPermissions);
 
         app()->make(\Spatie\Permission\PermissionRegistrar::class)->forgetCachedPermissions();
-        $this->command->info('Roles and permissions (including TaskTimeHistory) synced successfully.');
+        $this->command->info('Roles and permissions synced successfully.');
     }
 }

@@ -159,15 +159,47 @@ class PermissionSeeder extends Seeder
             ['name' => 'invoices export_pdf', 'module_name' => 'invoices'],
             ['name' => 'invoices view_own', 'module_name' => 'invoices'],
 
-            // Menus
+            // Menus (existentes + nuevos)
             ['name' => 'menu services', 'module_name' => 'menu'],
             ['name' => 'menu clients', 'module_name' => 'menu'],
             ['name' => 'menu quotes', 'module_name' => 'menu'],
             ['name' => 'menu projects', 'module_name' => 'menu'],
-            ['name' => 'menu tasks', 'module_name' => 'menu'], // Para "Mis Tareas"
+            ['name' => 'menu tasks', 'module_name' => 'menu'],
             ['name' => 'menu invoices', 'module_name' => 'menu'],
+            ['name' => 'menu whatsapp-general', 'module_name' => 'menu'],
+            ['name' => 'menu telegram-general', 'module_name' => 'menu'],
+
+            ['name' => 'menu timecontrolstatus', 'module_name' => 'menu'],
+            ['name' => 'menu company', 'module_name' => 'menu'],
+            ['name' => 'menu user', 'module_name' => 'menu'],
+            ['name' => 'menu role', 'module_name' => 'menu'],
+            ['name' => 'menu permission', 'module_name' => 'menu'],
+            ['name' => 'menu database_backup', 'module_name' => 'menu'],
+            ['name' => 'menu labcalendar', 'module_name' => 'menu'],
+            ['name' => 'menu calendarindividual', 'module_name' => 'menu'],
+            ['name' => 'menu scrapingtasks', 'module_name' => 'menu'],
+            ['name' => 'menu servermonitorbusynes', 'module_name' => 'menu'],
+            ['name' => 'menu servermonitor', 'module_name' => 'menu'],
+
+            
+
+            // WhatsApp General Empresa
+            ['name' => 'whatsapp-general create', 'module_name' => 'whatsapp-general'],
+            ['name' => 'whatsapp-general update', 'module_name' => 'whatsapp-general'],
+            ['name' => 'whatsapp-general delete', 'module_name' => 'whatsapp-general'],
+            ['name' => 'whatsapp-general show',   'module_name' => 'whatsapp-general'],
+            ['name' => 'whatsapp-general index',  'module_name' => 'whatsapp-general'],
+
+            // Telegram General Empresa
+            ['name' => 'telegram-general create', 'module_name' => 'telegram-general'],
+            ['name' => 'telegram-general update', 'module_name' => 'telegram-general'],
+            ['name' => 'telegram-general delete', 'module_name' => 'telegram-general'],
+            ['name' => 'telegram-general show',   'module_name' => 'telegram-general'],
+            ['name' => 'telegram-general index',  'module_name' => 'telegram-general'],
+
         ];
 
+        
         foreach ($permissions as $permissionData) {
             Permission::firstOrCreate(
                 [
