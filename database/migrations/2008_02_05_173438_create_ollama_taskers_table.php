@@ -15,6 +15,7 @@ class CreateOllamaTaskersTable extends Migration
     {
         Schema::create('ollama_taskers', function (Blueprint $table) {
             $table->id();
+            $table->string('model');                           // model
             $table->text('prompt');                             // Mensaje o prompt enviado a la API
             $table->text('response')->nullable();               // Respuesta procesada (nullable hasta completarse)
             $table->text('error')->nullable();                  // Mensaje de error en caso de fallo
