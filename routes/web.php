@@ -51,6 +51,9 @@ use App\Http\Controllers\ProjectController; // <-- Importar ProjectController
 use App\Http\Controllers\TaskController; // <-- Importar TaskController
 use App\Http\Controllers\TaskTimeHistoryController; // <-- Importar TaskTimeHistoryController
 use App\Http\Controllers\InvoiceController; // <-- Importar InvoiceController
+use App\Http\Controllers\WhatsappBusinessController;
+
+
 
 require __DIR__ . '/auth.php';
 
@@ -265,19 +268,31 @@ Route::put('/linkedin/{id}', [LinkedinController::class, 'update'])->name('taske
 Route::middleware(['auth'])->group(function () {
     // Ruta para ver la lista de contactos (teléfonos)
     Route::get('/whatsapp', [WhatsappController::class, 'index'])->name('whatsapp.index');
-
     // Ruta para ver la conversación de un teléfono en específico
     Route::get('/whatsapp/{phone}', [WhatsappController::class, 'conversation'])->name('whatsapp.conversation');
     Route::post('/whatsapp/import-contacts', [WhatsappController::class, 'importContacts'])->name('whatsapp.importContacts');
-
+    // Rutas para eliminar mensajes (accionadas por AJAX)
+    Route::delete('/whatsapp/message/{id}', [WhatsappController::class, 'destroyMessage'])->name('whatsapp.message.destroy');
+    Route::delete('/whatsapp/chat/{phone}', [WhatsappController::class, 'destroyChat'])->name('whatsapp.chat.destroy');
+    Route::get('/whatsapp/messages/json/{phone}', [WhatsappController::class, 'getMessagesJson'])->name('whatsapp.messages.json')->middleware('auth');
+    Route::get('/whatsapp/contacts/json', [WhatsappController::class, 'getContactsJson'])->name('whatsapp.contacts.json')->middleware('auth');
 });
+Route::middleware(['auth'])->group(function () {
+    // Ruta para ver la lista de contactos (teléfonos)
+    Route::get('/whatsapp-business', [WhatsappBusinessController::class, 'index'])->name('whatsapp-business.index');
+    // Ruta para ver la conversación de un teléfono en específico
+    Route::get('/whatsapp-business/{phone}', [WhatsappBusinessController::class, 'conversation'])->name('whatsapp-business.conversation');
+    Route::post('/whatsapp-business/import-contacts', [WhatsappBusinessController::class, 'importContacts'])->name('whatsapp-business.importContacts');
+    // Rutas para eliminar mensajes (accionadas por AJAX)
+    Route::delete('/whatsapp-business/message/{id}', [WhatsappBusinessController::class, 'destroyMessage'])->name('whatsapp-business.message.destroy');
+    Route::delete('/whatsapp-business/chat/{phone}', [WhatsappBusinessController::class, 'destroyChat'])->name('whatsapp-business.chat.destroy');
+    Route::get('/whatsapp-business/messages/json/{phone}', [WhatsappBusinessController::class, 'getMessagesJson'])->name('whatsapp-business.messages.json')->middleware('auth');
+    Route::get('/whatsapp-business/contacts/json', [WhatsappBusinessController::class, 'getContactsJson'])->name('whatsapp-business.contacts.json')->middleware('auth');
+});
+
+
     //para tranformar los videos en mp4 de whatsapp
 Route::get('/decrypt-media', [MediaController::class, 'decrypt'])->name('decryptMedia');
-
-// Rutas para eliminar mensajes (accionadas por AJAX)
-Route::delete('/whatsapp/message/{id}', [WhatsappController::class, 'destroyMessage'])->name('whatsapp.message.destroy');
-Route::delete('/whatsapp/chat/{phone}', [WhatsappController::class, 'destroyChat'])->name('whatsapp.chat.destroy');
-
 //contactos rutas
 Route::resource('contacts', ContactController::class)->middleware('auth');
 Route::post('/import-contacts', [ContactController::class, 'import'])->name('contacts.import');
@@ -288,8 +303,7 @@ Route::post('/auto-response-whatsapp', [AutoProcessController::class, 'updateWha
 Route::post('/auto-response-telegram', [AutoProcessController::class, 'updateTelegram'])->name('auto-response-telegram.update');
 Route::get('/auto-response-telegram-get', [AutoProcessController::class, 'getTelegram'])->middleware('auth');
 
-Route::get('/whatsapp/messages/json/{phone}', [WhatsappController::class, 'getMessagesJson'])->name('whatsapp.messages.json')->middleware('auth');
-Route::get('/whatsapp/contacts/json', [WhatsappController::class, 'getContactsJson'])->name('whatsapp.contacts.json')->middleware('auth');
+
 Route::get('/auto-response-whatsapp-get', [AutoProcessController::class, 'getWhatsapp'])->name('auto-response-whatsapp.get')->middleware('auth');
 
 //OLAMA
@@ -475,7 +489,6 @@ Route::middleware(['auth'])->group(function () {
 
     Route::get('invoices/{invoice}/pdf', [InvoiceController::class, 'exportPdf'])->name('invoices.pdf');
     Route::post('invoices/{invoice}/send-email', [InvoiceController::class, 'sendEmail'])->name('invoices.sendEmail');
-
 });
 
 // Grupo de rutas públicas
