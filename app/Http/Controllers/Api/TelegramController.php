@@ -5,16 +5,61 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use App\Models\TelegramMessage;
-use App\Models\Contact; // Asegúrate de importar el modelo de contactos
+use App\Models\Contact;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
-use App\Models\AutoProcess; // Asegúrate de tener este modelo si no existe, créalo
+use App\Models\AutoProcess;
 
+/**
+ * Controlador para manejar los mensajes de Telegram
+ */
 class TelegramController extends Controller
 {
     /**
      * Almacena un mensaje y, además, si el campo "peer" (o "chatPeer") no existe en la tabla de contactos,
      * lo crea usando el valor recibido. (Se normaliza el teléfono quitando el signo +).
+     */
+    /**
+     * Almacena un mensaje de Telegram y crea el contacto si no existe
+     *
+     * @OA\Post(
+     *     path="/api/telegram/messages",
+     *     summary="Almacena un mensaje de Telegram",
+     *     tags={"Telegram"},
+     *     security={{"bearerAuth": {}}},
+     *     @OA\Header(
+     *         header="Authorization",
+     *         description="Bearer token",
+     *         required=true,
+     *         @OA\Schema(type="string")
+     *     ),
+     *     @OA\RequestBody(
+     *         required=true,
+     *         @OA\JsonContent(
+     *             required={"user_id", "peer"},
+     *             @OA\Property(property="user_id", type="integer", example=1),
+     *             @OA\Property(property="peer", type="string", example="123456789"),
+     *             @OA\Property(property="message", type="string", example="Hola desde Swagger"),
+     *             @OA\Property(property="status", type="string", enum={"sent", "received"}, example="received"),
+     *             @OA\Property(property="media_url", type="string", nullable=true, example="https://example.com/media.jpg")
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=201,
+     *         description="Mensaje almacenado correctamente",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="success", type="boolean", example=true),
+     *             @OA\Property(property="message", type="string")
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=401,
+     *         description="No autorizado",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="error", type="string", example="Token inválido")
+     *         )
+     *     )
+     * )
      */
     public function store(Request $request)
     {

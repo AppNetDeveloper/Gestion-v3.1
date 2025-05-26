@@ -12,6 +12,9 @@ use Illuminate\Validation\ValidationException;
 use Illuminate\Support\Str;        // Para truncar cadenas
 use Throwable;
 
+/**
+ * Controlador para manejar los callbacks del servicio de scraping
+ */
 class ScrapingCallbackController extends Controller
 {
     /**
@@ -19,6 +22,45 @@ class ScrapingCallbackController extends Controller
      *
      * @param  \Illuminate\Http\Request  $request
      * @return \Illuminate\Http\JsonResponse
+     */
+    /**
+     * Maneja el callback del servicio de scraping
+     *
+     * @OA\Post(
+     *     path="/api/scraping/callback",
+     *     summary="Recibe un callback del servicio de scraping",
+     *     tags={"Scraping"},
+     *     @OA\RequestBody(
+     *         required=true,
+     *         @OA\JsonContent(
+     *             required={"task_id", "status", "fuente"},
+     *             @OA\Property(property="task_id", type="string", format="uuid", example="550e8400-e29b-41d4-a716-446655440000"),
+     *             @OA\Property(property="status", type="string", enum={"completed", "failed"}),
+     *             @OA\Property(property="error_message", type="string", nullable=true),
+     *             @OA\Property(property="fuente", type="string"),
+     *             @OA\Property(property="empresas", type="array", @OA\Items(type="object"), nullable=true),
+     *             @OA\Property(property="datos", type="object", nullable=true),
+     *             @OA\Property(property="resultados", type="array", @OA\Items(type="object"), nullable=true)
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=200,
+     *         description="Callback procesado correctamente",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="status", type="string", example="success"),
+     *             @OA\Property(property="message", type="string")
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=422,
+     *         description="Error de validación",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="status", type="string", example="error"),
+     *             @OA\Property(property="message", type="string"),
+     *             @OA\Property(property="errors", type="object")
+     *         )
+     *     )
+     * )
      */
     public function handleCallback(Request $request)
     {

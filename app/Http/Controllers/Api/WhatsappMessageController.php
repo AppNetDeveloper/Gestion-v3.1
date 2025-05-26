@@ -12,16 +12,7 @@ use Illuminate\Support\Facades\Log;
 use GuzzleHttp\Client;
 
 /**
- * @OA\Info(
- *     title="API de WhatsApp",
- *     version="1.0.0",
- *     description="Documentación de la API para gestionar mensajes de WhatsApp."
- * )
- *
- * @OA\Tag(
- *     name="Whatsapp Message",
- *     description="Endpoints para el manejo de mensajes de WhatsApp"
- * )
+ * Controlador para manejar los mensajes de WhatsApp
  */
 class WhatsappMessageController extends Controller
 {
@@ -30,7 +21,7 @@ class WhatsappMessageController extends Controller
      *
      * @OA\Post(
      *      path="/api/whatsapp/messages",
-     *      summary="Crear mensaje de WhatsApp",
+     *      summary="Almacenar mensaje de WhatsApp",
      *      description="Valida el token, almacena el mensaje en la base de datos y crea el contacto asociado si aún no existe. Además, si el mensaje es recibido, se evalúa si se debe enviar una respuesta automática.",
      *      operationId="storeWhatsappMessage",
      *      tags={"Whatsapp Message"},

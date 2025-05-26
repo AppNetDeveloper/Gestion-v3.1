@@ -11,6 +11,9 @@ use App\Models\User;
 use Carbon\Carbon;
 use Spatie\Permission\Models\Role;
 
+/**
+ * Controlador para el monitoreo de servidores
+ */
 class ServerMonitorController extends Controller
 {
     /**
@@ -23,6 +26,50 @@ class ServerMonitorController extends Controller
 
     /**
      * Store a newly created resource in storage.
+     */
+    /**
+     * Almacena las métricas de un servidor
+     *
+     * @OA\Post(
+     *     path="/api/server-monitor/metrics",
+     *     summary="Almacena métricas del servidor",
+     *     tags={"Server Monitor"},
+     *     security={{"apiToken": {}}},
+     *     @OA\Header(
+     *         header="token",
+     *         description="Token de autenticación del host",
+     *         required=true,
+     *         @OA\Schema(type="string")
+     *     ),
+     *     @OA\RequestBody(
+     *         required=true,
+     *         @OA\JsonContent(
+     *             required={"token", "total_memory", "memory_free", "memory_used", "memory_used_percent", "disk", "cpu"},
+     *             @OA\Property(property="token", type="string", example="host-unique-token"),
+     *             @OA\Property(property="total_memory", type="number", format="float", example=8192),
+     *             @OA\Property(property="memory_free", type="number", format="float", example=4096),
+     *             @OA\Property(property="memory_used", type="number", format="float", example=4096),
+     *             @OA\Property(property="memory_used_percent", type="number", format="float", example=50.5),
+     *             @OA\Property(property="disk", type="number", format="float", example=75.2),
+     *             @OA\Property(property="cpu", type="number", format="float", example=25.7)
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=200,
+     *         description="Métricas almacenadas correctamente",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="success", type="boolean", example=true),
+     *             @OA\Property(property="message", type="string")
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=404,
+     *         description="Host no encontrado",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="error", type="string", example="Host no encontrado")
+     *         )
+     *     )
+     * )
      */
     public function store(Request $request)
     {

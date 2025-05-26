@@ -15,7 +15,7 @@ use App\Http\Controllers\Api\WhatsappMessageController;
 use App\Http\Controllers\Api\TelegramController;
 use App\Http\Controllers\Api\WhatsappSessionController;
 use App\Http\Controllers\Api\ScrapingCallbackController; // Importar el controlador
-
+use App\Http\Controllers\Api\OllamaTaskerController;
 
 /*
  * API Routes
@@ -37,6 +37,10 @@ Route::group(['middleware' => 'auth:sanctum'], function () {
         ->middleware('throttle:6,1');
     Route::get('user', [AuthController::class, 'user']);
     Route::post('logout', [AuthController::class, 'logout']);
+
+    // Ollama Tasker API Routes
+    Route::post('ollama-tasks', [OllamaTaskerController::class, 'createTask']);
+    Route::get('ollama-tasks/{id}', [OllamaTaskerController::class, 'getTaskResult']);
 
     Route::apiSingleton('env', EnvironmentController::class);
     Route::group(['middleware' => 'verified', 'as' => 'api.v1.'], function () {

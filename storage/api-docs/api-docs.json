@@ -1,17 +1,419 @@
 {
     "openapi": "3.0.0",
     "info": {
-        "title": "API de WhatsApp",
-        "description": "Documentación de la API para gestionar mensajes de WhatsApp.",
+        "title": "API Documentation",
+        "description": "Documentación completa de la API del sistema",
+        "contact": {
+            "email": "info@appnetdeveloper.com"
+        },
         "version": "1.0.0"
     },
+    "servers": [
+        {
+            "url": "http://my-default-host.com",
+            "description": "API Server"
+        }
+    ],
     "paths": {
+        "/api/ollama-tasks": {
+            "post": {
+                "tags": [
+                    "Ollama Tasks"
+                ],
+                "summary": "Crear una nueva tarea de Ollama",
+                "description": "Crea una nueva tarea asíncrona para procesar un prompt con Ollama",
+                "operationId": "createTask",
+                "requestBody": {
+                    "description": "Datos de la tarea a crear",
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/TaskInput"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Tarea creada exitosamente",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/TaskResponse"
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Error de validación",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/ollama-tasks/{id}": {
+            "get": {
+                "tags": [
+                    "Ollama Tasks"
+                ],
+                "summary": "Obtener el resultado de una tarea",
+                "description": "Obtiene el estado y resultado de una tarea de Ollama por su ID",
+                "operationId": "getTaskResult",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "description": "ID de la tarea",
+                        "required": true,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Detalles de la tarea",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/TaskResult"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Tarea no encontrada",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/NotFoundResponse"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/scraping/callback": {
+            "post": {
+                "tags": [
+                    "Scraping"
+                ],
+                "summary": "Recibe un callback del servicio de scraping",
+                "description": "Maneja el callback del servicio de scraping",
+                "operationId": "a7d49541f2946f95a0f823bf1c41c3d0",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "required": [
+                                    "task_id",
+                                    "status",
+                                    "fuente"
+                                ],
+                                "properties": {
+                                    "task_id": {
+                                        "type": "string",
+                                        "format": "uuid",
+                                        "example": "550e8400-e29b-41d4-a716-446655440000"
+                                    },
+                                    "status": {
+                                        "type": "string",
+                                        "enum": [
+                                            "completed",
+                                            "failed"
+                                        ]
+                                    },
+                                    "error_message": {
+                                        "type": "string",
+                                        "nullable": true
+                                    },
+                                    "fuente": {
+                                        "type": "string"
+                                    },
+                                    "empresas": {
+                                        "type": "array",
+                                        "items": {
+                                            "type": "object"
+                                        },
+                                        "nullable": true
+                                    },
+                                    "datos": {
+                                        "type": "object",
+                                        "nullable": true
+                                    },
+                                    "resultados": {
+                                        "type": "array",
+                                        "items": {
+                                            "type": "object"
+                                        },
+                                        "nullable": true
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Callback procesado correctamente",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "status": {
+                                            "type": "string",
+                                            "example": "success"
+                                        },
+                                        "message": {
+                                            "type": "string"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Error de validación",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "status": {
+                                            "type": "string",
+                                            "example": "error"
+                                        },
+                                        "message": {
+                                            "type": "string"
+                                        },
+                                        "errors": {
+                                            "type": "object"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/server-monitor/metrics": {
+            "post": {
+                "tags": [
+                    "Server Monitor"
+                ],
+                "summary": "Almacena métricas del servidor",
+                "description": "Almacena las métricas de un servidor",
+                "operationId": "96f22fce4317a1eab90ffa59c01b7258",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "required": [
+                                    "token",
+                                    "total_memory",
+                                    "memory_free",
+                                    "memory_used",
+                                    "memory_used_percent",
+                                    "disk",
+                                    "cpu"
+                                ],
+                                "properties": {
+                                    "token": {
+                                        "type": "string",
+                                        "example": "host-unique-token"
+                                    },
+                                    "total_memory": {
+                                        "type": "number",
+                                        "format": "float",
+                                        "example": 8192
+                                    },
+                                    "memory_free": {
+                                        "type": "number",
+                                        "format": "float",
+                                        "example": 4096
+                                    },
+                                    "memory_used": {
+                                        "type": "number",
+                                        "format": "float",
+                                        "example": 4096
+                                    },
+                                    "memory_used_percent": {
+                                        "type": "number",
+                                        "format": "float",
+                                        "example": 50.5
+                                    },
+                                    "disk": {
+                                        "type": "number",
+                                        "format": "float",
+                                        "example": 75.2
+                                    },
+                                    "cpu": {
+                                        "type": "number",
+                                        "format": "float",
+                                        "example": 25.7
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Métricas almacenadas correctamente",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "success": {
+                                            "type": "boolean",
+                                            "example": true
+                                        },
+                                        "message": {
+                                            "type": "string"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Host no encontrado",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "error": {
+                                            "type": "string",
+                                            "example": "Host no encontrado"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "apiToken": []
+                    }
+                ]
+            }
+        },
+        "/api/telegram/messages": {
+            "post": {
+                "tags": [
+                    "Telegram"
+                ],
+                "summary": "Almacena un mensaje de Telegram",
+                "description": "Almacena un mensaje de Telegram y crea el contacto si no existe",
+                "operationId": "a98edb383f9b63cc588d5275662209ef",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "required": [
+                                    "user_id",
+                                    "peer"
+                                ],
+                                "properties": {
+                                    "user_id": {
+                                        "type": "integer",
+                                        "example": 1
+                                    },
+                                    "peer": {
+                                        "type": "string",
+                                        "example": "123456789"
+                                    },
+                                    "message": {
+                                        "type": "string",
+                                        "example": "Hola desde Swagger"
+                                    },
+                                    "status": {
+                                        "type": "string",
+                                        "enum": [
+                                            "sent",
+                                            "received"
+                                        ],
+                                        "example": "received"
+                                    },
+                                    "media_url": {
+                                        "type": "string",
+                                        "example": "https://example.com/media.jpg",
+                                        "nullable": true
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "201": {
+                        "description": "Mensaje almacenado correctamente",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "success": {
+                                            "type": "boolean",
+                                            "example": true
+                                        },
+                                        "message": {
+                                            "type": "string"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "No autorizado",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "error": {
+                                            "type": "string",
+                                            "example": "Token inválido"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
         "/api/whatsapp/messages": {
             "post": {
                 "tags": [
                     "Whatsapp Message"
                 ],
-                "summary": "Crear mensaje de WhatsApp",
+                "summary": "Almacenar mensaje de WhatsApp",
                 "description": "Valida el token, almacena el mensaje en la base de datos y crea el contacto asociado si aún no existe. Además, si el mensaje es recibido, se evalúa si se debe enviar una respuesta automática.",
                 "operationId": "storeWhatsappMessage",
                 "requestBody": {
@@ -221,10 +623,164 @@
             }
         }
     },
+    "components": {
+        "schemas": {
+            "TaskInput": {
+                "required": [
+                    "prompt"
+                ],
+                "properties": {
+                    "prompt": {
+                        "type": "string",
+                        "example": "Dime un chiste"
+                    },
+                    "model": {
+                        "type": "string",
+                        "example": "gemma3:4b-it-qat"
+                    },
+                    "callback_url": {
+                        "type": "string",
+                        "format": "url",
+                        "example": "https://tudominio.com/webhook/ollama-callback"
+                    }
+                },
+                "type": "object"
+            },
+            "TaskResponse": {
+                "properties": {
+                    "success": {
+                        "type": "boolean",
+                        "example": true
+                    },
+                    "task_id": {
+                        "type": "integer",
+                        "example": 1
+                    },
+                    "status": {
+                        "type": "string",
+                        "example": "Task created and queued for processing"
+                    }
+                },
+                "type": "object"
+            },
+            "TaskResult": {
+                "properties": {
+                    "success": {
+                        "type": "boolean",
+                        "example": true
+                    },
+                    "task": {
+                        "properties": {
+                            "id": {
+                                "type": "integer",
+                                "example": 1
+                            },
+                            "model": {
+                                "type": "string",
+                                "example": "gemma3:4b-it-qat"
+                            },
+                            "prompt": {
+                                "type": "string",
+                                "example": "Dime un chiste"
+                            },
+                            "response": {
+                                "type": "string",
+                                "example": "¿Por qué los programadores prefieren el modo oscuro? ¡Porque la luz atrae los bugs!",
+                                "nullable": true
+                            },
+                            "error": {
+                                "type": "string",
+                                "example": null,
+                                "nullable": true
+                            },
+                            "created_at": {
+                                "type": "string",
+                                "format": "date-time"
+                            },
+                            "updated_at": {
+                                "type": "string",
+                                "format": "date-time"
+                            }
+                        },
+                        "type": "object"
+                    }
+                },
+                "type": "object"
+            },
+            "ErrorResponse": {
+                "properties": {
+                    "success": {
+                        "type": "boolean",
+                        "example": false
+                    },
+                    "message": {
+                        "type": "string",
+                        "example": "Error de validación"
+                    },
+                    "errors": {
+                        "type": "object",
+                        "additionalProperties": {
+                            "properties": {
+                                "": {
+                                    "type": "array",
+                                    "items": {
+                                        "type": "string"
+                                    }
+                                }
+                            },
+                            "type": "object"
+                        }
+                    }
+                },
+                "type": "object"
+            },
+            "NotFoundResponse": {
+                "properties": {
+                    "success": {
+                        "type": "boolean",
+                        "example": false
+                    },
+                    "error": {
+                        "type": "string",
+                        "example": "Task not found"
+                    }
+                },
+                "type": "object"
+            }
+        },
+        "securitySchemes": {
+            "bearerAuth": {
+                "type": "http",
+                "bearerFormat": "JWT",
+                "scheme": "bearer"
+            },
+            "apiToken": {
+                "type": "apiKey",
+                "name": "token",
+                "in": "header"
+            }
+        }
+    },
     "tags": [
         {
+            "name": "Telegram",
+            "description": "Endpoints para manejar mensajes de Telegram"
+        },
+        {
+            "name": "Scraping",
+            "description": "Endpoints para manejar el servicio de scraping"
+        },
+        {
+            "name": "Server Monitor",
+            "description": "Endpoints para monitoreo de servidores"
+        },
+        {
+            "name": "Ollama Tasks",
+            "description": "Ollama Tasks"
+        },
+        {
             "name": "Whatsapp Message",
-            "description": "Endpoints para el manejo de mensajes de WhatsApp"
+            "description": "Whatsapp Message"
         }
     ]
 }
