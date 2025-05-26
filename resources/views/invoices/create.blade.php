@@ -48,7 +48,7 @@
                             {{ __('Invoice #') }} <span class="text-red-500">*</span>
                         </label>
                         <input id="invoice_number" name="invoice_number" type="text"
-                               value="{{ old('invoice_number', 'FAC-'.date('Ymd').'-'.rand(100,999)) }}"
+                               value="{{ old('invoice_number', $nextInvoiceNumber) }}"
                                class="inputField w-full p-3 {{ $errors->has('invoice_number') ? 'border-red-500' : 'border-slate-300 dark:border-slate-600' }} border rounded-md dark:bg-slate-900" required>
                         @error('invoice_number') <p class="mt-1 text-xs text-red-500">{{ $message }}</p> @enderror
                     </div>

@@ -17,47 +17,96 @@
             margin: 0 auto;
             padding: 20px;
         }
-        .header {
+
+        /* NUEVA SECCIÓN SUPERIOR: QR a la izquierda, Info Principal Factura a la derecha */
+        .invoice-top-section {
             display: table;
             width: 100%;
-            margin-bottom: 30px;
+            margin-bottom: 20px; /* Espacio antes de la sección De/Facturado A */
         }
-        .header-left {
+        .invoice-qr-side {
             display: table-cell;
-            width: 50%;
+            width: 130px; /* Ancho para el QR y un poco de margen */
             vertical-align: top;
         }
-        .header-right {
+        .invoice-main-info-side {
             display: table-cell;
-            width: 50%;
+            vertical-align: top;
             text-align: right;
-            vertical-align: top;
         }
-        .company-logo {
-            max-height: 80px;
-            margin-bottom: 15px;
+
+        .qr-code {
+            width: 110px; /* Como se sugirió para tamaño VeriFactu */
+            border: 1px solid #e2e8f0;
+            background: white;
+            padding: 5px;
+            text-align: center;
+            margin-bottom: 10px; /* Si hay algo debajo en esta celda */
         }
+        .qr-code img {
+            max-width: 100%;
+            height: auto;
+            display: block;
+            margin: 0 auto;
+        }
+        .qr-code .qr-id {
+            font-size: 8px;
+            word-break: break-all;
+            margin-top: 3px;
+            line-height: 1;
+            color: #666;
+        }
+
         .invoice-title {
             font-size: 28px;
             font-weight: bold;
             color: #000;
-            margin-bottom: 0;
+            margin-top: 0; /* Ajustar si el QR es más alto */
+            margin-bottom: 5px;
         }
-        .invoice-details, .client-details, .company-details {
-            margin-bottom: 20px;
-        }
-        .invoice-details p, .client-details p, .company-details p {
-            margin: 0;
+        .invoice-details p {
+            margin: 0 0 3px 0;
             line-height: 1.4;
+            font-size: 11px;
         }
-        .section-title {
+
+        /* NUEVA SECCIÓN DE PARTES: De (Emisor) a la izquierda, Facturado A (Receptor) a la derecha */
+        .party-details-section {
+            display: table;
+            width: 100%;
+            margin-bottom: 30px;
+        }
+        .party-column {
+            display: table-cell;
+            width: 50%;
+            vertical-align: top;
+        }
+        .party-column.from-details {
+            padding-right: 15px; /* Espacio entre columnas */
+        }
+        .party-column.to-details {
+            padding-left: 15px; /* Espacio entre columnas */
+        }
+        .company-logo {
+            max-height: 60px; /* Ajusta según necesidad */
+            margin-bottom: 10px;
+        }
+        .company-details p, .client-address-details p { /* Unifica el estilo de los párrafos de dirección */
+            margin: 0 0 3px 0;
+            line-height: 1.4;
+            font-size: 11px; /* Un poco más pequeño para que quepa bien */
+        }
+        .section-title { /* Título para "De:" y "Facturado A:" */
             font-size: 14px;
             font-weight: bold;
             margin-bottom: 8px;
             color: #555;
             border-bottom: 1px solid #eee;
             padding-bottom: 5px;
+            margin-top: 0; /* Asegurar que no haya margen superior extra */
         }
+
+        /* Estilos de la tabla de ítems y totales (sin cambios significativos) */
         table.items-table {
             width: 100%;
             border-collapse: collapse;
@@ -84,15 +133,19 @@
         }
         .totals-table {
             width: 40%;
-            float: right; /* dompdf a veces tiene problemas con flex/grid, float es más seguro */
+            float: right;
         }
         .totals-table td {
             padding: 5px 8px;
         }
         .totals-table tr td:first-child {
-            text-align: right;
+            text-align: left; /* Etiquetas de totales a la izquierda */
             font-weight: bold;
             color: #555;
+            padding-right: 10px;
+        }
+        .totals-table tr td:last-child {
+            text-align: right; /* Valores de totales a la derecha */
         }
         .totals-table tr.grand-total td {
             font-size: 16px;
@@ -123,22 +176,20 @@
 </head>
 <body>
     <div class="container">
-        <div class="header">
-            <div class="header-left">
-                @if(isset($companyData['logo_path']) && $companyData['logo_path'])
-                    <img src="{{ $companyData['logo_path'] }}" alt="{{ $companyData['name'] ?? 'Company Logo' }}" class="company-logo">
-                @endif
-                <h3 class="section-title" style="margin-bottom: 5px;">{{ __('From:') }}</h3>
-                <div class="company-details">
-                    <p><strong>{{ $companyData['name'] ?? '' }}</strong></p>
-                    <p class="whitespace-pre-wrap">{{ $companyData['address'] ?? '' }}</p>
-                    <p>{{ $companyData['city_zip_country'] ?? '' }}</p>
-                    @if(isset($companyData['phone']) && $companyData['phone']) <p>{{ __('Phone:') }} {{ $companyData['phone'] }}</p> @endif
-                    @if(isset($companyData['email']) && $companyData['email']) <p>{{ __('Email:') }} {{ $companyData['email'] }}</p> @endif
-                    @if(isset($companyData['vat']) && $companyData['vat']) <p>{{ __('VAT ID:') }} {{ $companyData['vat'] }}</p> @endif
+        <div class="invoice-top-section">
+            <div class="invoice-qr-side">
+                @if($invoice->verifactu_qr_code_data)
+                <div class="qr-code">
+                    <img src="{{ $invoice->verifactu_qr_code_data }}" alt="Código QR Factura">
+                    @if($invoice->verifactu_id)
+                    <div class="qr-id">
+                        {{ substr($invoice->verifactu_id, 0, 12) }}...
+                    </div>
+                    @endif
                 </div>
+                @endif
             </div>
-            <div class="header-right">
+            <div class="invoice-main-info-side">
                 <h1 class="invoice-title">{{ __('INVOICE') }}</h1>
                 <div class="invoice-details">
                     <p><strong>{{ __('Invoice #') }}:</strong> {{ $invoice->invoice_number }}</p>
@@ -150,26 +201,50 @@
                     @if($invoice->project)
                         <p><strong>{{ __('Project:') }}</strong> {{ $invoice->project->project_title }}</p>
                     @endif
-                     <p><strong>{{ __('Status:') }}</strong> <span style="text-transform: capitalize;">{{ __(str_replace('_', ' ', $invoice->status)) }}</span></p>
+                    <p><strong>{{ __('Status:') }}</strong> <span style="text-transform: capitalize;">{{ __(str_replace('_', ' ', $invoice->status)) }}</span></p>
+                    @if($invoice->verifactu_id)
+                    <p style="margin-top: 5px; font-size: 9px; color: #666;">
+                        <strong>{{ __('VeriFactu ID:') }}</strong> {{ $invoice->verifactu_id }}
+                    </p>
+                    @endif
                 </div>
             </div>
         </div>
         <div class="clearfix"></div>
 
-        <div class="client-details">
-            <h3 class="section-title">{{ __('Billed To:') }}</h3>
-            @if($invoice->client)
-                <p><strong>{{ $invoice->client->name }}</strong></p>
-                <p class="whitespace-pre-wrap">{{ $invoice->client->address }}</p>
-                <p>{{ $invoice->client->city }}{{ $invoice->client->postal_code ? ', ' . $invoice->client->postal_code : '' }}</p>
-                <p>{{ $invoice->client->country }}</p>
-                @if($invoice->client->vat_number) <p>{{ __('VAT ID:') }} {{ $invoice->client->vat_number }}</p> @endif
-                @if($invoice->client->email) <p>{{ __('Email:') }} {{ $invoice->client->email }}</p> @endif
-                @if($invoice->client->phone) <p>{{ __('Phone:') }} {{ $invoice->client->phone }}</p> @endif
-            @else
-                <p>{{ __('N/A') }}</p>
-            @endif
+        <div class="party-details-section">
+            <div class="party-column from-details">
+                @if(isset($companyData['logo_path']) && $companyData['logo_path'])
+                    <img src="{{ $companyData['logo_path'] }}" alt="{{ $companyData['name'] ?? 'Company Logo' }}" class="company-logo">
+                @endif
+                <h3 class="section-title">{{ __('From:') }}</h3>
+                <div class="company-details">
+                    <p><strong>{{ $companyData['name'] ?? '' }}</strong></p>
+                    <p class="whitespace-pre-wrap">{{ $companyData['address'] ?? '' }}</p>
+                    <p>{{ $companyData['city_zip_country'] ?? '' }}</p>
+                    @if(isset($companyData['phone']) && $companyData['phone']) <p>{{ __('Phone:') }} {{ $companyData['phone'] }}</p> @endif
+                    @if(isset($companyData['email']) && $companyData['email']) <p>{{ __('Email:') }} {{ $companyData['email'] }}</p> @endif
+                    @if(isset($companyData['vat']) && $companyData['vat']) <p>{{ __('VAT ID:') }} {{ $companyData['vat'] }}</p> @endif
+                </div>
+            </div>
+            <div class="party-column to-details">
+                <h3 class="section-title">{{ __('Billed To:') }}</h3>
+                <div class="client-address-details"> {{-- Renombrado para evitar posible conflicto con un .client-details global si existiera --}}
+                    @if($invoice->client)
+                        <p><strong>{{ $invoice->client->name }}</strong></p>
+                        <p class="whitespace-pre-wrap">{{ $invoice->client->address }}</p>
+                        <p>{{ $invoice->client->city }}{{ $invoice->client->postal_code ? ', ' . $invoice->client->postal_code : '' }}</p>
+                        <p>{{ $invoice->client->country }}</p>
+                        @if($invoice->client->vat_number) <p>{{ __('VAT ID:') }} {{ $invoice->client->vat_number }}</p> @endif
+                        @if($invoice->client->email) <p>{{ __('Email:') }} {{ $invoice->client->email }}</p> @endif
+                        @if($invoice->client->phone) <p>{{ __('Phone:') }} {{ $invoice->client->phone }}</p> @endif
+                    @else
+                        <p>{{ __('N/A') }}</p>
+                    @endif
+                </div>
+            </div>
         </div>
+        <div class="clearfix"></div>
 
         <table class="items-table">
             <thead>
@@ -223,7 +298,6 @@
             </table>
         </div>
         <div class="clearfix"></div>
-
 
         @if($invoice->payment_terms || $invoice->notes_to_client)
         <div class="footer-notes">

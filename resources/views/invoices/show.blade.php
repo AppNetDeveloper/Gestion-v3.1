@@ -31,6 +31,12 @@
                         <a href="{{ route('invoices.pdf', $invoice->id) }}" target="_blank" class="btn btn-sm btn-outline-secondary inline-flex items-center">
                             <iconify-icon icon="heroicons:arrow-down-tray" class="mr-1"></iconify-icon> <span>{{ __('PDF') }}</span>
                         </a>
+                        
+                        @if($invoice->verifactu_hash)
+                        <a href="{{ route('invoices.verify', $invoice->id) }}" target="_blank" class="btn btn-sm btn-outline-success inline-flex items-center">
+                            <iconify-icon icon="heroicons:shield-check" class="mr-1"></iconify-icon> <span>{{ __('Verify') }}</span>
+                        </a>
+                        @endif
                     @endcan
                     <button type="button" onclick="window.print()" class="btn btn-sm btn-outline-secondary inline-flex items-center">
                         <iconify-icon icon="heroicons:printer" class="mr-1"></iconify-icon> <span>{{ __('Print') }}</span>
@@ -88,45 +94,81 @@
                         {{ config('app.company_email', 'contact@yourcompany.com') }}<br>
                         @if(config('app.company_vat')) VAT: {{ config('app.company_vat') }} @endif
                     </p>
-                    <div class="mt-4">
-                        <span class="inline-block px-3 py-1 text-xs font-semibold rounded-full
-                            @switch($invoice->status)
-                                @case('draft') bg-orange-100 text-orange-700 dark:bg-orange-700 dark:text-orange-100 @break
-                                @case('sent') bg-blue-100 text-blue-700 dark:bg-blue-700 dark:text-blue-100 @break
-                                @case('paid') bg-green-100 text-green-700 dark:bg-green-700 dark:text-green-100 @break
-                                @case('partially_paid') bg-yellow-100 text-yellow-700 dark:bg-yellow-700 dark:text-yellow-100 @break
-                                @case('overdue') bg-red-100 text-red-700 dark:bg-red-700 dark:text-red-100 @break
-                                @case('cancelled') bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-100 @break
-                                @default bg-slate-100 text-slate-700 dark:bg-slate-700 dark:text-slate-100
-                            @endswitch
-                        ">
-                            {{ __(ucfirst(str_replace('_', ' ', $invoice->status))) }}
-                        </span>
+                    <div class="mt-4 space-y-4">
+                        <div>
+                            <span class="inline-block px-3 py-1 text-xs font-semibold rounded-full
+                                @switch($invoice->status)
+                                    @case('draft') bg-orange-100 text-orange-700 dark:bg-orange-700 dark:text-orange-100 @break
+                                    @case('sent') bg-blue-100 text-blue-700 dark:bg-blue-700 dark:text-blue-100 @break
+                                    @case('paid') bg-green-100 text-green-700 dark:bg-green-700 dark:text-green-100 @break
+                                    @case('partially_paid') bg-yellow-100 text-yellow-700 dark:bg-yellow-700 dark:text-yellow-100 @break
+                                    @case('overdue') bg-red-100 text-red-700 dark:bg-red-700 dark:text-red-100 @break
+                                    @case('cancelled') bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-100 @break
+                                    @default bg-slate-100 text-slate-700 dark:bg-slate-700 dark:text-slate-100
+                                @endswitch">
+                                {{ __(ucfirst(str_replace('_', ' ', $invoice->status))) }}
+                            </span>
+                        </div>
+                        
+                        @if($invoice->verifactu_qr_code_data)
+                        <div class="p-3 bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700">
+                            <h5 class="text-xs font-medium text-slate-500 dark:text-slate-400 mb-2">{{ __('VeriFactu QR') }}</h5>
+                            <div class="flex justify-center">
+                                @if(str_starts_with($invoice->verifactu_qr_code_data, 'data:image/'))
+                                    <img src="{{ $invoice->verifactu_qr_code_data }}" alt="VeriFactu QR Code" class="w-32 h-32" />
+                                @else
+                                    <div class="text-xs text-red-500 p-2 bg-red-50 dark:bg-red-900/20 rounded">
+                                        {{ __('Invalid QR code format') }}
+                                    </div>
+                                @endif
+                            </div>
+                            @if($invoice->verifactu_id)
+                            <p class="text-xs text-center mt-2 text-slate-500 dark:text-slate-400">
+                                {{ $invoice->verifactu_id }}
+                            </p>
+                            @endif
+                        </div>
+                        @endif
+                    </div>
                     </div>
                 </div>
             </div>
 
             {{-- Líneas de la Factura --}}
-            <div class="overflow-x-auto -mx-6">
-                <table class="min-w-full">
+            <div class="mt-6 overflow-x-auto">
+                <table class="w-full table-auto">
+                    <colgroup>
+                        <col style="width: 50%;">
+                        <col style="width: 10%;">
+                        <col style="width: 20%;">
+                        <col style="width: 20%;">
+                    </colgroup>
                     <thead class="bg-slate-100 dark:bg-slate-700">
                         <tr>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-300 uppercase tracking-wider">{{ __('Item Description') }}</th>
-                            <th class="px-6 py-3 text-center text-xs font-medium text-slate-500 dark:text-slate-300 uppercase tracking-wider">{{ __('Qty') }}</th>
-                            <th class="px-6 py-3 text-right text-xs font-medium text-slate-500 dark:text-slate-300 uppercase tracking-wider">{{ __('Unit Price') }}</th>
-                            <th class="px-6 py-3 text-right text-xs font-medium text-slate-500 dark:text-slate-300 uppercase tracking-wider">{{ __('Subtotal') }}</th>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-300 uppercase tracking-wider">{{ __('Item Description') }}</th>
+                            <th class="px-2 py-3 text-center text-xs font-medium text-slate-500 dark:text-slate-300 uppercase tracking-wider">{{ __('Qty') }}</th>
+                            <th class="px-3 py-3 text-right text-xs font-medium text-slate-500 dark:text-slate-300 uppercase tracking-wider">{{ __('Unit Price') }}</th>
+                            <th class="px-4 py-3 text-right text-xs font-medium text-slate-500 dark:text-slate-300 uppercase tracking-wider">{{ __('Subtotal') }}</th>
                         </tr>
                     </thead>
                     <tbody class="bg-white dark:bg-slate-800 divide-y divide-slate-200 dark:divide-slate-700">
                         @forelse ($invoice->items as $item)
-                            <tr>
-                                <td class="px-6 py-4 whitespace-normal text-sm text-slate-700 dark:text-slate-300">
-                                    {{ $item->item_description }}
-                                    @if($item->service) <span class="text-xs text-slate-400">({{ $item->service->name }})</span> @endif
+                            <tr class="hover:bg-slate-50 dark:hover:bg-slate-700/50">
+                                <td class="px-4 py-3">
+                                    <div class="text-sm text-slate-800 dark:text-slate-200 break-words">{{ $item->item_description }}</div>
+                                    @if($item->service) 
+                                        <div class="text-xs text-slate-500 dark:text-slate-400">{{ $item->service->name }}</div>
+                                    @endif
                                 </td>
-                                <td class="px-6 py-4 whitespace-nowrap text-sm text-slate-500 dark:text-slate-400 text-center">{{ $item->quantity }}</td>
-                                <td class="px-6 py-4 whitespace-nowrap text-sm text-slate-500 dark:text-slate-400 text-right">{{ number_format($item->unit_price, 2, ',', '.') }} {{ $invoice->currency }}</td>
-                                <td class="px-6 py-4 whitespace-nowrap text-sm text-slate-700 dark:text-slate-200 text-right font-medium">{{ number_format($item->item_subtotal, 2, ',', '.') }} {{ $invoice->currency }}</td>
+                                <td class="px-2 py-3 text-center text-sm text-slate-600 dark:text-slate-300">
+                                    {{ $item->quantity }}
+                                </td>
+                                <td class="px-3 py-3 text-right text-sm text-slate-600 dark:text-slate-300">
+                                    {{ number_format($item->unit_price, 2, ',', '.') }} {{ $invoice->currency }}
+                                </td>
+                                <td class="px-4 py-3 text-right text-sm font-medium text-slate-800 dark:text-slate-200">
+                                    {{ number_format($item->item_subtotal, 2, ',', '.') }} {{ $invoice->currency }}
+                                </td>
                             </tr>
                         @empty
                             <tr>
@@ -138,37 +180,42 @@
             </div>
 
             {{-- Totales de la Factura --}}
-            <div class="grid grid-cols-1 md:grid-cols-3 mt-8">
-                <div class="md:col-span-2">
+            <div class="flex flex-col md:flex-row justify-between mt-8 gap-8">
+                <div class="md:w-2/3 pl-0 md:pl-4">
                     @if($invoice->payment_terms)
                         <h5 class="text-slate-600 dark:text-slate-300 font-medium text-sm mb-1">{{ __('Payment Terms') }}</h5>
                         <p class="text-sm text-slate-500 dark:text-slate-400 whitespace-pre-wrap">{{ $invoice->payment_terms }}</p>
                     @endif
-                     @if($invoice->notes_to_client)
+                    @if($invoice->notes_to_client)
                         <h5 class="text-slate-600 dark:text-slate-300 font-medium text-sm mt-4 mb-1">{{ __('Notes to Client') }}</h5>
                         <p class="text-sm text-slate-500 dark:text-slate-400 whitespace-pre-wrap">{{ $invoice->notes_to_client }}</p>
                     @endif
                 </div>
-                <div class="text-right space-y-1 mt-6 md:mt-0">
-                    <div class="flex justify-between text-sm">
-                        <span class="text-slate-500 dark:text-slate-400">{{ __('Subtotal') }}:</span>
-                        <span class="text-slate-700 dark:text-slate-200">{{ number_format($invoice->subtotal, 2, ',', '.') }} {{ $invoice->currency }}</span>
+                <div class="md:w-1/3">
+                    <div class="bg-slate-50 dark:bg-slate-700/30 p-4 rounded-lg">
+                        <div class="space-y-2">
+                            <div class="flex justify-between text-sm">
+                                <span class="text-slate-500 dark:text-slate-400">{{ __('Subtotal') }}:</span>
+                                <span class="text-slate-700 dark:text-slate-200">{{ number_format($invoice->subtotal, 2, ',', '.') }} {{ $invoice->currency }}</span>
+                            </div>
+                            @if($invoice->discount_amount > 0)
+                            <div class="flex justify-between text-sm">
+                                <span class="text-slate-500 dark:text-slate-400">{{ __('Discount') }}:</span>
+                                <span class="text-slate-700 dark:text-slate-200">-{{ number_format($invoice->discount_amount, 2, ',', '.') }} {{ $invoice->currency }}</span>
+                            </div>
+                            @endif
+                            <div class="flex justify-between text-sm">
+                                <span class="text-slate-500 dark:text-slate-400">{{ __('Total Tax') }} ({{ $invoice->client->vat_rate ?? config('app.vat_rate', 21) }}%):</span>
+                                <span class="text-slate-700 dark:text-slate-200">{{ number_format($invoice->tax_amount, 2, ',', '.') }} {{ $invoice->currency }}</span>
+                            </div>
+                            <hr class="my-2 border-slate-200 dark:border-slate-600">
+                            <div class="flex justify-between font-bold text-base">
+                                <span class="text-slate-900 dark:text-white">{{ __('Total Amount') }}:</span>
+                                <span class="text-slate-900 dark:text-white">{{ number_format($invoice->total_amount, 2, ',', '.') }} {{ $invoice->currency }}</span>
+                            </div>
+                        </div>
                     </div>
-                    @if($invoice->discount_amount > 0)
-                    <div class="flex justify-between text-sm">
-                        <span class="text-slate-500 dark:text-slate-400">{{ __('Discount') }}:</span>
-                        <span class="text-slate-700 dark:text-slate-200">-{{ number_format($invoice->discount_amount, 2, ',', '.') }} {{ $invoice->currency }}</span>
-                    </div>
-                    @endif
-                    <div class="flex justify-between text-sm">
-                        <span class="text-slate-500 dark:text-slate-400">{{ __('Total Tax') }} ({{ $invoice->client->vat_rate ?? config('app.vat_rate', 21) }}%):</span>
-                        <span class="text-slate-700 dark:text-slate-200">{{ number_format($invoice->tax_amount, 2, ',', '.') }} {{ $invoice->currency }}</span>
-                    </div>
-                    <hr class="my-2 border-slate-200 dark:border-slate-700">
-                    <div class="flex justify-between font-bold text-lg">
-                        <span class="text-slate-900 dark:text-white">{{ __('Total Amount') }}:</span>
-                        <span class="text-slate-900 dark:text-white">{{ number_format($invoice->total_amount, 2, ',', '.') }} {{ $invoice->currency }}</span>
-                    </div>
+                </div>
                 </div>
             </div>
 

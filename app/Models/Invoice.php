@@ -34,7 +34,11 @@ class Invoice extends Model
         'internal_notes',
         'verifactu_id', // Para Veri*factu
         'verifactu_qr_code_data', // Para Veri*factu
-        'discount_id'
+        'verifactu_hash', // Hash de la factura
+        'verifactu_signature', // Firma digital
+        'verifactu_timestamp', // Fecha de generación
+        'discount_id',
+        'is_locked',
     ];
 
     /**
@@ -49,8 +53,111 @@ class Invoice extends Model
         'discount_amount' => 'decimal:2',
         'tax_amount' => 'decimal:2',
         'total_amount' => 'decimal:2',
+        'verifactu_timestamp' => 'datetime',
+        'is_locked' => 'boolean',
     ];
+    public function lock()
+    {
+        if ($this->isLocked()) {
+            return true;
+        }
 
+        $this->update(['is_locked' => true]);
+        $this->logAction('locked');
+        return true;
+    }
+
+    /**
+     * Desbloquea la factura (solo super-admin)
+     */
+    public function unlock()
+    {
+        if (!auth()->user()?->hasRole('super-admin')) {
+            throw new \Exception('No tienes permiso para desbloquear facturas');
+        }
+
+        $this->update(['is_locked' => false]);
+        $this->logAction('unlocked');
+        return true;
+    }
+
+    /**
+     * Verifica si la factura está bloqueada
+     */
+    public function isLocked()
+    {
+        return (bool) $this->is_locked || !is_null($this->verifactu_hash);
+    }
+
+    /**
+     * Verifica si la factura puede ser editada
+     */
+    public function isEditable()
+    {
+        if (auth()->user()?->hasRole('super-admin')) {
+            return true;
+        }
+
+        return !$this->isLocked();
+    }
+
+    /**
+     * Lanza una excepción si la factura está bloqueada
+     */
+    public function checkIfEditable()
+    {
+        if (!$this->isEditable()) {
+            throw new \App\Exceptions\InvoiceLockedException(
+                'Esta factura está bloqueada y no puede ser modificada.'
+            );
+        }
+    }
+
+    /**
+     * Sobrescribir el método save para validar antes de guardar
+     */
+    public function save(array $options = [])
+    {
+        if ($this->exists && !auth()->user()?->hasRole('super-admin')) {
+            $this->checkIfEditable();
+        }
+
+        return parent::save($options);
+    }
+
+    /**
+     * Sobrescribir el método delete para validar antes de eliminar
+     */
+    public function delete()
+    {
+        if (!auth()->user()?->hasRole('super-admin')) {
+            $this->checkIfEditable();
+        }
+
+        return parent::delete();
+    }
+
+    /**
+     * Eventos del modelo
+     */
+    protected static function booted()
+    {
+        static::updating(function ($invoice) {
+            if ($invoice->isLocked() && !auth()->user()?->hasRole('super-admin')) {
+                throw new \App\Exceptions\InvoiceLockedException(
+                    'No se puede modificar una factura bloqueada.'
+                );
+            }
+        });
+
+        // Registrar acción de auditoría
+        static::updated(function ($invoice) {
+            if ($invoice->wasChanged('is_locked')) {
+                $action = $invoice->is_locked ? 'locked' : 'unlocked';
+                $invoice->logAction($action);
+            }
+        });
+    }
     /**
      * Get the client that owns the invoice.
      */

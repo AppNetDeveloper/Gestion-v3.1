@@ -489,11 +489,21 @@ Route::middleware(['auth'])->group(function () {
 
     Route::get('invoices/{invoice}/pdf', [InvoiceController::class, 'exportPdf'])->name('invoices.pdf');
     Route::post('invoices/{invoice}/send-email', [InvoiceController::class, 'sendEmail'])->name('invoices.sendEmail');
+// routes/web.php
+Route::post('/invoices/{invoice}/lock', [InvoiceController::class, 'lock'])
+    ->name('invoices.lock')
+    ->middleware('auth');
+
+Route::post('/invoices/{invoice}/unlock', [InvoiceController::class, 'unlock'])
+    ->name('invoices.unlock')
+    ->middleware(['auth', 'role:super-admin']);
 });
+
+// Ruta para verificar facturas (accesible sin autenticación)
+Route::get('/factura/verificar/{id}', [\App\Http\Controllers\InvoiceVerificationController::class, 'showVerificationForm'])->name('invoices.verify');
+Route::post('/factura/verificar', [\App\Http\Controllers\InvoiceVerificationController::class, 'verify'])->name('invoices.verify.submit');
 
 // Grupo de rutas públicas
 Route::group([], function () {
     Route::get('/logo/{media}', [ImageLogoController::class, 'show'])->name('logo.show');
-
-
 });

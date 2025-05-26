@@ -16,10 +16,12 @@ use Yajra\DataTables\Facades\DataTables;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule; // Para reglas de validación
 use App\Models\Service;
+use App\Services\VeriFactuService;
 use Barryvdh\DomPDF\Facade\Pdf;
 use App\Mail\InvoiceSentMail;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Storage; // Para manejo de archivos
+use SimpleSoftwareIO\QrCode\Facades\QrCode; // Para generar códigos QR
 
 class InvoiceController extends Controller
 {
@@ -122,6 +124,33 @@ class InvoiceController extends Controller
         return abort(403, 'Unauthorized action.');
     }
 
+    /**
+     * Generate a sequential invoice number with year prefix
+     * Format: YYYY-XXXX (e.g., 2025-0001)
+     *
+     * @return string
+     */
+    private function generateInvoiceNumber()
+    {
+        $currentYear = date('Y');
+        $lastInvoice = Invoice::orderBy('id', 'desc')
+                            ->where('invoice_number', 'LIKE', $currentYear.'-%')
+                            ->first();
+        
+        // If no invoice exists for the current year, start with 1
+        $nextNumber = 1;
+        
+        if ($lastInvoice) {
+            // Extract the sequential number from the last invoice number
+            if (preg_match('/^\d{4}-(\d+)$/', $lastInvoice->invoice_number, $matches)) {
+                $nextNumber = (int)$matches[1] + 1;
+            }
+        }
+        
+        // Format: YYYY-XXXX (e.g., 2025-0001)
+        return $currentYear . '-' . str_pad($nextNumber, 4, '0', STR_PAD_LEFT);
+    }
+
     public function create()
     {
         if (!Auth::user()->can('invoices create')) {
@@ -141,14 +170,25 @@ class InvoiceController extends Controller
                                     ->orderBy('project_title')
                                     ->get(['id', 'project_title', 'client_id']);
 
-        $discounts = Discount::where('is_active', true)->orderBy('name')->get(); // <-- OBTENER DESCUENTOS
+        $discounts = Discount::where('is_active', true)->orderBy('name')->get();
         $services = Service::orderBy('name')->get(['id', 'name', 'default_price', 'unit', 'description']);
+        $nextInvoiceNumber = $this->generateInvoiceNumber();
+        
         $breadcrumbItems = [
             ['name' => __('Dashboard'), 'url' => '/dashboard'],
             ['name' => __('Invoices'), 'url' => route('invoices.index')],
             ['name' => __('Create'), 'url' => route('invoices.create')],
         ];
-        return view('invoices.create', compact('breadcrumbItems', 'clients', 'availableQuotes', 'availableProjects', 'discounts', 'services')); // <-- PASAR DISCOUNTS
+        
+        return view('invoices.create', compact(
+            'breadcrumbItems', 
+            'clients', 
+            'availableQuotes', 
+            'availableProjects', 
+            'discounts', 
+            'services',
+            'nextInvoiceNumber'
+        ));
     }
 
     /**
@@ -225,6 +265,34 @@ class InvoiceController extends Controller
             $invoiceData['discount_amount'] = $request->input('discount_amount', $calculatedDiscountAmount); // Usar el del input si existe, si no el calculado
 
 
+            // Generar ID único para Veri*factu
+            $verifactuId = 'FAC-' . date('Ymd-His-') . strtoupper(uniqid());
+            
+            // Generar datos para el código QR según normativa española
+            $qrData = [
+                'id' => $verifactuId,
+                'fecha' => now()->format('d-m-Y'),
+                'total' => number_format($request->input('total_amount', 0), 2, ',', ''),
+                'nif_emisor' => config('app.company_vat', ''), // Usamos APP_COMPANY_VAT del .env
+                'nif_receptor' => $client->tax_number ?? '',
+                'importe_base' => number_format($request->input('subtotal', 0), 2, ',', ''),
+                'iva' => number_format($request->input('tax_amount', 0), 2, ',', ''),
+            ];
+            
+            // Generar cadena para el QR
+            $qrString = collect($qrData)->map(function($value, $key) {
+                return "$key=$value";
+            })->implode('|');
+            
+            // Generar código QR como SVG
+            $qrCode = QrCode::format('svg')
+                ->size(200)
+                ->generate($qrString);
+                
+            // Añadir datos al array de la factura
+            $invoiceData['verifactu_id'] = $verifactuId;
+            $invoiceData['verifactu_qr_code_data'] = $qrCode;
+            
             $invoice = Invoice::create($invoiceData);
 
             foreach ($request->input('items', []) as $itemData) {
@@ -287,7 +355,14 @@ class InvoiceController extends Controller
              abort(403, __('This action is unauthorized.'));
         }
 
-        $invoice->load('client', 'items.service', 'quote', 'project');
+        // Cargar relaciones y asegurarse de que los campos del QR estén disponibles
+        $invoice->load(['client', 'items.service', 'quote', 'project']);
+        
+        // Si no hay código QR, generarlo (para facturas antiguas)
+        if (!$invoice->verifactu_qr_code_data) {
+            $this->generateQrCodeForInvoice($invoice);
+            $invoice->refresh(); // Recargar el modelo con los nuevos datos
+        }
 
         $breadcrumbItems = [
             ['name' => __('Dashboard'), 'url' => '/dashboard'],
@@ -429,17 +504,24 @@ class InvoiceController extends Controller
                         ->with('error', __('Failed to update invoice. Please check the errors.'));
         }
 
+        // Check if status is changing from draft to sent/paid
+        $isStatusChanging = $request->has('status') && 
+                          $invoice->status === 'draft' && 
+                          in_array($request->status, ['sent', 'paid']);
+
         DB::beginTransaction();
         try {
             $invoiceData = $request->only([
                 'client_id', 'quote_id', 'project_id', 'invoice_number', 'invoice_date', 'due_date',
-                'status', 'currency', 'payment_terms', 'notes_to_client', 'internal_notes',
-                'subtotal', 'discount_amount', 'tax_amount', 'total_amount'
+                'status', 'currency', 'payment_terms', 'notes', 'subtotal',
+                'discount_amount', 'tax_amount', 'total_amount'
             ]);
-            $invoiceData['quote_id'] = $request->filled('quote_id') ? $request->input('quote_id') : null;
-            $invoiceData['project_id'] = $request->filled('project_id') ? $request->input('project_id') : null;
-            $invoiceData['discount_amount'] = $request->filled('discount_amount') ? $request->input('discount_amount') : 0;
-
+            
+            // Generate digital fingerprint if status is changing from draft to sent/paid
+            if ($isStatusChanging && !$invoice->verifactu_hash) {
+                $this->generateQrCodeForInvoice($invoice);
+            }
+            
             $invoice->update($invoiceData);
 
             $existingItemIds = $invoice->items()->pluck('id')->toArray();
@@ -523,6 +605,58 @@ class InvoiceController extends Controller
      * @param  \App\Models\Invoice  $invoice
      * @return \Illuminate\Http\Response
      */
+    /**
+     * Generate digital fingerprint and QR code for an invoice
+     *
+     * @param  \App\Models\Invoice  $invoice
+     * @return void
+     */
+    private function generateQrCodeForInvoice(Invoice $invoice)
+    {
+        try {
+            $veriFactuService = new VeriFactuService();
+            $fingerprintData = $veriFactuService->generateDigitalFingerprint($invoice);
+            
+            // Generar código QR en formato PNG como base64
+            $qrCodeData = json_encode([
+                'id' => $fingerprintData['verifactu_id'],
+                'hash' => $fingerprintData['verifactu_hash'],
+                'signature' => $fingerprintData['verifactu_signature'],
+                'timestamp' => now()->toIso8601String()
+            ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+            
+            // Generar el código QR como PNG en memoria
+            $qrCodePng = QrCode::format('png')
+                ->size(200)
+                ->margin(1)
+                ->generate($qrCodeData);
+                
+            // Convertir a base64 para almacenar en la base de datos
+            $qrCodeBase64 = 'data:image/png;base64,' . base64_encode($qrCodePng);
+            
+            // Actualizar la factura con todos los datos
+            $invoice->update([
+                'verifactu_id' => $fingerprintData['verifactu_id'],
+                'verifactu_hash' => $fingerprintData['verifactu_hash'],
+                'verifactu_signature' => $fingerprintData['verifactu_signature'],
+                'verifactu_qr_code_data' => $qrCodeBase64,
+                'verifactu_timestamp' => $fingerprintData['verifactu_timestamp']
+            ]);
+            
+            return $fingerprintData;
+            
+        } catch (\Exception $e) {
+            Log::error('Error generating digital fingerprint for invoice #' . $invoice->id . ': ' . $e->getMessage());
+            throw $e;
+        }
+    }
+
+    /**
+     * Export the invoice to PDF.
+     *
+     * @param  \App\Models\Invoice  $invoice
+     * @return \Illuminate\Http\Response
+     */
     public function exportPdf(Invoice $invoice)
     {
         $user = Auth::user();
@@ -536,7 +670,22 @@ class InvoiceController extends Controller
              abort(403, __('This action is unauthorized.'));
         }
 
-        $invoice->load('client', 'items.service'); // Cargar relaciones necesarias para el PDF
+        // Cargar relaciones necesarias para el PDF
+        $invoice->load(['client', 'items.service']);
+        
+        // Asegurarse de que la factura tenga una huella digital y código QR
+        try {
+            // Generar o actualizar el código QR si no existe o está en formato antiguo (SVG)
+            if (!$invoice->verifactu_hash || !$invoice->verifactu_qr_code_data || 
+                strpos($invoice->verifactu_qr_code_data, 'data:image/png;base64,') !== 0) {
+                $this->generateQrCodeForInvoice($invoice);
+                $invoice->refresh(); // Recargar el modelo con los nuevos datos
+            }
+        } catch (\Exception $e) {
+            Log::error('Error generating digital fingerprint for PDF: ' . $e->getMessage());
+            // Continuar incluso si hay error, pero registrar el problema
+            Log::warning('Proceeding with PDF generation without QR code due to error: ' . $e->getMessage());
+        }
 
         // Datos de la empresa (ejemplo, podrías tenerlos en config o una tabla de settings)
         $companyData = [
@@ -545,7 +694,7 @@ class InvoiceController extends Controller
             'city_zip_country' => config('app.company_city_zip_country', 'Anytown, 12345, USA'),
             'phone' => config('app.company_phone', '+1 234 567 890'),
             'email' => config('app.company_email', 'contact@yourcompany.com'),
-            'vat' => config('app.company_vat', 'ES12345678X'),
+            'vat' => config('app.company_vat', ''), // Usar el valor de APP_COMPANY_VAT del .env
             'logo_path' => public_path('images/logo_color.png') // Asegúrate que esta ruta sea correcta
         ];
         if (!file_exists($companyData['logo_path'])) {
@@ -630,6 +779,32 @@ class InvoiceController extends Controller
                 Storage::delete('temp/' . $pdfFileName);
             }
             return back()->with('error', __('An error occurred while sending the email. Please check logs.'));
+        }
+    }
+    public function lock(Invoice $invoice)
+    {
+        try {
+            $invoice->lock();
+            return redirect()->back()
+                ->with('success', 'Factura bloqueada exitosamente.');
+        } catch (\Exception $e) {
+            return redirect()->back()
+                ->with('error', $e->getMessage());
+        }
+    }
+
+    /**
+     * Desbloquear una factura (solo super-admin)
+     */
+    public function unlock(Invoice $invoice)
+    {
+        try {
+            $invoice->unlock();
+            return redirect()->back()
+                ->with('success', 'Factura desbloqueada exitosamente.');
+        } catch (\Exception $e) {
+            return redirect()->back()
+                ->with('error', $e->getMessage());
         }
     }
 }
