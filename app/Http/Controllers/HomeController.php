@@ -154,6 +154,9 @@ class HomeController extends Controller
         // Obtener total de ventas
         $totalSales = $this->getTotalSales();
         
+        // Obtener conteo total de facturas (no solo las pagadas)
+        $totalInvoices = \App\Models\Invoice::count();
+        
         // Obtener actividad reciente
         $recentActivities = $this->getRecentActivities(5);
         

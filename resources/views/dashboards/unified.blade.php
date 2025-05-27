@@ -487,18 +487,25 @@
                     <div class="card-header flex justify-between items-center">
                         <h4 class="card-title">Ventas</h4>
                         <div class="flex items-center">
-                            <span class="text-sm {{ $analyticChartData['yearlyRevenue']['growth'] >= 0 ? 'text-success-500' : 'text-danger-500' }}">
-                                {{ number_format($analyticChartData['yearlyRevenue']['growth'], 1) }}%
-                                <i class="fas {{ $analyticChartData['yearlyRevenue']['growth'] >= 0 ? 'fa-arrow-up' : 'fa-arrow-down' }} ml-1"></i>
+                            <span class="text-sm text-primary-500">
+                                <i class="fas fa-file-invoice mr-1"></i>
+                                {{ $totalInvoices ?? 0 }} {{ trans_choice('facturas', $totalInvoices ?? 0) }}
                             </span>
                         </div>
                     </div>
                     <div class="card-body p-6">
-                        <div class="text-3xl font-bold mb-2">
-                            {{ number_format($analyticChartData['yearlyRevenue']['total'], 2) }}<span class="text-sm text-slate-400">€</span>
+                        <div class="flex items-center justify-between mb-4">
+                            <div>
+                                <p class="text-slate-500 dark:text-slate-300 text-sm mb-1">Facturas Totales</p>
+                                <div class="text-3xl font-bold text-primary-600">
+                                    {{ $totalInvoices ?? 0 }}
+                                </div>
+                            </div>
+                            <div class="bg-primary-50 dark:bg-primary-900/30 rounded-full p-3">
+                                <i class="fas fa-file-invoice text-2xl text-primary-500"></i>
+                            </div>
                         </div>
-                        <p class="text-slate-500 dark:text-slate-300 text-sm mb-4">Ventas totales</p>
-                        <div class="h-40">
+                        <div class="h-32">
                             <canvas id="salesChart"></canvas>
                         </div>
                     </div>
