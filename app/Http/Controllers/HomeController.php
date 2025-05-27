@@ -132,25 +132,59 @@ class HomeController extends Controller
         $months = collect();
         $salesData = collect();
         
+        // Obtener datos reales de facturas
+        $invoices = \App\Models\Invoice::select(
+                DB::raw('DATE_FORMAT(created_at, "%b %Y") as month'),
+                DB::raw('COUNT(*) as count'),
+                DB::raw('SUM(total_amount) as total_amount')
+            )
+            ->where('created_at', '>=', now()->subMonths(5)->startOfMonth())
+            ->groupBy('month')
+            ->orderBy(DB::raw('MIN(created_at)'))
+            ->get();
+        
+        // Rellenar los últimos 6 meses
         for ($i = 5; $i >= 0; $i--) {
             $date = now()->subMonths($i);
-            $months->push($date->format('M Y'));
+            $monthYear = $date->format('M Y');
+            $months->push($monthYear);
             
-            // Simular datos de ventas (reemplazar con consulta real a tu base de datos)
-            $salesData->push(rand(5000, 20000));
+            // Buscar datos reales para este mes
+            $monthData = $invoices->firstWhere('month', $monthYear);
+            $salesData->push($monthData ? $monthData->total_amount : 0);
+        }
+        
+        // Calcular crecimiento respecto al mes anterior
+        $growth = 0;
+        if ($salesData->count() > 1) {
+            $currentMonth = $salesData->last();
+            $previousMonth = $salesData->slice(-2, 1)->first();
+            
+            if ($previousMonth > 0) {
+                $growth = (($currentMonth - $previousMonth) / $previousMonth) * 100;
+            } elseif ($currentMonth > 0) {
+                $growth = 100; // 100% de crecimiento si no había ventas el mes anterior
+            }
         }
         
         return [
             'months' => $months,
             'sales' => $salesData,
-            'total' => $salesData->sum(),
-            'growth' => $salesData->count() > 1 ? 
-                (($salesData->last() - $salesData->slice(-2, 1)->first()) / $salesData->slice(-2, 1)->first()) * 100 : 0
+            'total' => $invoices->sum('total_amount'),
+            'growth' => $growth,
+            'total_orders' => $invoices->sum('count')
         ];
     }
 
     public function unifiedDashboard(Request $request): \Illuminate\Contracts\View\View
     {
+        // Initialize growth array
+        $growthData = [
+            'preSymbol' => '+',
+            'postSymbol' => '%',
+            'value' => 0
+        ];
+        
         // Obtener total de ventas
         $totalSales = $this->getTotalSales();
         
@@ -174,51 +208,75 @@ class HomeController extends Controller
         $projectStats = $this->getProjectStats();
         $salesStats = $this->getSalesStats();
         
-        // Asegurarse de que los datos de ventas tengan el formato correcto
+        // Formatear datos de ventas para gráficos
         $yearlyRevenue = [
             'year' => $salesStats['months']->toArray(),
-            'revenue' => $salesStats['sales']->toArray(),
-            'total' => $salesStats['total'],
-            'growth' => $salesStats['growth'],
+            'revenue' => $salesStats['sales']->map(fn($amount) => (float) number_format($amount, 2, '.', ''))->toArray(),
+            'total' => number_format($salesStats['total'], 2, ',', '.'),
+            'growth' => round($salesStats['growth'], 2),
             'currencySymbol' => '€',
         ];
 
-        // Datos simulados para productSold y growth
-        $productSold = [
-            'year' => [2020, 2021, 2022, 2023, 2024],
-            'quantity' => [100, 150, 200, 180, 250],
-            'total' => 880,
-            'growth' => 25.5
-        ];
+        // Calcular beneficio (asumiendo un margen del 30% como ejemplo)
+        $profit = $salesStats['total'] * 0.3; // Ajustar según tu lógica de negocio
+        
+        // Calcular crecimiento de pedidos
+        $orderGrowth = 0;
+        if (isset($salesStats['total_orders_previous_period']) && $salesStats['total_orders_previous_period'] > 0) {
+            $orderGrowth = (($salesStats['total_orders'] - $salesStats['total_orders_previous_period']) / $salesStats['total_orders_previous_period']) * 100;
+        } elseif ($salesStats['total_orders'] > 0) {
+            $orderGrowth = 100; // 100% de crecimiento si no había pedidos en el período anterior
+        }
 
-        $growth = [
-            'year' => [2020, 2021, 2022, 2023, 2024],
-            'perYearRate' => [10, 25, 15, 30, 20],
-            'total' => 100,
-            'growth' => 20.0
-        ];
-
-        // Preparar los datos para la vista
+        // Preparar estadísticas para la vista
         $viewData = [
             'pageTitle' => 'Dashboard',
-            'totalSales' => $totalSales,
+            'totalSales' => number_format($salesStats['total'], 2, ',', '.'),
+            'totalOrders' => $salesStats['total_orders'],
+            'totalProfit' => number_format($profit, 2, ',', '.'),
+            'salesGrowth' => round($salesStats['growth'], 2),
+            'orderGrowth' => round($orderGrowth, 2),
+            'profitGrowth' => round($salesStats['growth'], 2), // Mismo crecimiento que ventas por defecto
             'recentActivities' => $recentActivities,
             'recentOrders' => $recentOrders,
             'taskCounts' => $taskCounts,
             'recentTasks' => $recentTasks,
-            'productSold' => $productSold,
-            'growth' => $growth,
             'analyticChartData' => [
                 'yearlyRevenue' => $yearlyRevenue,
-                'totalSales' => $totalSales,
+                'totalSales' => number_format($salesStats['total'], 2, ',', '.'),
+                'totalOrders' => $salesStats['total_orders'],
                 'recentActivities' => $recentActivities,
                 'recentOrders' => $recentOrders,
                 'taskStats' => $taskStats,
                 'projectStats' => $projectStats,
                 'taskCounts' => $taskCounts,
-                'productSold' => $productSold,
-                'growth' => $growth,
             ],
+            'stats' => [
+                'sales' => [
+                    'value' => number_format($salesStats['total_orders']),
+                    'growth' => round($orderGrowth, 1),
+                    'trend' => $orderGrowth >= 0 ? 'up' : 'down',
+                    'label' => 'Pedidos',
+                    'icon' => 'shopping-cart',
+                    'prefix' => ''
+                ],
+                'revenue' => [
+                    'value' => number_format($salesStats['total'], 2, ',', '.'),
+                    'growth' => round($salesStats['growth'], 1),
+                    'trend' => $salesStats['growth'] >= 0 ? 'up' : 'down',
+                    'label' => 'Ingresos',
+                    'icon' => 'euro-sign',
+                    'prefix' => '€'
+                ],
+                'profit' => [
+                    'value' => number_format($profit, 2, ',', '.'),
+                    'growth' => round($salesStats['growth'], 1), // Mismo crecimiento que ventas
+                    'trend' => $salesStats['growth'] >= 0 ? 'up' : 'down',
+                    'label' => 'Beneficio',
+                    'icon' => 'chart-line',
+                    'prefix' => '€'
+                ]
+            ]
         ];
 
         // Obtener usuarios con paginación
@@ -249,11 +307,8 @@ class HomeController extends Controller
             ]
         ];
 
-        // Add growth data with symbols
-        $viewData['growth'] = array_merge($viewData['growth'], [
-            'preSymbol' => '+',
-            'postSymbol' => '%'
-        ]);
+        // Set growth data
+        $viewData['growth'] = $growthData;
 
         // Add cash flow data
         $viewData['cashFlow'] = [

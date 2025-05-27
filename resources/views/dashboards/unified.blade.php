@@ -81,7 +81,7 @@
                     </h4>
                     <p class="font-Inter text-xl text-black dark:text-white font-medium">
                         {{-- Use 'yearlyRevenue' from unified data --}}
-                        {{ ($data['yearlyRevenue']['currencySymbol'] ?? '$') . number_format($data['yearlyRevenue']['total'] ?? 0, 2) }}
+                        {{ ($data['yearlyRevenue']['currencySymbol'] ?? '$') . ($data['yearlyRevenue']['total'] ?? '0,00') }}
                     </p>
                 </div>
                 <div class="flex-none w-24"> {{-- Ensure chart area doesn't shrink --}}
@@ -203,10 +203,10 @@
                         @if(isset($data['totalSales']))
                             <div class="flex flex-col items-center justify-center h-full">
                                 <div class="text-4xl font-bold text-primary-600 dark:text-primary-400 mb-2">
-                                    {{ number_format($data['totalSales']['total_amount'], 2) }} €
+                                    {{ $data['totalSales'] }} €
                                 </div>
                                 <div class="text-sm text-slate-500 dark:text-slate-400">
-                                    {{ $data['totalSales']['total_invoices'] }} {{ trans_choice('invoice.invoice', $data['totalSales']['total_invoices']) }}
+                                    {{ $data['totalOrders'] ?? 0 }} {{ trans_choice('invoice.invoice', $data['totalOrders'] ?? 0) }}
                                 </div>
                                 <div class="mt-4 w-full bg-slate-200 dark:bg-slate-700 h-2 rounded-full overflow-hidden">
                                     <div class="h-full rounded-full bg-primary-500" style="width: 100%"></div>
@@ -441,18 +441,132 @@
             </div>
         </div>
 
-        {{-- Sección de Estadísticas Mejorada --}}
+        {{-- Sección de Estadísticas Principales --}}
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-6">
+            {{-- Tarjeta de Pedidos --}}
+            <div class="bg-gradient-to-br from-blue-50 to-blue-100 dark:from-slate-800 dark:to-slate-900 rounded-xl shadow-sm overflow-hidden transition-all duration-300 hover:shadow-md">
+                <div class="p-5">
+                    <div class="flex items-center justify-between mb-4">
+                        <div>
+                            <h3 class="text-lg font-semibold text-slate-800 dark:text-white">Pedidos</h3>
+                            <p class="text-sm text-slate-500 dark:text-slate-400">Total de pedidos registrados</p>
+                        </div>
+                        <div class="bg-blue-100 dark:bg-blue-900/50 rounded-full p-2">
+                            <i class="fas fa-shopping-cart text-blue-600 dark:text-blue-400 text-xl"></i>
+                        </div>
+                    </div>
+                    <div class="flex items-end justify-between mt-6">
+                        <div>
+                            <div class="text-3xl font-bold text-slate-800 dark:text-white">
+                                {{ $stats['sales']['value'] }}
+                            </div>
+                            <div class="flex items-center mt-2">
+                                @if($stats['sales']['trend'] === 'up')
+                                    <span class="text-green-500 text-sm font-medium">
+                                        <i class="fas fa-arrow-up mr-1"></i> {{ $stats['sales']['growth'] }}%
+                                    </span>
+                                @else
+                                    <span class="text-red-500 text-sm font-medium">
+                                        <i class="fas fa-arrow-down mr-1"></i> {{ abs($stats['sales']['growth']) }}%
+                                    </span>
+                                @endif
+                                <span class="text-slate-500 dark:text-slate-400 text-xs ml-2">vs período anterior</span>
+                            </div>
+                        </div>
+                        <div class="h-16 w-24" id="ordersChart">
+                            <!-- Gráfico de pedidos se insertará aquí -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            {{-- Tarjeta de Ingresos --}}
+            <div class="bg-gradient-to-br from-green-50 to-green-100 dark:from-slate-800 dark:to-slate-900 rounded-xl shadow-sm overflow-hidden transition-all duration-300 hover:shadow-md">
+                <div class="p-5">
+                    <div class="flex items-center justify-between mb-4">
+                        <div>
+                            <h3 class="text-lg font-semibold text-slate-800 dark:text-white">Ingresos</h3>
+                            <p class="text-sm text-slate-500 dark:text-slate-400">Total facturado</p>
+                        </div>
+                        <div class="bg-green-100 dark:bg-green-900/50 rounded-full p-2">
+                            <i class="fas fa-euro-sign text-green-600 dark:text-green-400 text-xl"></i>
+                        </div>
+                    </div>
+                    <div class="flex items-end justify-between mt-6">
+                        <div>
+                            <div class="text-3xl font-bold text-slate-800 dark:text-white">
+                                {{ $stats['revenue']['prefix'] }} {{ $stats['revenue']['value'] }}
+                            </div>
+                            <div class="flex items-center mt-2">
+                                @if($stats['revenue']['trend'] === 'up')
+                                    <span class="text-green-500 text-sm font-medium">
+                                        <i class="fas fa-arrow-up mr-1"></i> {{ $stats['revenue']['growth'] }}%
+                                    </span>
+                                @else
+                                    <span class="text-red-500 text-sm font-medium">
+                                        <i class="fas fa-arrow-down mr-1"></i> {{ abs($stats['revenue']['growth']) }}%
+                                    </span>
+                                @endif
+                                <span class="text-slate-500 dark:text-slate-400 text-xs ml-2">vs período anterior</span>
+                            </div>
+                        </div>
+                        <div class="h-16 w-24" id="revenueChart">
+                            <!-- Gráfico de ingresos se insertará aquí -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            {{-- Tarjeta de Beneficio --}}
+            <div class="bg-gradient-to-br from-purple-50 to-purple-100 dark:from-slate-800 dark:to-slate-900 rounded-xl shadow-sm overflow-hidden transition-all duration-300 hover:shadow-md">
+                <div class="p-5">
+                    <div class="flex items-center justify-between mb-4">
+                        <div>
+                            <h3 class="text-lg font-semibold text-slate-800 dark:text-white">Beneficio</h3>
+                            <p class="text-sm text-slate-500 dark:text-slate-400">Beneficio estimado</p>
+                        </div>
+                        <div class="bg-purple-100 dark:bg-purple-900/50 rounded-full p-2">
+                            <i class="fas fa-chart-line text-purple-600 dark:text-purple-400 text-xl"></i>
+                        </div>
+                    </div>
+                    <div class="flex items-end justify-between mt-6">
+                        <div>
+                            <div class="text-3xl font-bold text-slate-800 dark:text-white">
+                                {{ $stats['profit']['prefix'] }} {{ $stats['profit']['value'] }}
+                            </div>
+                            <div class="flex items-center mt-2">
+                                @if($stats['profit']['trend'] === 'up')
+                                    <span class="text-green-500 text-sm font-medium">
+                                        <i class="fas fa-arrow-up mr-1"></i> {{ $stats['profit']['growth'] }}%
+                                    </span>
+                                @else
+                                    <span class="text-red-500 text-sm font-medium">
+                                        <i class="fas fa-arrow-down mr-1"></i> {{ abs($stats['profit']['growth']) }}%
+                                    </span>
+                                @endif
+                                <span class="text-slate-500 dark:text-slate-400 text-xs ml-2">vs período anterior</span>
+                            </div>
+                        </div>
+                        <div class="h-16 w-24" id="profitChart">
+                            <!-- Gráfico de beneficio se insertará aquí -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        {{-- Sección de Estadísticas Secundarias --}}
         <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-6">
             {{-- Tarjeta de Tareas --}}
-            <div class="bg-gradient-to-br from-blue-50 to-blue-100 dark:from-slate-800 dark:to-slate-900 rounded-xl shadow-sm overflow-hidden transition-all duration-300 hover:shadow-md">
+            <div class="bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-800 dark:to-slate-900 rounded-xl shadow-sm overflow-hidden transition-all duration-300 hover:shadow-md">
                 <div class="p-5">
                     <div class="flex items-center justify-between mb-4">
                         <div>
                             <h3 class="text-lg font-semibold text-slate-800 dark:text-white">Tareas</h3>
                             <p class="text-sm text-slate-500 dark:text-slate-400">Estado actual de tus tareas</p>
                         </div>
-                        <div class="bg-blue-100 dark:bg-blue-900/50 rounded-full p-2">
-                            <i class="fas fa-tasks text-blue-600 dark:text-blue-400 text-xl"></i>
+                        <div class="bg-slate-100 dark:bg-slate-700 rounded-full p-2">
+                            <i class="fas fa-tasks text-slate-600 dark:text-slate-300 text-xl"></i>
                         </div>
                     </div>
                     <div class="grid grid-cols-3 gap-4 text-center mt-6">
@@ -469,7 +583,7 @@
                     </div>
                 </div>
                 <div class="bg-white dark:bg-slate-800/30 p-4 border-t border-slate-100 dark:border-slate-700/50">
-                    <a href="{{ route('tasks.my') }}" class="text-sm font-medium text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 flex items-center justify-center">
+                    <a href="{{ route('tasks.my') }}" class="text-sm font-medium text-slate-600 dark:text-slate-300 hover:text-slate-800 dark:hover:text-white flex items-center justify-center">
                         Ver todas las tareas
                         <i class="fas fa-arrow-right ml-2"></i>
                     </a>
@@ -477,15 +591,15 @@
             </div>
 
             {{-- Tarjeta de Proyectos --}}
-            <div class="bg-gradient-to-br from-purple-50 to-purple-100 dark:from-slate-800 dark:to-slate-900 rounded-xl shadow-sm overflow-hidden transition-all duration-300 hover:shadow-md">
+            <div class="bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-800 dark:to-slate-900 rounded-xl shadow-sm overflow-hidden transition-all duration-300 hover:shadow-md">
                 <div class="p-5">
                     <div class="flex items-center justify-between mb-4">
                         <div>
                             <h3 class="text-lg font-semibold text-slate-800 dark:text-white">Proyectos</h3>
                             <p class="text-sm text-slate-500 dark:text-slate-400">Resumen de proyectos</p>
                         </div>
-                        <div class="bg-purple-100 dark:bg-purple-900/50 rounded-full p-2">
-                            <i class="fas fa-project-diagram text-purple-600 dark:text-purple-400 text-xl"></i>
+                        <div class="bg-slate-100 dark:bg-slate-700 rounded-full p-2">
+                            <i class="fas fa-project-diagram text-slate-600 dark:text-slate-300 text-xl"></i>
                         </div>
                     </div>
                     <div class="space-y-3 mt-4">
