@@ -10,7 +10,7 @@ use App\Http\Controllers\Controller;
  *     version="1.0.0",
  *     description="Documentación completa de la API del sistema",
  *     @OA\Contact(
- *         email="info@appnetdeveloper.com"
+ *         email="info@appnet.dev"
  *     )
  * )
  * 
@@ -30,6 +30,11 @@ use App\Http\Controllers\Controller;
  * )
  * 
  * @OA\Tag(
+ *     name="Ollama Tasks",
+ *     description="Endpoints para gestionar tareas de Ollama"
+ * )
+ * 
+ * @OA\Tag(
  *     name="Scraping",
  *     description="Endpoints para manejar el servicio de scraping"
  * )
@@ -39,19 +44,24 @@ use App\Http\Controllers\Controller;
  *     description="Endpoints para monitoreo de servidores"
  * )
  * 
- * @OA\SecurityScheme(
- *     type="http",
- *     scheme="bearer",
- *     securityScheme="bearerAuth",
- *     bearerFormat="JWT"
+ * @OA\Components(
+ *     @OA\SecurityScheme(
+ *         securityScheme="bearerAuth",
+ *         type="http",
+ *         scheme="bearer",
+ *         bearerFormat="JWT",
+ *         name="Authorization"
+ *     ),
+ *     @OA\SecurityScheme(
+ *         securityScheme="whatsappToken",
+ *         type="apiKey",
+ *         in="header",
+ *         name="Authorization"
+ *     )
  * )
  * 
- * @OA\SecurityScheme(
- *     type="apiKey",
- *     in="header",
- *     name="token",
- *     securityScheme="apiToken"
- * )
+ * @OA\Security({"bearerAuth": {}})
+ * @OA\Security({"whatsappToken": {}})
  */
 class SwaggerController extends Controller
 {

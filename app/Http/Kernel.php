@@ -66,5 +66,8 @@ class Kernel extends HttpKernel
         'signed' => \App\Http\Middleware\ValidateSignature::class,
         'throttle' => \Illuminate\Routing\Middleware\ThrottleRequests::class,
         'verified' => \Illuminate\Auth\Middleware\EnsureEmailIsVerified::class,
+        'ollama.token' => \App\Http\Middleware\VerifyOllamaToken::class,
+        'whatsapp.token' => \App\Http\Middleware\VerifyWhatsAppToken::class,
+        'telegram.token' => \App\Http\Middleware\VerifyTelegramToken::class,
     ];
 }

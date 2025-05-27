@@ -227,6 +227,7 @@ return [
         /*
          * Package Service Providers...
          */
+        App\Providers\SwaggerServiceProvider::class,
         Spatie\Permission\PermissionServiceProvider::class,
         /*
          * Application Service Providers...

@@ -31,16 +31,60 @@ Route::post('forgot-password', [AuthController::class, 'forgotPassword']);
 Route::get('profile-verify-new-email/{token}',
     [ProfileController::class, 'verifyNewEmail'])->name('profile.verify-new-email');
 
-// authenticated routes
+// Ollama Tasker API Routes (solo requieren el token de API)
+Route::prefix('ollama-tasks')->middleware('ollama.token')->group(function () {
+    Route::post('/', [OllamaTaskerController::class, 'createTask']);
+    Route::get('/{id}', [OllamaTaskerController::class, 'getTaskResult']);
+});
+
+// WhatsApp Proxy API Routes (requieren el token de WhatsApp)
+Route::prefix('whatsapp')->middleware('whatsapp.token')->group(function () {
+    // Sesiones
+    Route::get('/sessions', [\App\Http\Controllers\Api\WhatsAppProxyController::class, 'getSessions']);
+    Route::post('/start-session', [\App\Http\Controllers\Api\WhatsAppProxyController::class, 'startSession']);
+    
+    // Mensajes
+    Route::post('/send-message', [\App\Http\Controllers\Api\WhatsAppProxyController::class, 'sendMessage']);
+    Route::post('/send-media', [\App\Http\Controllers\Api\WhatsAppProxyController::class, 'sendMedia']);
+    
+    // Chats y mensajes
+    Route::get('/chats', [\App\Http\Controllers\Api\WhatsAppProxyController::class, 'getChats']);
+    Route::get('/messages', [\App\Http\Controllers\Api\WhatsAppProxyController::class, 'getMessages']);
+    
+    // Multimedia
+    Route::get('/download-media', [\App\Http\Controllers\Api\WhatsAppProxyController::class, 'downloadMedia']);
+    
+    // Contactos
+    Route::get('/contact-info', [\App\Http\Controllers\Api\WhatsAppProxyController::class, 'getContactInfo']);
+});
+
+// Telegram Proxy API Routes (requieren el token de Telegram)
+Route::prefix('telegram')->middleware('telegram.token')->group(function () {
+    // Mensajes
+    Route::post('/send-message', [\App\Http\Controllers\Api\TelegramProxyController::class, 'sendMessage']);
+    Route::post('/send-photo', [\App\Http\Controllers\Api\TelegramProxyController::class, 'sendPhoto']);
+    
+    // Actualizaciones
+    Route::get('/updates', [\App\Http\Controllers\Api\TelegramProxyController::class, 'getUpdates']);
+    
+    // Información del bot
+    Route::get('/me', [\App\Http\Controllers\Api\TelegramProxyController::class, 'getMe']);
+    
+    // Chats
+    Route::get('/chats', [\App\Http\Controllers\Api\TelegramProxyController::class, 'getChats']);
+    Route::get('/chat-info', [\App\Http\Controllers\Api\TelegramProxyController::class, 'getChatInfo']);
+    Route::get('/chat-messages', [\App\Http\Controllers\Api\TelegramProxyController::class, 'getChatMessages']);
+    
+    // Contactos
+    Route::get('/contacts', [\App\Http\Controllers\Api\TelegramProxyController::class, 'getContacts']);
+});
+
+// authenticated routes (requieren autenticación de usuario)
 Route::group(['middleware' => 'auth:sanctum'], function () {
     Route::post('resend-verification', [AuthController::class, 'resendVerification'])
         ->middleware('throttle:6,1');
     Route::get('user', [AuthController::class, 'user']);
     Route::post('logout', [AuthController::class, 'logout']);
-
-    // Ollama Tasker API Routes
-    Route::post('ollama-tasks', [OllamaTaskerController::class, 'createTask']);
-    Route::get('ollama-tasks/{id}', [OllamaTaskerController::class, 'getTaskResult']);
 
     Route::apiSingleton('env', EnvironmentController::class);
     Route::group(['middleware' => 'verified', 'as' => 'api.v1.'], function () {

@@ -9,7 +9,7 @@ return [
                 'description' => 'Documentación de la API de Ollama Tasker',
                 'version' => '1.0.0',
                 'contact' => [
-                    'email' => 'info@appnetdeveloper.com'
+                    'email' => 'info@appnet.dev'
                 ],
             ],
             'routes' => [

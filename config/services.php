@@ -31,6 +31,18 @@ return [
         'region' => env('AWS_DEFAULT_REGION', 'us-east-1'),
     ],
 
+    'whatsapp' => [
+        'api_token' => env('WHATSAPP_API_TOKEN'),
+        'server_id' => env('WHATSAPP_ID_SERVER', 2),
+        'url' => env('WATSHAPP_URL', 'http://localhost:3005')
+    ],
+
+    'telegram' => [
+        'api_token' => env('TELEGRAM_API_TOKEN'),
+        'server_id' => env('TELEGRAM_ID_SERVER', 2),
+        'url' => env('TELEGRAM_URL', 'http://localhost:3006')
+    ],
+
     'facebook' => [
         'client_id' => env('FACEBOOK_CLIENT_ID'),
         'client_secret' => env('FACEBOOK_CLIENT_SECRET'),
@@ -47,6 +59,11 @@ return [
         'client_id' => env('LINKEDIN_CLIENT_ID'),
         'client_secret' => env('LINKEDIN_CLIENT_SECRET'),
         'redirect' => env('LINKEDIN_REDIRECT'),
+    ],
+
+    'ollama' => [
+        'api_token' => env('OLLAMA_TASKER_API_TOKEN'),
+        'model_default' => env('OLLAMA_MODEL_DEFAULT', 'lgemma3:4b-it-qat'),
     ],
 
     'google' => [

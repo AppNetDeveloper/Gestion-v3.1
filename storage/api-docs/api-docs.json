@@ -4,13 +4,13 @@
         "title": "API Documentation",
         "description": "Documentación completa de la API del sistema",
         "contact": {
-            "email": "info@appnetdeveloper.com"
+            "email": "info@appnet.dev"
         },
         "version": "1.0.0"
     },
     "servers": [
         {
-            "url": "http://my-default-host.com",
+            "url": "https://app.appnet.dev",
             "description": "API Server"
         }
     ],
@@ -21,7 +21,7 @@
                     "Ollama Tasks"
                 ],
                 "summary": "Crear una nueva tarea de Ollama",
-                "description": "Crea una nueva tarea asíncrona para procesar un prompt con Ollama",
+                "description": "Crea una nueva tarea asíncrona para procesar un prompt con Ollama. Requiere autenticación por token de API.",
                 "operationId": "createTask",
                 "requestBody": {
                     "description": "Datos de la tarea a crear",
@@ -55,7 +55,12 @@
                             }
                         }
                     }
-                }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
             }
         },
         "/api/ollama-tasks/{id}": {
@@ -64,7 +69,7 @@
                     "Ollama Tasks"
                 ],
                 "summary": "Obtener el resultado de una tarea",
-                "description": "Obtiene el estado y resultado de una tarea de Ollama por su ID",
+                "description": "Obtiene el estado y resultado de una tarea de Ollama por su ID. Requiere autenticación por token de API.",
                 "operationId": "getTaskResult",
                 "parameters": [
                     {
@@ -98,7 +103,12 @@
                             }
                         }
                     }
-                }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
             }
         },
         "/api/scraping/callback": {
@@ -408,7 +418,482 @@
                 ]
             }
         },
+        "/api/telegram/send-message": {
+            "post": {
+                "tags": [
+                    "Telegram"
+                ],
+                "summary": "Enviar un mensaje de texto",
+                "operationId": "3f3c64434ac7ac67701c3c53ceddee5d",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "required": [
+                                    "chat_id",
+                                    "text"
+                                ],
+                                "properties": {
+                                    "chat_id": {
+                                        "type": "string",
+                                        "example": "123456789"
+                                    },
+                                    "text": {
+                                        "type": "string",
+                                        "example": "Hola, esto es un mensaje de prueba"
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Mensaje enviado correctamente"
+                    },
+                    "400": {
+                        "description": "Error de validación"
+                    },
+                    "500": {
+                        "description": "Error interno del servidor"
+                    }
+                }
+            }
+        },
+        "/api/telegram/updates": {
+            "get": {
+                "tags": [
+                    "Telegram"
+                ],
+                "summary": "Obtener actualizaciones de mensajes",
+                "operationId": "04a46d5be9264bc29130a9e76aab423f",
+                "parameters": [
+                    {
+                        "name": "offset",
+                        "in": "query",
+                        "description": "Identificador de la última actualización recibida",
+                        "required": false,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    },
+                    {
+                        "name": "limit",
+                        "in": "query",
+                        "description": "Número máximo de actualizaciones a devolver",
+                        "required": false,
+                        "schema": {
+                            "type": "integer",
+                            "default": 100,
+                            "maximum": 100
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Lista de actualizaciones"
+                    },
+                    "500": {
+                        "description": "Error interno del servidor"
+                    }
+                }
+            }
+        },
+        "/api/telegram/send-photo": {
+            "post": {
+                "tags": [
+                    "Telegram"
+                ],
+                "summary": "Enviar una foto",
+                "operationId": "372245475bae0ecd15c59fa0a6810207",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "required": [
+                                    "chat_id",
+                                    "photo"
+                                ],
+                                "properties": {
+                                    "chat_id": {
+                                        "type": "string",
+                                        "example": "123456789"
+                                    },
+                                    "photo": {
+                                        "type": "string",
+                                        "format": "url",
+                                        "example": "https://example.com/photo.jpg"
+                                    },
+                                    "caption": {
+                                        "type": "string",
+                                        "example": "Descripción de la foto"
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Foto enviada correctamente"
+                    },
+                    "400": {
+                        "description": "Error de validación"
+                    },
+                    "500": {
+                        "description": "Error interno del servidor"
+                    }
+                }
+            }
+        },
+        "/api/telegram/me": {
+            "get": {
+                "tags": [
+                    "Telegram"
+                ],
+                "summary": "Obtener información del bot",
+                "operationId": "6722d0ef26c543fef464a38f0357f75b",
+                "responses": {
+                    "200": {
+                        "description": "Información del bot"
+                    },
+                    "500": {
+                        "description": "Error interno del servidor"
+                    }
+                }
+            }
+        },
+        "/api/telegram/chats": {
+            "get": {
+                "tags": [
+                    "Telegram"
+                ],
+                "summary": "Obtener la lista de chats",
+                "operationId": "7ef94c4e07598c522a384676674aa39b",
+                "parameters": [
+                    {
+                        "name": "limit",
+                        "in": "query",
+                        "description": "Número máximo de chats a devolver",
+                        "required": false,
+                        "schema": {
+                            "type": "integer",
+                            "default": 100,
+                            "maximum": 200
+                        }
+                    },
+                    {
+                        "name": "offset",
+                        "in": "query",
+                        "description": "Desplazamiento para la paginación",
+                        "required": false,
+                        "schema": {
+                            "type": "integer",
+                            "default": 0
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Lista de chats obtenida correctamente"
+                    },
+                    "500": {
+                        "description": "Error interno del servidor"
+                    }
+                }
+            }
+        },
+        "/api/telegram/chat-messages": {
+            "get": {
+                "tags": [
+                    "Telegram"
+                ],
+                "summary": "Obtener mensajes de un chat específico",
+                "operationId": "52c1e4e521c93a3deeaa6d4e4b00d0cc",
+                "parameters": [
+                    {
+                        "name": "chat_id",
+                        "in": "query",
+                        "description": "ID del chat",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "limit",
+                        "in": "query",
+                        "description": "Número máximo de mensajes a devolver",
+                        "required": false,
+                        "schema": {
+                            "type": "integer",
+                            "default": 50,
+                            "maximum": 100
+                        }
+                    },
+                    {
+                        "name": "offset",
+                        "in": "query",
+                        "description": "ID del mensaje a partir del cual obtener los mensajes",
+                        "required": false,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Mensajes del chat obtenidos correctamente"
+                    },
+                    "400": {
+                        "description": "Error de validación"
+                    },
+                    "500": {
+                        "description": "Error interno del servidor"
+                    }
+                }
+            }
+        },
+        "/api/telegram/contacts": {
+            "get": {
+                "tags": [
+                    "Telegram"
+                ],
+                "summary": "Obtener la lista de contactos",
+                "operationId": "3e60e42da76ed4b0c2eb970b199e51dc",
+                "responses": {
+                    "200": {
+                        "description": "Lista de contactos obtenida correctamente"
+                    },
+                    "500": {
+                        "description": "Error interno del servidor"
+                    }
+                }
+            }
+        },
+        "/api/telegram/chat-info": {
+            "get": {
+                "tags": [
+                    "Telegram"
+                ],
+                "summary": "Obtener información de un chat específico",
+                "operationId": "efaaa9de053705ede3a5438a41d8a1ca",
+                "parameters": [
+                    {
+                        "name": "chat_id",
+                        "in": "query",
+                        "description": "ID del chat",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Información del chat obtenida correctamente"
+                    },
+                    "400": {
+                        "description": "Error de validación"
+                    },
+                    "500": {
+                        "description": "Error interno del servidor"
+                    }
+                }
+            }
+        },
+        "/api/whatsapp/send-message": {
+            "post": {
+                "tags": [
+                    "WhatsApp"
+                ],
+                "summary": "Enviar mensaje de WhatsApp",
+                "operationId": "7a6cec1544854c927e0a99ff45143865",
+                "parameters": [
+                    {
+                        "name": "server_id",
+                        "in": "query",
+                        "description": "ID del servidor de WhatsApp",
+                        "required": false,
+                        "schema": {
+                            "type": "integer",
+                            "default": 2
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "required": [
+                                    "to",
+                                    "message"
+                                ],
+                                "properties": {
+                                    "to": {
+                                        "type": "string",
+                                        "example": "34612345678"
+                                    },
+                                    "message": {
+                                        "type": "string",
+                                        "example": "Hola, esto es un mensaje de prueba"
+                                    },
+                                    "options": {
+                                        "type": "object",
+                                        "example": {
+                                            "delay": 1000
+                                        }
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Mensaje enviado correctamente"
+                    },
+                    "400": {
+                        "description": "Error de validación"
+                    },
+                    "500": {
+                        "description": "Error interno del servidor"
+                    }
+                }
+            }
+        },
+        "/api/whatsapp/sessions": {
+            "get": {
+                "tags": [
+                    "WhatsApp"
+                ],
+                "summary": "Obtener sesiones de WhatsApp",
+                "operationId": "cfde2cb294333df012ca89bb56bc8c11",
+                "responses": {
+                    "200": {
+                        "description": "Lista de sesiones"
+                    },
+                    "500": {
+                        "description": "Error interno del servidor"
+                    }
+                }
+            }
+        },
+        "/api/whatsapp/start-session": {
+            "post": {
+                "tags": [
+                    "WhatsApp"
+                ],
+                "summary": "Iniciar sesión de WhatsApp",
+                "operationId": "f82578fc5d6beae09a1c27e242e7e2c2",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "required": [
+                                    "session_id"
+                                ],
+                                "properties": {
+                                    "session_id": {
+                                        "type": "string",
+                                        "example": "my-session-1"
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Sesión iniciada correctamente"
+                    },
+                    "400": {
+                        "description": "Error de validación"
+                    },
+                    "500": {
+                        "description": "Error interno del servidor"
+                    }
+                }
+            }
+        },
+        "/api/whatsapp/chats": {
+            "get": {
+                "tags": [
+                    "WhatsApp"
+                ],
+                "summary": "Obtener lista de chats",
+                "operationId": "d75b9ee8d144486eb254062ea8166cec",
+                "parameters": [
+                    {
+                        "name": "server_id",
+                        "in": "query",
+                        "description": "ID del servidor de WhatsApp",
+                        "required": false,
+                        "schema": {
+                            "type": "integer",
+                            "default": 2
+                        }
+                    },
+                    {
+                        "name": "limit",
+                        "in": "query",
+                        "description": "Límite de chats a devolver",
+                        "required": false,
+                        "schema": {
+                            "type": "integer",
+                            "default": 50
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Lista de chats"
+                    }
+                }
+            }
+        },
         "/api/whatsapp/messages": {
+            "get": {
+                "tags": [
+                    "WhatsApp"
+                ],
+                "summary": "Obtener mensajes de un chat",
+                "operationId": "50c4b9fe0a0420de8006ec8d9a59cddc",
+                "parameters": [
+                    {
+                        "name": "chat_id",
+                        "in": "query",
+                        "description": "ID del chat",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "limit",
+                        "in": "query",
+                        "description": "Límite de mensajes a devolver",
+                        "required": false,
+                        "schema": {
+                            "type": "integer",
+                            "default": 50
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Lista de mensajes del chat"
+                    }
+                }
+            },
             "post": {
                 "tags": [
                     "Whatsapp Message"
@@ -508,6 +993,115 @@
                                 }
                             }
                         }
+                    }
+                }
+            }
+        },
+        "/api/whatsapp/download-media": {
+            "get": {
+                "tags": [
+                    "WhatsApp"
+                ],
+                "summary": "Descargar un archivo multimedia",
+                "operationId": "16b422c1495757defd20fbd87e02beb7",
+                "parameters": [
+                    {
+                        "name": "message_id",
+                        "in": "query",
+                        "description": "ID del mensaje que contiene el medio",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Archivo multimedia descargado"
+                    }
+                }
+            }
+        },
+        "/api/whatsapp/send-media": {
+            "post": {
+                "tags": [
+                    "WhatsApp"
+                ],
+                "summary": "Enviar un archivo multimedia",
+                "operationId": "6ee0c22b9ddc52df78ad669884938457",
+                "parameters": [
+                    {
+                        "name": "server_id",
+                        "in": "query",
+                        "description": "ID del servidor de WhatsApp",
+                        "required": false,
+                        "schema": {
+                            "type": "integer",
+                            "default": 2
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "required": [
+                                    "to",
+                                    "media_url",
+                                    "caption"
+                                ],
+                                "properties": {
+                                    "to": {
+                                        "type": "string",
+                                        "example": "34612345678"
+                                    },
+                                    "media_url": {
+                                        "type": "string",
+                                        "example": "https://example.com/image.jpg"
+                                    },
+                                    "caption": {
+                                        "type": "string",
+                                        "example": "Mira esta imagen"
+                                    },
+                                    "filename": {
+                                        "type": "string",
+                                        "example": "imagen.jpg"
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Archivo multimedia enviado correctamente"
+                    }
+                }
+            }
+        },
+        "/api/whatsapp/contact-info": {
+            "get": {
+                "tags": [
+                    "WhatsApp"
+                ],
+                "summary": "Obtener información de un contacto",
+                "operationId": "99055e139707917631746251c5dbf2fc",
+                "parameters": [
+                    {
+                        "name": "contact_id",
+                        "in": "query",
+                        "description": "ID o número de teléfono del contacto",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Información del contacto"
                     }
                 }
             }
@@ -751,20 +1345,29 @@
         "securitySchemes": {
             "bearerAuth": {
                 "type": "http",
+                "name": "Authorization",
                 "bearerFormat": "JWT",
                 "scheme": "bearer"
             },
-            "apiToken": {
+            "whatsappToken": {
                 "type": "apiKey",
-                "name": "token",
+                "name": "Authorization",
                 "in": "header"
             }
         }
     },
     "tags": [
         {
+            "name": "WhatsApp",
+            "description": "Endpoints para interactuar con la API de WhatsApp"
+        },
+        {
             "name": "Telegram",
-            "description": "Endpoints para manejar mensajes de Telegram"
+            "description": "Endpoints para interactuar con la API de Telegram"
+        },
+        {
+            "name": "Ollama Tasks",
+            "description": "Endpoints para gestionar tareas de Ollama"
         },
         {
             "name": "Scraping",
@@ -773,10 +1376,6 @@
         {
             "name": "Server Monitor",
             "description": "Endpoints para monitoreo de servidores"
-        },
-        {
-            "name": "Ollama Tasks",
-            "description": "Ollama Tasks"
         },
         {
             "name": "Whatsapp Message",

@@ -9,7 +9,13 @@ return [
                 'description' => 'Documentación de la API de Ollama Tasker',
                 'version' => '1.0.0',
                 'contact' => [
-                    'email' => 'info@appnetdeveloper.com'
+                    'email' => 'info@appnet.dev'
+                ],
+            ],
+            'servers' => [
+                [
+                    'url' => config('app.url'),
+                    'description' => 'Servidor de la API',
                 ],
             ],
             'routes' => [
@@ -23,6 +29,33 @@ return [
                     'oauth2_callback' => [],
                 ],
             ],
+            'security' => [
+                ['bearerAuth' => []],
+                ['whatsappToken' => []],
+                ['telegramToken' => []]
+            ],
+            'securityDefinitions' => [
+                'bearerAuth' => [
+                    'type' => 'http',
+                    'scheme' => 'bearer',
+                    'bearerFormat' => 'JWT',
+                    'name' => 'Authorization',
+                    'in' => 'header',
+                    'description' => 'Ingresa el token de autenticación JWT con el prefijo Bearer',
+                ],
+                'whatsappToken' => [
+                    'type' => 'apiKey',
+                    'name' => 'Authorization',
+                    'in' => 'header',
+                    'description' => 'Ingresa el token de la API de WhatsApp',
+                ],
+                'telegramToken' => [
+                    'type' => 'apiKey',
+                    'name' => 'Authorization',
+                    'in' => 'header',
+                    'description' => 'Ingresa el token de la API de Telegram',
+                ]
+            ],
             'paths' => [
                 'docs' => storage_path('api-docs'),
                 'docs_json' => 'api-docs.json',
@@ -31,13 +64,20 @@ return [
                 'base' => env('L5_SWAGGER_BASE_PATH', null),
                 'excludes' => [],
                 'format_to_use_for_docs' => env('L5_FORMAT_TO_USE_FOR_DOCS', 'json'),
+                'swagger' => '3.0',
+                'openapi' => '3.0.0',
+                'security' => [
+                    ['bearerAuth' => []]
+                ],
                 'annotations' => [
                     base_path('app/Http/Controllers/Api'),
                     base_path('app/Http/Controllers'),
                 ],
                 'paths' => [
                     base_path('app/Http/Controllers/Api/WhatsappMessageController.php'),
+                    base_path('app/Http/Controllers/Api/WhatsAppProxyController.php'),
                     base_path('app/Http/Controllers/Api/TelegramController.php'),
+                    base_path('app/Http/Controllers/Api/TelegramProxyController.php'),
                     base_path('app/Http/Controllers/Api/ScrapingCallbackController.php'),
                     base_path('app/Http/Controllers/Api/ServerMonitorController.php'),
                     base_path('app/Http/Controllers/Api/SwaggerController.php'),

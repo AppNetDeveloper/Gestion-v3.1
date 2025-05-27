@@ -13,22 +13,35 @@ use Illuminate\Support\Facades\Validator;
 
 /**
  * @OA\Info(
- *     version="1.0.0",
  *     title="Ollama Tasker API",
+ *     version="1.0.0",
  *     description="API para gestionar tareas asíncronas con Ollama",
  *     @OA\Contact(
- *         email="info@appnetdeveloper.com"
+ *         email="info@appnet.dev"
  *     )
  * )
  * 
  * @OA\Server(
- *     url=L5_SWAGGER_CONST_HOST,
+ *     url="https://app.appnet.dev",
  *     description="API Server"
  * )
  * 
  * @OA\Tag(
  *     name="Ollama Tasks",
  *     description="Operaciones para gestionar tareas de Ollama"
+ * )
+ * 
+ * @OA\SecurityScheme(
+ *     type="apiKey",
+ *     in="header",
+ *     securityScheme="api_key",
+ *     name="Authorization"
+ * )
+ * 
+ * @OA\Security(
+ *     {
+ *         "api_key": {}
+ *     }
  * )
  */
 
@@ -91,8 +104,9 @@ class OllamaTaskerController extends Controller
      *     path="/api/ollama-tasks",
      *     tags={"Ollama Tasks"},
      *     summary="Crear una nueva tarea de Ollama",
-     *     description="Crea una nueva tarea asíncrona para procesar un prompt con Ollama",
+     *     description="Crea una nueva tarea asíncrona para procesar un prompt con Ollama. Requiere autenticación por token de API.",
      *     operationId="createTask",
+     *     security={{"bearerAuth":{}}},
      *     @OA\RequestBody(
      *         required=true,
      *         description="Datos de la tarea a crear",
@@ -176,8 +190,9 @@ class OllamaTaskerController extends Controller
      *     path="/api/ollama-tasks/{id}",
      *     tags={"Ollama Tasks"},
      *     summary="Obtener el resultado de una tarea",
-     *     description="Obtiene el estado y resultado de una tarea de Ollama por su ID",
+     *     description="Obtiene el estado y resultado de una tarea de Ollama por su ID. Requiere autenticación por token de API.",
      *     operationId="getTaskResult",
+     *     security={{"bearerAuth":{}}},
      *     @OA\Parameter(
      *         name="id",
      *         in="path",
