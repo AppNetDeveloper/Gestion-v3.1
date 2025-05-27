@@ -58,7 +58,7 @@
         <div class="grid sm:grid-cols-2 xl:grid-cols-4 gap-7">
             {{-- Welcome Card --}}
             <div class="dasboardCard bg-white dark:bg-slate-800 rounded-md px-5 py-4 flex items-center justify-between bg-center bg-cover bg-no-repeat" style="background-image:url('{{ asset('/images/ecommerce-wid-bg.png') }}')">
-                <div class="w-full"> {{-- Adjusted width --}}
+                <div class="w-full">
                     <h3 class="font-Inter font-normal text-white text-lg">
                         {{ __('Good evening') }}, {{-- Consider dynamic greeting based on time --}}
                     </h3>
@@ -66,22 +66,21 @@
                         {{ auth()->user()?->name ?? 'Invitado' }}
                     </h3>
                     <p class="font-Inter text-base text-white font-normal">
-                        {{ __('Welcome to AppNet Developer') }} {{-- Updated welcome message --}}
+                        {{ __('Welcome to AppNet Developer') }}
                     </p>
                 </div>
             </div>
             {{-- Total Revenue Card --}}
             <div class="bg-white dark:bg-slate-800 rounded-md px-5 py-4 flex justify-between items-center"> {{-- Use flex for alignment --}}
                 <div class="pl-14 relative">
-                    <div class="w-10 h-10 rounded-full bg-sky-100 text-sky-800 text-base flex items-center justify-center absolute left-0 top-1/2 -translate-y-1/2"> {{-- Centered icon --}}
+                    <div class="w-10 h-10 rounded-full bg-sky-100 text-sky-800 text-base flex items-center justify-center absolute left-0 top-1/2 -translate-y-1/2">
                         <iconify-icon icon="ph:shopping-cart-simple-bold"></iconify-icon>
                     </div>
                     <h4 class="font-Inter font-normal text-sm text-textColor dark:text-white pb-1">
                         {{ __('Total revenue') }}
                     </h4>
                     <p class="font-Inter text-xl text-black dark:text-white font-medium">
-                        {{-- Use 'yearlyRevenue' from unified data --}}
-                        {{ ($data['yearlyRevenue']['currencySymbol'] ?? '$') . ($data['yearlyRevenue']['total'] ?? '0,00') }}
+                        {{ '€' . ($totalSales ?? '0,00') }}
                     </p>
                 </div>
                 <div class="flex-none w-24"> {{-- Ensure chart area doesn't shrink --}}
@@ -142,49 +141,67 @@
                         {{ __('Statistics') }}
                     </h3>
                     <div class="grid md:grid-cols-2 grid-cols-1 gap-4 p-6">
-                        {{-- Orders --}}
+                        {{-- Pedidos --}}
                         <div class="statisticsChartCard">
                             <div>
-                                <h5 class="text-sm text-slate-600 dark:text-slate-300 mb-[6px]"> {{ __('Orders') }} </h5>
-                                <h3 class="text-lg text-slate-900 dark:text-slate-300 font-medium mb-[6px]">{{ $data['lastWeekOrder']['total'] ?? 'N/A' }}</h3>
+                                <h5 class="text-sm text-slate-600 dark:text-slate-300 mb-[6px]">{{ $stats['sales']['label'] ?? 'Pedidos' }}</h5>
+                                <h3 class="text-lg text-slate-900 dark:text-slate-300 font-medium mb-[6px]">{{ $stats['sales']['value'] ?? '0' }}</h3>
                                 <p class="font-normal text-xs text-slate-600 dark:text-slate-300">
-                                    <span class="{{ ($data['lastWeekOrder']['preSymbol'] ?? '') == '+' ? 'text-success-500' : 'text-danger-500' }}">
-                                        {{ $data['lastWeekOrder']['preSymbol'] ?? '' }}{{ $data['lastWeekOrder']['percentage'] ?? 0 }}%
+                                    <span class="{{ ($stats['sales']['trend'] ?? '') == 'up' ? 'text-success-500' : 'text-danger-500' }}">
+                                        {{ ($stats['sales']['trend'] == 'up' ? '+' : '') . ($stats['sales']['growth'] ?? 0) }}%
                                     </span>
                                     {{ __('From last week.') }}
                                 </p>
                             </div>
                             <div id="columnChart" class="mt-1"></div> {{-- Target for orders column chart --}}
                         </div>
-                        {{-- Profit --}}
+                        {{-- Ingresos --}}
                         <div class="statisticsChartCard">
                             <div>
-                                <h5 class="text-sm text-slate-600 dark:text-slate-300 mb-[6px]">{{ __('Profit') }}</h5>
+                                <h5 class="text-sm text-slate-600 dark:text-slate-300 mb-[6px]">{{ $stats['revenue']['label'] ?? 'Ingresos' }}</h5>
                                 <h3 class="text-lg text-slate-900 dark:text-slate-300 font-medium mb-[6px]">
-                                    {{ $data['lastWeekProfit']['total'] ?? 'N/A' }}
+                                    {{ ($stats['revenue']['prefix'] ?? '') . ($stats['revenue']['value'] ?? '0,00') }}
                                 </h3>
                                 <p class="font-normal text-xs text-slate-600 dark:text-slate-300">
-                                    <span class="{{ ($data['lastWeekProfit']['preSymbol'] ?? '') == '+' ? 'text-success-500' : 'text-danger-500' }}">
-                                       {{ $data['lastWeekProfit']['preSymbol'] ?? '' }}{{ $data['lastWeekProfit']['percentage'] ?? 0 }}%
+                                    <span class="{{ ($stats['revenue']['trend'] ?? '') == 'up' ? 'text-success-500' : 'text-danger-500' }}">
+                                        {{ ($stats['revenue']['trend'] == 'up' ? '+' : '') . ($stats['revenue']['growth'] ?? 0) }}%
                                     </span>
                                     {{ __('From last week.') }}
                                 </p>
                             </div>
-                            <div id="lineChart" class="mt-1"></div> {{-- Target for profit line chart --}}
+                            <div id="revenueChart" class="mt-1"></div> {{-- Target for revenue chart --}}
                         </div>
-                        {{-- Overview Donut --}}
-                        <div class="statisticsChartCard py-4 md:col-span-2 md:flex items-center justify-between">
+                        {{-- Beneficio --}}
+                        <div class="statisticsChartCard">
                             <div>
-                                <h5 class="text-sm text-slate-600 dark:text-slate-300 mb-[6px]">{{ $data['lastWeekOverview']['title'] ?? 'Overview' }}</h5>
-                                <h3 class="text-lg text-slate-900 dark:text-slate-300 font-medium mb-[6px]">{{ $data['lastWeekOverview']['amount'] ?? 'N/A' }}</h3>
+                                <h5 class="text-sm text-slate-600 dark:text-slate-300 mb-[6px]">{{ $stats['profit']['label'] ?? 'Beneficio' }}</h5>
+                                <h3 class="text-lg text-slate-900 dark:text-slate-300 font-medium mb-[6px]">
+                                    {{ ($stats['profit']['prefix'] ?? '') . ($stats['profit']['value'] ?? '0,00') }}
+                                </h3>
                                 <p class="font-normal text-xs text-slate-600 dark:text-slate-300">
-                                    <span class="text-indigo-500"> {{-- Consistent color --}}
-                                        {{ number_format(($data['lastWeekOverview']['percentage'] ?? 0) * 100, 1) }}%
+                                    <span class="{{ ($stats['profit']['trend'] ?? '') == 'up' ? 'text-success-500' : 'text-danger-500' }}">
+                                        {{ ($stats['profit']['trend'] == 'up' ? '+' : '') . ($stats['profit']['growth'] ?? 0) }}%
                                     </span>
-                                    {{ __('From last Week') }}
+                                    {{ __('From last week.') }}
                                 </p>
                             </div>
-                            <div id="donutChart"></div> {{-- Target for overview donut chart --}}
+                            <div id="profitChart" class="mt-1"></div> {{-- Target for profit chart --}}
+                        </div>
+                        {{-- Crecimiento --}}
+                        <div class="statisticsChartCard">
+                            <div>
+                                <h5 class="text-sm text-slate-600 dark:text-slate-300 mb-[6px]">Crecimiento</h5>
+                                <h3 class="text-lg text-slate-900 dark:text-slate-300 font-medium mb-[6px]">
+                                    {{ ($stats['sales']['trend'] == 'up' ? '+' : '') . ($stats['sales']['growth'] ?? 0) }}%
+                                </h3>
+                                <p class="font-normal text-xs text-slate-600 dark:text-slate-300">
+                                    <span class="{{ ($stats['sales']['trend'] ?? '') == 'up' ? 'text-success-500' : 'text-danger-500' }}">
+                                        {{ ($stats['sales']['trend'] == 'up' ? '+' : '') . ($stats['sales']['growth'] ?? 0) }}%
+                                    </span>
+                                    {{ __('From last week.') }}
+                                </p>
+                            </div>
+                            <div id="growthChart" class="mt-1"></div> {{-- Target for growth chart --}}
                         </div>
                     </div>
                 </div>
