@@ -193,146 +193,92 @@
 
         {{-- Customer & Orders Row --}}
         <div class="grid grid-cols-12 gap-6">
-            {{-- Top Customer Area (from Dashboard 1 - structure kept, data source is $topCustomers) --}}
+            {{-- Total de Ventas --}}
             <div class="xl:col-span-6 col-span-12">
                 <div class="card h-full">
                     <div class="card-header flex justify-between items-center">
-                        <h4 class="card-title">Top Customers</h4>
-                        {{-- Dropdown can be added back if needed --}}
+                        <h4 class="card-title">{{ __('Total Sales') }}</h4>
                     </div>
                     <div class="card-body p-6">
-                        {{-- Check if $topCustomers exists and is not empty --}}
-                        {{-- Make sure $topCustomers is passed as an array or Traversable from controller --}}
-                        @if(isset($topCustomers) && (is_array($topCustomers) || $topCustomers instanceof \Illuminate\Support\Collection) && count($topCustomers) > 0)
-                            <div class="grid md:grid-cols-3 grid-cols-1 gap-5 pb-2">
-                                {{-- Display top 3 customers prominently --}}
-                                @foreach(collect($topCustomers)->take(3) as $customer) {{-- Ensure it's a collection for take() --}}
-                                <div class="relative z-[1] text-center p-4 rounded before:w-full before:h-[calc(100%-60px)] before:absolute before:left-0 before:top-[60px] before:rounded before:z-[-1] before:bg-opacity-[0.1] before:bg-{{ $customer['backgroundColor'] ?? 'info' }}-500">
-                                    <div class="h-[70px] w-[70px] rounded-full mx-auto mb-4 relative {{ $customer['isMvpUser'] ? 'ring-2 ring-amber-500' : '' }}">
-                                        @if($customer['isMvpUser'])
-                                        <span class="crown absolute -top-[24px] left-1/2 -translate-x-1/2">
-                                            <img src="{{ asset('images/icon/crown.svg') }}" alt="MVP">
-                                        </span>
-                                        @endif
-                                        <img src="{{ asset($customer['photo'] ?? 'images/users/user-1.jpg') }}" alt="{{ $customer['name'] }}" class="w-full h-full rounded-full object-cover">
-                                        <span class="h-[27px] w-[27px] absolute right-0 bottom-0 rounded-full bg-[#FFC155] border border-white flex flex-col items-center justify-center text-white text-xs font-medium">
-                                            {{ $customer['serialNo'] }}
-                                        </span>
-                                    </div>
-                                    <h4 class="text-sm text-slate-600 dark:text-slate-300 font-semibold mb-4">
-                                        {{ $customer['name'] }}
-                                    </h4>
-                                    <div class="inline-block bg-slate-900 dark:bg-slate-700 text-white px-[10px] py-[6px] text-xs font-medium rounded-full min-w-[60px]">
-                                        {{ $customer['totalPoint'] }} pts
-                                    </div>
-                                    <div>
-                                        <div class="flex justify-between text-sm font-normal dark:text-slate-300 mb-3 mt-4">
-                                            <span>Progress</span>
-                                            <span class="font-normal">{{ $customer['progressBarPoint'] }}%</span>
-                                        </div>
-                                        <div class="w-full bg-slate-200 dark:bg-slate-700 h-2 rounded-xl overflow-hidden">
-                                            <div class="progress-bar bg-{{ $customer['progressBarColor'] ?? 'info' }}-500 h-full rounded-xl" style="width: {{ $customer['progressBarPoint'] }}%;"></div>
-                                        </div>
-                                    </div>
+                        @if(isset($data['totalSales']))
+                            <div class="flex flex-col items-center justify-center h-full">
+                                <div class="text-4xl font-bold text-primary-600 dark:text-primary-400 mb-2">
+                                    {{ number_format($data['totalSales']['total_amount'], 2) }} €
                                 </div>
-                                @endforeach
-                            </div>
-                             {{-- Display remaining customers in a list --}}
-                            @if(count($topCustomers) > 3)
-                            <div class="grid grid-cols-1 gap-4 mt-5">
-                                @foreach(collect($topCustomers)->slice(3) as $customer) {{-- Ensure it's a collection for slice() --}}
-                                <div class="relative z-[1] p-4 rounded md:flex items-center bg-slate-50 dark:bg-slate-900 md:space-x-4 rtl:space-x-reverse md:space-y-0 space-y-3">
-                                    <div class="flex-none h-10 w-10 rounded-full relative">
-                                        <img src="{{ asset($customer['photo'] ?? 'images/users/user-1.jpg') }}" alt="{{ $customer['name'] }}" class="w-full h-full rounded-full object-cover">
-                                        <span class="h-4 w-4 absolute right-0 bottom-0 rounded-full bg-[#FFC155] border border-white flex flex-col items-center justify-center text-white text-[10px] font-medium">
-                                            {{ $customer['serialNo'] }}
-                                        </span>
-                                    </div>
-                                    <h4 class="text-sm text-slate-600 dark:text-slate-300 font-semibold flex-none md:w-32">
-                                        {{ $customer['name'] }}
-                                    </h4>
-                                    <div class="inline-block text-center bg-slate-900 dark:bg-slate-700 text-white px-[10px] py-[6px] text-xs font-medium rounded-full min-w-[60px]">
-                                        {{ $customer['totalPoint'] }} pts
-                                    </div>
-                                    <div class="flex-1">
-                                        <div class="flex justify-between text-sm font-normal dark:text-slate-300 mb-1">
-                                            <span>Progress</span>
-                                            <span class="font-normal">{{ $customer['progressBarPoint'] }}%</span>
-                                        </div>
-                                        <div class="w-full bg-slate-200 dark:bg-slate-700 h-2 rounded-xl overflow-hidden">
-                                            <div class="progress-bar bg-{{ $customer['progressBarColor'] ?? 'info' }}-500 h-full rounded-xl" style="width: {{ $customer['progressBarPoint'] }}%;"></div>
-                                        </div>
-                                    </div>
+                                <div class="text-sm text-slate-500 dark:text-slate-400">
+                                    {{ $data['totalSales']['total_invoices'] }} {{ trans_choice('invoice.invoice', $data['totalSales']['total_invoices']) }}
                                 </div>
-                                @endforeach
+                                <div class="mt-4 w-full bg-slate-200 dark:bg-slate-700 h-2 rounded-full overflow-hidden">
+                                    <div class="h-full rounded-full bg-primary-500" style="width: 100%"></div>
+                                </div>
+                                <div class="mt-2 text-xs text-slate-500">
+                                    {{ __('Last 12 months') }}
+                                </div>
                             </div>
-                            @endif
                         @else
-                            <p class="text-slate-500 dark:text-slate-400">No customer data available.</p>
+                            <p class="text-slate-500 dark:text-slate-400">{{ __('No sales data available.') }}</p>
                         @endif
                     </div>
                 </div>
             </div>
 
-            {{-- Recent Orders Table (from Dashboard 1 - structure kept, data source is $recentOrders) --}}
+            {{-- Pedidos Recientes --}}
             <div class="xl:col-span-6 col-span-12">
                 <div class="card h-full">
                     <div class="card-header flex justify-between items-center">
-                        <h4 class="card-title">Recent Orders</h4>
-                         {{-- Dropdown can be added back if needed --}}
+                        <h4 class="card-title">{{ __('Recent Orders') }}</h4>
                     </div>
                     <div class="card-body p-6">
-                        <div class="overflow-x-auto -mx-6">
-                            <div class="inline-block min-w-full align-middle">
-                                <div class="overflow-hidden ">
-                                     {{-- Check if $recentOrders exists and is not empty --}}
-                                     {{-- Make sure $recentOrders is passed as an array or Traversable from controller --}}
-                                    @if(isset($recentOrders) && (is_array($recentOrders) || $recentOrders instanceof \Illuminate\Support\Collection) && count($recentOrders) > 0)
-                                    <table class="min-w-full divide-y divide-slate-100 table-fixed dark:divide-slate-700">
-                                        <thead class="bg-slate-200 dark:bg-slate-700">
-                                            <tr>
-                                                <th scope="col" class="table-th">Company</th>
-                                                <th scope="col" class="table-th">Product Type</th>
-                                                <th scope="col" class="table-th">Invoice</th>
-                                                <th scope="col" class="table-th">Amount</th>
-                                                <th scope="col" class="table-th">Status</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody class="bg-white divide-y divide-slate-100 dark:bg-slate-800 dark:divide-slate-700">
-                                            @foreach($recentOrders as $order)
-                                            <tr>
-                                                <td class="table-td">
-                                                    <span class="text-sm text-slate-600 dark:text-slate-300">{{ $order['companyName'] }}</span><br>
-                                                    <span class="text-xs text-slate-500">{{ $order['email'] }}</span>
-                                                </td>
-                                                <td class="table-td">{{ $order['productType'] }}</td>
-                                                <td class="table-td">{{ $order['invoiceNo'] }}</td>
-                                                <td class="table-td">{{ $order['currencySymbol'] ?? '$' }}{{ number_format($order['amount'] ?? 0, 2) }}</td>
-                                                <td class="table-td">
-                                                    @php
-                                                        $statusClass = match(strtolower($order['paymentStatus'] ?? '')) {
-                                                            'paid' => 'bg-success-500 text-success-500',
-                                                            'due' => 'bg-warning-500 text-warning-500',
-                                                            'pending' => 'bg-info-500 text-info-500',
-                                                            'cancled', 'cancelled' => 'bg-danger-500 text-danger-500',
-                                                            'shipped' => 'bg-primary-500 text-primary-500',
-                                                            default => 'bg-slate-500 text-slate-500',
-                                                        };
-                                                    @endphp
-                                                    <div class="inline-block px-3 min-w-[90px] text-center mx-auto py-1 rounded-[999px] bg-opacity-25 {{ $statusClass }}">
-                                                        {{ ucfirst($order['paymentStatus'] ?? 'Unknown') }}
-                                                    </div>
-                                                </td>
-                                            </tr>
-                                            @endforeach
-                                        </tbody>
-                                    </table>
-                                    @else
-                                        <p class="text-slate-500 dark:text-slate-400 p-4">No recent orders found.</p>
-                                    @endif
+                        @if(isset($data['recentOrders']) && count($data['recentOrders']) > 0)
+                            <div class="space-y-4">
+                                @foreach($data['recentOrders'] as $order)
+                                <div class="flex items-start justify-between p-3 bg-white dark:bg-slate-800 rounded-lg shadow-sm border border-slate-100 dark:border-slate-700">
+                                    <div class="flex items-start space-x-3 rtl:space-x-reverse">
+                                        <div class="flex-none w-10 h-10 rounded-full flex items-center justify-center {{ $order['type'] === 'invoice' ? 'bg-blue-100 text-blue-600' : 'bg-purple-100 text-purple-600' }} dark:bg-opacity-20">
+                                            @if($order['type'] === 'invoice')
+                                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                                                <path fill-rule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4z" clip-rule="evenodd" />
+                                            </svg>
+                                            @else
+                                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                                                <path fill-rule="evenodd" d="M5 4a1 1 0 00-.94.652L1.879 11H2a1 1 0 01.936 1.351l-1.5 4A1 1 0 002 17h12a1 1 0 00.966-1.259l-1.5-4A1 1 0 0114 11h.121l-2.06-6.348A1 1 0 0011 4H5zm9.5 7a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0z" clip-rule="evenodd" />
+                                            </svg>
+                                            @endif
+                                        </div>
+                                        <div>
+                                            <h4 class="text-sm font-medium text-slate-700 dark:text-slate-200">
+                                                {{ $order['client_name'] }}
+                                            </h4>
+                                            <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                                                @if($order['type'] === 'invoice')
+                                                    {{ __('Invoice') }} #{{ $order['number'] }}
+                                                @else
+                                                    {{ __('Quote') }} #{{ $order['number'] }}
+                                                @endif
+                                                <span class="mx-1">•</span>
+                                                {{ $order['date'] }}
+                                            </p>
+                                        </div>
+                                    </div>
+                                    <div class="text-right">
+                                        <p class="text-sm font-semibold text-slate-900 dark:text-white">
+                                            {{ number_format($order['amount'], 2) }} €
+                                        </p>
+                                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium {{ $order['status']['class'] }} bg-opacity-10">
+                                            {{ $order['status']['text'] }}
+                                        </span>
+                                    </div>
                                 </div>
+                                @endforeach
                             </div>
-                        </div>
+                            <div class="mt-4 text-center">
+                                <a href="{{ route('invoices.index') }}" class="text-sm font-medium text-primary-600 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300">
+                                    {{ __('View all orders') }} →
+                                </a>
+                            </div>
+                        @else
+                            <p class="text-slate-500 dark:text-slate-400">{{ __('No recent orders found.') }}</p>
+                        @endif
                     </div>
                 </div>
             </div>
@@ -413,79 +359,162 @@
                 </div>
             </div>
 
-            {{-- Recent Activity (from Dashboard 2 - Static example) --}}
+            {{-- Actividad Reciente --}}
             <div class="lg:col-span-4 col-span-12">
                 <div class="card h-full">
                     <div class="card-header">
-                        <h4 class="card-title">Recent Activity</h4>
+                        <h4 class="card-title">{{ __('Recent Activity') }}</h4>
                     </div>
                     <div class="card-body p-6">
-                        {{-- This is static content, replace with dynamic data if needed --}}
-                        <div>
-                            <ul class="list-item space-y-3 h-full overflow-x-auto max-h-[400px]"> {{-- Added max-height --}}
-                                <li class="flex items-center space-x-3 rtl:space-x-reverse border-b border-slate-100 dark:border-slate-700 last:border-b-0 pb-3 last:pb-0">
-                                    <div><div class="w-8 h-8 rounded-full"><img src="{{ asset('images/users/user-1.jpg') }}" alt="" class="w-full h-full rounded-full object-cover"></div></div>
-                                    <div class="text-start overflow-hidden text-ellipsis whitespace-nowrap max-w-[63%]"><div class="text-sm text-slate-600 dark:text-slate-300 overflow-hidden text-ellipsis whitespace-nowrap">User John Doe logged in.</div></div>
-                                    <div class="flex-1 ltr:text-right rtl:text-left"><div class="text-sm font-light text-slate-400 dark:text-slate-400">1 hour ago</div></div>
-                                </li>
-                                <li class="flex items-center space-x-3 rtl:space-x-reverse border-b border-slate-100 dark:border-slate-700 last:border-b-0 pb-3 last:pb-0">
-                                    <div><div class="w-8 h-8 rounded-full"><img src="{{ asset('images/users/user-2.jpg') }}" alt="" class="w-full h-full rounded-full object-cover"></div></div>
-                                    <div class="text-start overflow-hidden text-ellipsis whitespace-nowrap max-w-[63%]"><div class="text-sm text-slate-600 dark:text-slate-300 overflow-hidden text-ellipsis whitespace-nowrap">New order #INV-2025-004 received.</div></div>
-                                    <div class="flex-1 ltr:text-right rtl:text-left"><div class="text-sm font-light text-slate-400 dark:text-slate-400">2 hours ago</div></div>
-                                </li>
-                                <li class="flex items-center space-x-3 rtl:space-x-reverse border-b border-slate-100 dark:border-slate-700 last:border-b-0 pb-3 last:pb-0">
-                                    <div><div class="w-8 h-8 rounded-full"><img src="{{ asset('images/users/user-3.jpg') }}" alt="" class="w-full h-full rounded-full object-cover"></div></div>
-                                    <div class="text-start overflow-hidden text-ellipsis whitespace-nowrap max-w-[63%]"><div class="text-sm text-slate-600 dark:text-slate-300 overflow-hidden text-ellipsis whitespace-nowrap">Password changed for Jane Smith.</div></div>
-                                    <div class="flex-1 ltr:text-right rtl:text-left"><div class="text-sm font-light text-slate-400 dark:text-slate-400">3 hours ago</div></div>
-                                </li>
-                                {{-- Add more static or dynamic items --}}
-                            </ul>
-                        </div>
+                        @if(isset($data['recentActivities']) && count($data['recentActivities']) > 0)
+                            <div class="space-y-4">
+                                @foreach($data['recentActivities'] as $activity)
+                                <div class="flex items-start pb-4 border-b border-slate-100 dark:border-slate-700 last:border-0 last:pb-0 last:mb-0">
+                                    <div class="flex-shrink-0 mt-0.5">
+                                        <div class="h-9 w-9 rounded-full flex items-center justify-center {{ $activity['type'] === 'invoice' ? 'bg-blue-100 text-blue-600' : 'bg-purple-100 text-purple-600' }} dark:bg-opacity-20">
+                                            @if($activity['type'] === 'invoice')
+                                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                                                <path fill-rule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4z" clip-rule="evenodd" />
+                                            </svg>
+                                            @else
+                                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                                                <path fill-rule="evenodd" d="M5 4a1 1 0 00-.94.652L1.879 11H2a1 1 0 01.936 1.351l-1.5 4A1 1 0 002 17h12a1 1 0 00.966-1.259l-1.5-4A1 1 0 0114 11h.121l-2.06-6.348A1 1 0 0011 4H5zm9.5 7a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0z" clip-rule="evenodd" />
+                                            </svg>
+                                            @endif
+                                        </div>
+                                    </div>
+                                    <div class="ml-3 flex-1 min-w-0">
+                                        <p class="text-sm font-medium text-slate-800 dark:text-slate-200 truncate">
+                                            {{ $activity['description'] }}
+                                        </p>
+                                        <div class="flex items-center justify-between mt-1">
+                                            <span class="text-xs text-slate-500 dark:text-slate-400">
+                                                {{ $activity['time_ago'] }}
+                                            </span>
+                                            @if(is_array($activity['status'] ?? null))
+                                                <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium {{ $activity['status']['class'] ?? '' }} bg-opacity-10">
+                                                    {{ $activity['status']['text'] ?? '' }}
+                                                </span>
+                                            @elseif(is_string($activity['status'] ?? null))
+                                                <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-slate-100 dark:bg-slate-700 text-slate-800 dark:text-slate-200">
+                                                    {{ $activity['status'] }}
+                                                </span>
+                                            @endif
+                                        </div>
+                                    </div>
+                                </div>
+                                @endforeach
+                            </div>
+                        @else
+                            <div class="text-center py-6">
+                                <svg class="mx-auto h-12 w-12 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                </svg>
+                                <h3 class="mt-2 text-sm font-medium text-slate-900 dark:text-white">{{ __('No recent activity') }}</h3>
+                                <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">{{ __('Activity will appear here as it happens.') }}</p>
+                            </div>
+                        @endif
                     </div>
                 </div>
             </div>
         </div>
 
-        {{-- Map & Server Monitor Row --}}
+        {{-- Tareas y Monitor de Servidor --}}
         <div class="grid grid-cols-12 gap-6">
-            {{-- Most Sales Map (from Dashboard 2 - Static example) --}}
+            {{-- Resumen de Tareas Pendientes --}}
             <div class="lg:col-span-8 col-span-12">
                 <div class="card h-full">
-                    <div class="card-header">
-                        <h4 class="card-title">Sales by Region</h4> {{-- Renamed title --}}
+                    <div class="card-header flex justify-between items-center">
+                        <h4 class="card-title">Resumen de Tareas</h4>
+                        <a href="{{ route('tasks.my') }}" class="btn-sm bg-slate-50 hover:bg-slate-100 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-800 dark:text-slate-200">
+                            Ver Mis Tareas
+                        </a>
                     </div>
                     <div class="card-body p-6">
-                        {{-- This section uses jVectorMap, ensure JS is loaded --}}
-                        <div class="md:flex items-center">
-                            <div class="grow-0">
-                                <h4 class="text-slate-600 dark:text-slate-200 text-sm font-normal mb-[6px]">
-                                    Total earnings
-                                </h4>
-                                <div class="text-lg font-medium mb-[6px] dark:text-white text-slate-900">
-                                    $12,65,647.87 {{-- Example data --}}
+                        <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                            {{-- Tareas Pendientes --}}
+                            <div class="bg-slate-50 dark:bg-slate-900 rounded-lg p-3 text-center">
+                                <div class="text-2xl font-bold text-primary-500">
+                                    {{ $taskCounts['pending'] ?? 0 }}
                                 </div>
-                                <div class="text-xs font-light dark:text-slate-200">
-                                    <span class="text-primary-500">+08%</span> From last month {{-- Example data --}}
+                                <div class="text-xs text-slate-500 dark:text-slate-300 mt-1">
+                                    Pendientes
                                 </div>
-                                {{-- Simplified stats list --}}
-                                <ul class="bg-slate-50 dark:bg-slate-900 rounded p-4 min-w-[184px] space-y-3 mt-4">
-                                    <li class="flex justify-between text-xs text-slate-600 dark:text-slate-300">
-                                        <span class="flex space-x-2 rtl:space-x-reverse items-center"><span class="inline-flex h-[6px] w-[6px] bg-primary-500 rounded-full"></span><span>USA</span></span>
-                                        <span>$125k</span>
-                                    </li>
-                                    <li class="flex justify-between text-xs text-slate-600 dark:text-slate-300">
-                                        <span class="flex space-x-2 rtl:space-x-reverse items-center"><span class="inline-flex h-[6px] w-[6px] bg-success-500 rounded-full"></span><span>Canada</span></span>
-                                        <span>$95k</span>
-                                    </li>
-                                     <li class="flex justify-between text-xs text-slate-600 dark:text-slate-300">
-                                        <span class="flex space-x-2 rtl:space-x-reverse items-center"><span class="inline-flex h-[6px] w-[6px] bg-info-500 rounded-full"></span><span>Mexico</span></span>
-                                        <span>$75k</span>
-                                    </li>
-                                </ul>
+                                <div class="h-1 bg-slate-200 dark:bg-slate-700 mt-2 rounded-full overflow-hidden">
+                                    <div class="h-full bg-primary-500" style="width: {{ min(($taskCounts['pending'] ?? 0) / max(($taskCounts['total'] ?? 1), 1) * 100, 100) }}%"></div>
+                                </div>
                             </div>
-                            <div class="grow">
-                                <div class="h-[360px] w-full ltr:pl-10 rtl:pr-10">
-                                    <div id="world-map" class="h-full w-full"></div> {{-- Target for jVectorMap --}}
+                            
+                            {{-- Tareas en Progreso --}}
+                            <div class="bg-slate-50 dark:bg-slate-900 rounded-lg p-3 text-center">
+                                <div class="text-2xl font-bold text-warning-500">
+                                    {{ $taskCounts['in_progress'] ?? 0 }}
+                                </div>
+                                <div class="text-xs text-slate-500 dark:text-slate-300 mt-1">
+                                    En Progreso
+                                </div>
+                                <div class="h-1 bg-slate-200 dark:bg-slate-700 mt-2 rounded-full overflow-hidden">
+                                    <div class="h-full bg-warning-500" style="width: {{ min(($taskCounts['in_progress'] ?? 0) / max(($taskCounts['total'] ?? 1), 1) * 100, 100) }}%"></div>
+                                </div>
+                            </div>
+                            
+                            {{-- Tareas Completadas --}}
+                            <div class="bg-slate-50 dark:bg-slate-900 rounded-lg p-3 text-center">
+                                <div class="text-2xl font-bold text-success-500">
+                                    {{ $taskCounts['completed'] ?? 0 }}
+                                </div>
+                                <div class="text-xs text-slate-500 dark:text-slate-300 mt-1">
+                                    Completadas
+                                </div>
+                                <div class="h-1 bg-slate-200 dark:bg-slate-700 mt-2 rounded-full overflow-hidden">
+                                    <div class="h-full bg-success-500" style="width: {{ min(($taskCounts['completed'] ?? 0) / max(($taskCounts['total'] ?? 1), 1) * 100, 100) }}%"></div>
+                                </div>
+                            </div>
+                            
+                            {{-- Tareas Totales --}}
+                            <div class="bg-slate-50 dark:bg-slate-900 rounded-lg p-3 text-center">
+                                <div class="text-2xl font-bold text-info-500">
+                                    {{ $taskCounts['total'] ?? 0 }}
+                                </div>
+                                <div class="text-xs text-slate-500 dark:text-slate-300 mt-1">
+                                    Total Tareas
+                                </div>
+                                <div class="h-1 bg-slate-200 dark:bg-slate-700 mt-2 rounded-full overflow-hidden">
+                                    <div class="h-full bg-info-500" style="width: 100%"></div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        {{-- Lista de Tareas Recientes --}}
+                        <div class="mt-6">
+                            <h5 class="text-sm font-medium text-slate-600 dark:text-slate-200 mb-3">Tareas Recientes</h5>
+                            <div class="space-y-2">
+                                @if(isset($recentTasks) && count($recentTasks) > 0)
+                                    @foreach($recentTasks as $task)
+                                        <div class="flex items-center justify-between p-2 bg-slate-50 dark:bg-slate-900 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
+                                            <div class="flex items-center space-x-2 truncate">
+                                                <div class="w-2 h-2 flex-shrink-0 rounded-full {{ 
+                                                    $task['status'] === 'completed' ? 'bg-success-500' : 
+                                                    ($task['status'] === 'in_progress' ? 'bg-warning-500' : 'bg-primary-500') 
+                                                }}"></div>
+                                                <div class="truncate">
+                                                    <h6 class="text-xs font-medium text-slate-700 dark:text-slate-200 truncate">{{ $task['title'] }}</h6>
+                                                    <p class="text-xs text-slate-500 dark:text-slate-400 truncate">{{ $task['project'] ?? 'Sin proyecto' }}</p>
+                                                </div>
+                                            </div>
+                                            <span class="text-xs text-slate-500 dark:text-slate-400 whitespace-nowrap ml-2">
+                                                {{ $task['due_date'] ?? 'Sin fecha' }}
+                                            </span>
+                                        </div>
+                                    @endforeach
+                                @else
+                                    <p class="text-xs text-slate-500 dark:text-slate-400 text-center py-3">No hay tareas recientes</p>
+                                @endif
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
                                 </div>
                             </div>
                         </div>

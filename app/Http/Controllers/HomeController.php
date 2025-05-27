@@ -3,11 +3,15 @@
 namespace App\Http\Controllers;
 
 use App\Models\User;
+use App\Models\Invoice;
+use App\Models\Quote;
+use App\Models\Client;
 use Illuminate\Http\Request;
-
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\View; // Importa la fachada View
-use Illuminate\Support\Facades\Log; // Importa Log para registrar errores si es necesario
+use Illuminate\Support\Facades\View;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\DB;
+use Carbon\Carbon;
 
 class HomeController extends Controller
 {
@@ -15,16 +19,88 @@ class HomeController extends Controller
     /**
      * Analytic Dashboard
      */
+    /**
+     * Get task counts by status
+     */
+    protected function getTaskCounts(): array
+    {
+        if (!class_exists('App\Models\Task')) {
+            return [
+                'pending' => 0,
+                'in_progress' => 0,
+                'completed' => 0,
+                'total' => 0
+            ];
+        }
+
+        $counts = [
+            'pending' => \App\Models\Task::where('status', 'pending')->count(),
+            'in_progress' => \App\Models\Task::where('status', 'in_progress')->count(),
+            'completed' => \App\Models\Task::where('status', 'completed')->count(),
+            'total' => \App\Models\Task::count()
+        ];
+
+        return $counts;
+    }
+
+    /**
+     * Get recent tasks
+     */
+    protected function getRecentTasks(int $limit = 5): array
+    {
+        if (!class_exists('App\Models\Task')) {
+            return [];
+        }
+
+        return \App\Models\Task::with(['project' => function($query) {
+                $query->select('id', 'project_title');
+            }])
+            ->orderBy('created_at', 'desc')
+            ->limit($limit)
+            ->get()
+            ->map(function($task) {
+                return [
+                    'id' => $task->id,
+                    'title' => $task->title,
+                    'status' => $task->status,
+                    'due_date' => $task->due_date ? $task->due_date->format('d/m/Y') : null,
+                    'project' => $task->project->project_title ?? null,
+                    'created_at' => $task->created_at->diffForHumans()
+                ];
+            })
+            ->toArray();
+    }
+
     public function unifiedDashboard(Request $request): \Illuminate\Contracts\View\View
     {
+        // Obtener total de ventas
+        $totalSales = $this->getTotalSales();
+        
+        // Obtener actividad reciente
+        $recentActivities = $this->getRecentActivities(5);
+        
+        // Obtener pedidos recientes
+        $recentOrders = $this->getRecentOrders(5);
+        
+        // Obtener contadores de tareas
+        $taskCounts = $this->getTaskCounts();
+        
+        // Obtener tareas recientes
+        $recentTasks = $this->getRecentTasks(5);
+        
         // --- Data primarily from Analytic Dashboard Logic ---
         $analyticChartData = [
             'yearlyRevenue' => [
                 'year' => [1991, 1992, 1993, 1994, 1995],
                 'revenue' => [350, 500, 950, 700, 900],
-                'total' => 3500, // Considerar calcular dinámicamente si los datos no son estáticos
-                'currencySymbol' => '$',
+                'total' => $totalSales['total_amount'],
+                'currencySymbol' => '€',
             ],
+            'totalSales' => $totalSales,
+            'recentActivities' => $recentActivities,
+            'recentOrders' => $recentOrders,
+            'taskCounts' => $taskCounts,
+            'recentTasks' => $recentTasks,
             'productSold' => [ // Prioritized from Analytic data
                 'year' => [1991, 1992, 1993, 1994, 1995],
                 'quantity' => [800, 600, 1000, 800, 900],
@@ -524,8 +600,161 @@ class HomeController extends Controller
         // Devuelve el HTML renderizado como JSON
         return response()->json(['html' => $html]);
     }
+    
+    /**
+     * Obtiene el total de ventas
+     */
+    protected function getTotalSales()
+    {
+        $result = DB::table('invoices')
+            ->select(
+                DB::raw('COUNT(invoices.id) as total_invoices'),
+                DB::raw('COALESCE(SUM(invoices.total_amount), 0) as total_amount')
+            )
+            ->where('invoices.status', 'paid')
+            ->where('invoices.invoice_date', '>=', now()->subYear())
+            ->first();
 
-    // No olvides definir la ruta GET en routes/web.php
-    // Route::get('/get-time-control-section', [HomeController::class, 'getTimeControlSection'])->middleware('auth');
+        return [
+            'total_invoices' => (int) ($result->total_invoices ?? 0),
+            'total_amount' => (float) ($result->total_amount ?? 0)
+        ];
+    }
+    
+    /**
+     * Obtiene la actividad reciente
+     */
+    protected function getRecentActivities($limit = 5)
+    {
+        // Obtener actividades de facturas
+        $invoiceActivities = DB::table('invoices')
+            ->select(
+                'id',
+                'invoice_number',
+                'created_at',
+                'status',
+                DB::raw("'invoice' as type")
+            )
+            ->orderBy('created_at', 'desc')
+            ->limit($limit);
 
+        // Obtener actividades de presupuestos
+        $quoteActivities = DB::table('quotes')
+            ->select(
+                'id',
+                'quote_number as invoice_number',
+                'created_at',
+                'status',
+                DB::raw("'quote' as type")
+            )
+            ->orderBy('created_at', 'desc')
+            ->limit($limit);
+
+        // Unir y ordenar todas las actividades
+        return $invoiceActivities->union($quoteActivities)
+            ->orderBy('created_at', 'desc')
+            ->limit($limit)
+            ->get()
+            ->map(function ($activity) {
+                $activity->description = $this->getActivityDescription($activity);
+                $activity->time_ago = Carbon::parse($activity->created_at)->diffForHumans();
+                return (array) $activity;
+            });
+    }
+    
+    /**
+     * Obtiene la descripción de la actividad
+     */
+    protected function getActivityDescription($activity)
+    {
+        if ($activity->type === 'invoice') {
+            return __('Factura :invoice creada', ['invoice' => $activity->invoice_number]);
+        } elseif ($activity->type === 'quote') {
+            return __('Presupuesto :quote creado', ['quote' => $activity->invoice_number]);
+        }
+        
+        return '';
+    }
+    
+    /**
+     * Obtiene los pedidos recientes
+     */
+    protected function getRecentOrders($limit = 5)
+    {
+        // Obtener facturas recientes
+        $invoices = Invoice::with('client')
+            ->orderBy('created_at', 'desc')
+            ->limit($limit)
+            ->get()
+            ->map(function ($invoice) {
+                return [
+                    'id' => $invoice->id,
+                    'number' => $invoice->invoice_number,
+                    'type' => 'invoice',
+                    'client_name' => $invoice->client ? $invoice->client->name : 'Cliente eliminado',
+                    'amount' => $invoice->total_amount,
+                    'date' => $invoice->created_at->format('d/m/Y'),
+                    'sort_date' => $invoice->created_at, // Keep the original datetime for sorting
+                    'status' => $this->getStatusBadge($invoice->status)
+                ];
+            })->toArray(); // Convert to array
+            
+        // Obtener presupuestos recientes
+        $quotes = Quote::with('client')
+            ->orderBy('created_at', 'desc')
+            ->limit($limit)
+            ->get()
+            ->map(function ($quote) {
+                return [
+                    'id' => $quote->id,
+                    'number' => $quote->quote_number,
+                    'type' => 'quote',
+                    'client_name' => $quote->client ? $quote->client->name : 'Cliente eliminado',
+                    'amount' => $quote->total_amount,
+                    'date' => $quote->created_at->format('d/m/Y'),
+                    'sort_date' => $quote->created_at, // Keep the original datetime for sorting
+                    'status' => $this->getStatusBadge($quote->status, true)
+                ];
+            })->toArray(); // Convert to array
+            
+        // Combinar arrays
+        $combined = array_merge($invoices, $quotes);
+        
+        // Ordenar por fecha de creación (más reciente primero)
+        usort($combined, function($a, $b) {
+            return $b['sort_date'] <=> $a['sort_date'];
+        });
+        
+        // Tomar los primeros $limit elementos
+        return array_slice($combined, 0, $limit);
+    }
+    
+    /**
+     * Obtiene el badge de estado
+     */
+    protected function getStatusBadge($status, $isQuote = false)
+    {
+        $statuses = $isQuote 
+            ? [
+                'draft' => ['class' => 'bg-warning-500', 'text' => 'Borrador'],
+                'sent' => ['class' => 'bg-info-500', 'text' => 'Enviado'],
+                'accepted' => ['class' => 'bg-success-500', 'text' => 'Aceptado'],
+                'rejected' => ['class' => 'bg-danger-500', 'text' => 'Rechazado'],
+                'expired' => ['class' => 'bg-secondary-500', 'text' => 'Expirado'],
+            ]
+            : [
+                'draft' => ['class' => 'bg-warning-500', 'text' => 'Borrador'],
+                'sent' => ['class' => 'bg-info-500', 'text' => 'Enviada'],
+                'paid' => ['class' => 'bg-success-500', 'text' => 'Pagada'],
+                'overdue' => ['class' => 'bg-danger-500', 'text' => 'Vencida'],
+                'cancelled' => ['class' => 'bg-secondary-500', 'text' => 'Cancelada'],
+            ];
+            
+        $statusData = $statuses[$status] ?? ['class' => 'bg-gray-500', 'text' => ucfirst($status)];
+        
+        return [
+            'class' => $statusData['class'],
+            'text' => $statusData['text']
+        ];
+    }
 }
