@@ -71,6 +71,84 @@ class HomeController extends Controller
             ->toArray();
     }
 
+    /**
+     * Obtener estadísticas de tareas por estado
+     */
+    protected function getTaskStats()
+    {
+        if (!class_exists('App\Models\Task')) {
+            return [
+                'labels' => ['Pendientes', 'En Progreso', 'Completadas'],
+                'data' => [0, 0, 0],
+                'colors' => ['#3B82F6', '#F59E0B', '#10B981']
+            ];
+        }
+
+        $stats = [
+            'Pendientes' => \App\Models\Task::where('status', 'pending')->count(),
+            'En Progreso' => \App\Models\Task::where('status', 'in_progress')->count(),
+            'Completadas' => \App\Models\Task::where('status', 'completed')->count()
+        ];
+
+        return [
+            'labels' => array_keys($stats),
+            'data' => array_values($stats),
+            'colors' => ['#3B82F6', '#F59E0B', '#10B981']
+        ];
+    }
+
+    /**
+     * Obtener estadísticas de proyectos
+     */
+    protected function getProjectStats()
+    {
+        if (!class_exists('App\Models\Project')) {
+            return [
+                'total' => 0,
+                'active' => 0,
+                'completed' => 0,
+                'overdue' => 0
+            ];
+        }
+
+        $today = now()->toDateString();
+        
+        return [
+            'total' => \App\Models\Project::count(),
+            'active' => \App\Models\Project::where('status', 'in_progress')->count(),
+            'completed' => \App\Models\Project::where('status', 'completed')->count(),
+            'overdue' => \App\Models\Project::where('due_date', '<', $today)
+                ->where('status', '!=', 'completed')
+                ->count()
+        ];
+    }
+
+    /**
+     * Obtener estadísticas de ventas
+     */
+    protected function getSalesStats()
+    {
+        // Usar los últimos 6 meses
+        $months = collect();
+        $salesData = collect();
+        
+        for ($i = 5; $i >= 0; $i--) {
+            $date = now()->subMonths($i);
+            $months->push($date->format('M Y'));
+            
+            // Simular datos de ventas (reemplazar con consulta real a tu base de datos)
+            $salesData->push(rand(5000, 20000));
+        }
+        
+        return [
+            'months' => $months,
+            'sales' => $salesData,
+            'total' => $salesData->sum(),
+            'growth' => $salesData->count() > 1 ? 
+                (($salesData->last() - $salesData->slice(-2, 1)->first()) / $salesData->slice(-2, 1)->first()) * 100 : 0
+        ];
+    }
+
     public function unifiedDashboard(Request $request): \Illuminate\Contracts\View\View
     {
         // Obtener total de ventas
@@ -88,215 +166,367 @@ class HomeController extends Controller
         // Obtener tareas recientes
         $recentTasks = $this->getRecentTasks(5);
         
-        // --- Data primarily from Analytic Dashboard Logic ---
-        $analyticChartData = [
-            'yearlyRevenue' => [
-                'year' => [1991, 1992, 1993, 1994, 1995],
-                'revenue' => [350, 500, 950, 700, 900],
-                'total' => $totalSales['total_amount'],
-                'currencySymbol' => '€',
-            ],
+        // Obtener estadísticas
+        $taskStats = $this->getTaskStats();
+        $projectStats = $this->getProjectStats();
+        $salesStats = $this->getSalesStats();
+        
+        // Asegurarse de que los datos de ventas tengan el formato correcto
+        $yearlyRevenue = [
+            'year' => $salesStats['months']->toArray(),
+            'revenue' => $salesStats['sales']->toArray(),
+            'total' => $salesStats['total'],
+            'growth' => $salesStats['growth'],
+            'currencySymbol' => '€',
+        ];
+
+        // Datos simulados para productSold y growth
+        $productSold = [
+            'year' => [2020, 2021, 2022, 2023, 2024],
+            'quantity' => [100, 150, 200, 180, 250],
+            'total' => 880,
+            'growth' => 25.5
+        ];
+
+        $growth = [
+            'year' => [2020, 2021, 2022, 2023, 2024],
+            'perYearRate' => [10, 25, 15, 30, 20],
+            'total' => 100,
+            'growth' => 20.0
+        ];
+
+        // Preparar los datos para la vista
+        $viewData = [
+            'pageTitle' => 'Dashboard',
             'totalSales' => $totalSales,
             'recentActivities' => $recentActivities,
             'recentOrders' => $recentOrders,
             'taskCounts' => $taskCounts,
             'recentTasks' => $recentTasks,
-            'productSold' => [ // Prioritized from Analytic data
-                'year' => [1991, 1992, 1993, 1994, 1995],
-                'quantity' => [800, 600, 1000, 800, 900],
-                'total' => 4000, // Considerar calcular dinámicamente
-            ],
-            'growth' => [ // Prioritized from Analytic data
-                'year' => [1991, 1992, 1993, 1994, 1995],
-                'perYearRate' => [10, 20, 30, 40, 100],
-                'total' => 10, // Este 'total' parece representar una tasa o un valor específico, no una suma. Revisar lógica.
-                'preSymbol' => '+',
-                'postSymbol' => '%',
-            ],
-            'revenueReport' => [ // Identical in both original methods
-                'month' => ["Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct"],
-                'revenue' => [
-                    'title' => 'Revenue',
-                    'data' => [76, 85, 101, 98, 87, 105, 91, 114, 94],
-                ],
-                'netProfit' => [
-                    'title' => 'Net Profit',
-                    'data' => [35, 41, 36, 26, 45, 48, 52, 53, 41],
-                ],
-                'cashFlow' => [
-                    'title' => 'Cash Flow',
-                    'data' => [44, 55, 57, 56, 61, 58, 63, 60, 66],
-                ],
-            ],
-            'productGrowthOverview' => [
-                'productNames' => ["Books", "Pens", "Pencils", "Box"],
-                'data' => [88, 77, 66, 55],
-            ],
-            'thisYearGrowth' => [
-                'label' => ['Yearly Growth'],
-                'data' => [66],
-            ],
-            'investmentAmount' => [
-                // Ejemplo de datos de inversión
-                [
-                    'title' => 'Investment Alpha', 'amount' => 1000, 'currencySymbol' => '$',
-                    'profit' => 10, 'profitPercentage' => 50, 'loss' => 0, 'lossPercentage' => 0,
-                ],
-                [
-                    'title' => 'Investment Beta', 'amount' => 2500, 'currencySymbol' => '$',
-                    'profit' => 150, 'profitPercentage' => 6, 'loss' => 0, 'lossPercentage' => 0,
-                ],
-                [
-                    'title' => 'Investment Gamma', 'amount' => 500, 'currencySymbol' => '$',
-                    'profit' => 0, 'profitPercentage' => 0, 'loss' => 20, 'lossPercentage' => 4,
-                ]
+            'productSold' => $productSold,
+            'growth' => $growth,
+            'analyticChartData' => [
+                'yearlyRevenue' => $yearlyRevenue,
+                'totalSales' => $totalSales,
+                'recentActivities' => $recentActivities,
+                'recentOrders' => $recentOrders,
+                'taskStats' => $taskStats,
+                'projectStats' => $projectStats,
+                'taskCounts' => $taskCounts,
+                'productSold' => $productSold,
+                'growth' => $growth,
             ],
         ];
 
-        // --- Data Specific to Ecommerce Dashboard Logic ---
-        $ecommerceSpecificChartData = [
-            'lastWeekOrder' => [
-                'name' => 'Last Week Order',
-                'data' => [44, 55, 57, 56, 61, 10], // Datos de ejemplo
-                'total' => '10k+', // Valor de ejemplo
-                'percentage' => 100, // Valor de ejemplo
-                'preSymbol' => '-', // Símbolo de ejemplo
+        // Verificar si el modelo User existe antes de intentar usarlo
+        if (class_exists('App\Models\User')) {
+            $viewData['users'] = \App\Models\User::query()
+                ->latest()
+                ->take(5)
+                ->get();
+        } else {
+            $viewData['users'] = collect();
+        }
+
+        // Add additional data required by the view
+        $viewData['revenueReport'] = [
+            'month' => ["Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct"],
+            'revenue' => [
+                'title' => 'Revenue',
+                'data' => [76, 85, 101, 98, 87, 105, 91, 114, 94],
             ],
-            'lastWeekProfit' => [
-                'name' => 'Last Week Profit',
-                'data' => [44, 55, 57, 56, 61, 10], // Datos de ejemplo
-                'total' => '10k+', // Valor de ejemplo
-                'percentage' => 100, // Valor de ejemplo
-                'preSymbol' => '+', // Símbolo de ejemplo
-            ],
-            'lastWeekOverview' => [
-                'labels' => ["Success", "Return"],
-                'data' => [60, 40], // Datos de ejemplo
-                'title' => 'Profit',
-                'amount' => '650k+', // Valor de ejemplo
-                'percentage' => 0.02, // Valor de ejemplo
-            ],
-            // Las claves 'revenue', 'productSold', 'growth' ya están incluidas desde $analyticChartData
+            'netProfit' => [
+                'title' => 'Net Profit',
+                'data' => [35, 41, 36, 26, 45, 48, 52, 53, 41],
+            ]
         ];
 
-        // --- Combine Chart Data ---
-        // Fusiona los datos específicos de ecommerce en la estructura principal
-        $combinedChartData = array_merge($analyticChartData, $ecommerceSpecificChartData);
+        // Add growth data with symbols
+        $viewData['growth'] = array_merge($viewData['growth'], [
+            'preSymbol' => '+',
+            'postSymbol' => '%'
+        ]);
 
-        // --- Standalone Data Structures & System Info ---
+        // Add cash flow data
+        $viewData['cashFlow'] = [
+            'title' => 'Cash Flow',
+            'data' => [44, 55, 57, 56, 61, 58, 63, 60, 66]
+        ];
 
-        // System Load Average (from Analytic Logic)
-        $loadAverage = ['N/A', 'N/A', 'N/A']; // Default value in case command fails
+        // Add product growth overview
+        $viewData['productGrowthOverview'] = [
+            'productNames' => ["Books", "Pens", "Pencils", "Box"],
+            'data' => [88, 77, 66, 55]
+        ];
+
+        // Add this year growth data
+        $viewData['thisYearGrowth'] = [
+            'label' => ['Yearly Growth'],
+            'data' => [66]
+        ];
+
+        // Add investment data
+        $viewData['investmentAmount'] = [
+            [
+                'title' => 'Investment Alpha',
+                'amount' => 1000,
+                'currencySymbol' => '$',
+                'profit' => 10,
+                'profitPercentage' => 50,
+                'loss' => 0,
+                'lossPercentage' => 0
+            ],
+            [
+                'title' => 'Investment Beta',
+                'amount' => 2500,
+                'currencySymbol' => '$',
+                'profit' => 150,
+                'profitPercentage' => 6,
+                'loss' => 0,
+                'lossPercentage' => 0
+            ],
+            [
+                'title' => 'Investment Gamma',
+                'amount' => 500,
+                'currencySymbol' => '$',
+                'profit' => 0,
+                'profitPercentage' => 0,
+                'loss' => 20,
+                'lossPercentage' => 4
+            ]
+        ];
+
+        // Add e-commerce specific data
+        $viewData['lastWeekOrder'] = [
+            'name' => 'Last Week Order',
+            'data' => [44, 55, 57, 56, 61, 10],
+            'total' => '10k+',
+            'percentage' => 100,
+            'preSymbol' => '-'
+        ];
+
+        $viewData['lastWeekProfit'] = [
+            'name' => 'Last Week Profit',
+            'data' => [44, 55, 57, 56, 61, 10],
+            'total' => '10k+',
+            'percentage' => 100,
+            'preSymbol' => '+'
+        ];
+
+        $viewData['lastWeekOverview'] = [
+            'labels' => ["Success", "Return"],
+            'data' => [60, 40],
+            'title' => 'Profit',
+            'amount' => '650k+'
+        ];
+
+        // Add the same data to analyticChartData for backward compatibility
+        $viewData['analyticChartData'] = array_merge($viewData['analyticChartData'], [
+            'cashFlow' => $viewData['cashFlow'],
+            'productGrowthOverview' => $viewData['productGrowthOverview'],
+            'thisYearGrowth' => $viewData['thisYearGrowth'],
+            'investmentAmount' => $viewData['investmentAmount'],
+            'lastWeekOrder' => $viewData['lastWeekOrder'],
+            'lastWeekProfit' => $viewData['lastWeekProfit'],
+            'lastWeekOverview' => $viewData['lastWeekOverview']
+        ]);
+
+        // Add any remaining data needed by the view
+        $viewData['lastWeekOverview']['percentage'] = 0.02;
+
+        // Add load average information
+        $loadAverage = ['N/A', 'N/A', 'N/A'];
+        
         try {
-            // shell_exec es generalmente preferible para capturar salida directa
-            // Asegúrate de que el comando 'uptime' está disponible y permitido en tu entorno
+            // shell_exec is generally preferred for capturing direct output
+            // Make sure the 'uptime' command is available and allowed in your environment
             $uptimeOutput = shell_exec('uptime');
             if ($uptimeOutput && preg_match('/load average: ([\d.]+),\s*([\d.]+),\s*([\d.]+)/', $uptimeOutput, $matches)) {
-                 // Captura los tres valores de carga promedio
+                // Capture the three load average values
                 $loadAverage = array_map('trim', [$matches[1], $matches[2], $matches[3]]);
             } else if ($uptimeOutput && preg_match('/load average: (.*)/', $uptimeOutput, $matches)) {
-                 // Fallback por si el formato es ligeramente diferente (ej. solo un valor o formato inesperado)
-                 $loadAverage = array_map('trim', explode(',', $matches[1]));
-                 // Rellena con N/A si no hay 3 valores
-                 while(count($loadAverage) < 3) $loadAverage[] = 'N/A';
-                 $loadAverage = array_slice($loadAverage, 0, 3); // Asegura que solo haya 3
+                // Fallback if the format is slightly different (e.g., only one value or unexpected format)
+                $loadAverage = array_map('trim', explode(',', $matches[1]));
+                // Fill with N/A if there are less than 3 values
+                while(count($loadAverage) < 3) $loadAverage[] = 'N/A';
+                $loadAverage = array_slice($loadAverage, 0, 3); // Ensure there are only 3 values
             }
-        } catch (\Throwable $e) { // Captura Throwable para errores más generales (incluyendo si shell_exec está desactivado)
-            Log::warning("Could not execute or parse 'uptime' command: " . $e->getMessage());
-            // $loadAverage ya tiene el valor por defecto ['N/A', 'N/A', 'N/A']
+        } catch (\Throwable $e) { // Catch any errors (including if shell_exec is disabled)
+            \Illuminate\Support\Facades\Log::warning("Could not execute or parse 'uptime' command: " . $e->getMessage());
+            // $loadAverage already has the default value ['N/A', 'N/A', 'N/A']
         }
-        // Add load average to the main data array passed to the view
-        $combinedChartData['loadAverage'] = $loadAverage;
 
+        
+        // Add load average to the view data
+        $viewData['loadAverage'] = $loadAverage;
 
-        // Latest Users (from Analytic Logic)
-        // Obtiene los 5 usuarios más recientes con paginación
-        $users = User::latest()->paginate(5);
-
-        // Top Customers (from Ecommerce Logic)
-        // Datos estáticos de ejemplo para los mejores clientes
-        $topCustomers = [
+        // Add top customers data
+        $viewData['topCustomers'] = [
             [
-                'serialNo' => 1, 'name' => 'Elena García', 'totalPoint' => 50.5, 'progressBarPoint' => 50,
-                'progressBarColor' => 'green', 'backgroundColor' => 'sky', 'isMvpUser' => true, 'photo' => '/images/customer1.png', // Usa rutas de imagen reales
-            ],
-            [
-                'serialNo' => 2, 'name' => 'Carlos Rodríguez', 'totalPoint' => 45.2, 'progressBarPoint' => 45,
-                'progressBarColor' => 'sky', 'backgroundColor' => 'orange', 'isMvpUser' => false, 'photo' => '/images/customer2.png',
+                'serialNo' => 1, 
+                'name' => 'Elena García', 
+                'totalPoint' => 50.5, 
+                'progressBarPoint' => 50,
+                'progressBarColor' => 'green', 
+                'backgroundColor' => 'sky', 
+                'isMvpUser' => true, 
+                'photo' => '/images/customer1.png',
             ],
             [
-                'serialNo' => 3, 'name' => 'Ana Martínez', 'totalPoint' => 40.8, 'progressBarPoint' => 41,
-                'progressBarColor' => 'orange', 'backgroundColor' => 'green', 'isMvpUser' => false, 'photo' => '/images/customer3.png',
+                'serialNo' => 2, 
+                'name' => 'Carlos Rodríguez', 
+                'totalPoint' => 45.2, 
+                'progressBarPoint' => 45,
+                'progressBarColor' => 'sky', 
+                'backgroundColor' => 'orange', 
+                'isMvpUser' => false, 
+                'photo' => '/images/customer2.png',
             ],
-             [
-                'serialNo' => 4, 'name' => 'Javier López', 'totalPoint' => 38.0, 'progressBarPoint' => 38,
-                'progressBarColor' => 'green', 'backgroundColor' => 'sky', 'isMvpUser' => false, 'photo' => '/images/customer4.png',
+            [
+                'serialNo' => 3, 
+                'name' => 'Ana Martínez', 
+                'totalPoint' => 40.8, 
+                'progressBarPoint' => 41,
+                'progressBarColor' => 'orange', 
+                'backgroundColor' => 'green', 
+                'isMvpUser' => false, 
+                'photo' => '/images/customer3.png',
             ],
-             [
-                'serialNo' => 5, 'name' => 'Sofía Fernández', 'totalPoint' => 35.5, 'progressBarPoint' => 36,
-                'progressBarColor' => 'sky', 'backgroundColor' => 'orange', 'isMvpUser' => false, 'photo' => '/images/customer5.png',
+            [
+                'serialNo' => 4, 
+                'name' => 'Javier López', 
+                'totalPoint' => 38.0, 
+                'progressBarPoint' => 38,
+                'progressBarColor' => 'green', 
+                'backgroundColor' => 'sky', 
+                'isMvpUser' => false, 
+                'photo' => '/images/customer4.png',
+            ],
+            [
+                'serialNo' => 5, 
+                'name' => 'Sofía Fernández', 
+                'totalPoint' => 35.5, 
+                'progressBarPoint' => 36,
+                'progressBarColor' => 'sky', 
+                'backgroundColor' => 'orange', 
+                'isMvpUser' => false, 
+                'photo' => '/images/customer5.png',
             ],
         ];
 
-        // Recent Orders (from Ecommerce Logic)
-        // Datos estáticos de ejemplo para pedidos recientes
-        $recentOrders = [
+        // Add recent orders data
+        $viewData['ecommerceOrders'] = [
             [
-                'companyName' => 'TecnoSoluciones SL', 'email' => 'contacto@tecnosoluciones.es', 'productType' => 'Hardware',
-                'invoiceNo' => 'INV-2025-001', 'amount' => 1250.75, 'currencySymbol' => '€', 'paymentStatus' => 'paid',
-            ],
-            [
-                'companyName' => 'Libros del Saber', 'email' => 'pedidos@librosdelsaber.com', 'productType' => 'Libros',
-                'invoiceNo' => 'INV-2025-002', 'amount' => 85.50, 'currencySymbol' => '€', 'paymentStatus' => 'due',
-            ],
-            [
-                'companyName' => 'Moda Actual', 'email' => 'ventas@modaactual.net', 'productType' => 'Ropa',
-                'invoiceNo' => 'INV-2025-003', 'amount' => 320.00, 'currencySymbol' => '€', 'paymentStatus' => 'paid',
+                'companyName' => 'TecnoSoluciones SL', 
+                'email' => 'contacto@tecnosoluciones.es', 
+                'productType' => 'Hardware',
+                'invoiceNo' => 'INV-2025-001', 
+                'amount' => 1250.75, 
+                'currencySymbol' => '€', 
+                'paymentStatus' => 'paid',
             ],
             [
-                'companyName' => 'Consultoría Global', 'email' => 'info@consultoriaglobal.org', 'productType' => 'Servicios',
-                'invoiceNo' => 'INV-2025-004', 'amount' => 5000.00, 'currencySymbol' => '€', 'paymentStatus' => 'paid',
-            ],
-             [
-                'companyName' => 'TecnoSoluciones SL', 'email' => 'contacto@tecnosoluciones.es', 'productType' => 'Software',
-                'invoiceNo' => 'INV-2025-005', 'amount' => 750.00, 'currencySymbol' => '€', 'paymentStatus' => 'due',
-            ],
+                'companyName' => 'Libros del Saber', 
+                'email' => 'pedidos@librosdelsaber.com', 
+                'productType' => 'Libros',
+                'invoiceNo' => 'INV-2025-002', 
+                'amount' => 85.50, 
+                'currencySymbol' => '€', 
+                'paymentStatus' => 'due',
+            ]
+        ];
+        
+        // Add the same data to analyticChartData for backward compatibility
+        $viewData['analyticChartData'] = array_merge($viewData['analyticChartData'], [
+            'loadAverage' => $viewData['loadAverage'],
+            'topCustomers' => $viewData['topCustomers'],
+            'ecommerceOrders' => $viewData['ecommerceOrders']
+        ]);
+        
+        // Add more ecommerce orders if needed
+        $viewData['ecommerceOrders'][] = [
+            'companyName' => 'Moda Actual', 
+            'email' => 'ventas@modaactual.net', 
+            'productType' => 'Ropa',
+            'invoiceNo' => 'INV-2025-003', 
+            'amount' => 320.00, 
+            'currencySymbol' => '€', 
+            'paymentStatus' => 'paid'
+        ];
+        
+        // Update the analyticChartData with the latest ecommerce orders
+        $viewData['analyticChartData']['ecommerceOrders'] = $viewData['ecommerceOrders'];
+        
+        // Add more ecommerce orders
+        $viewData['ecommerceOrders'][] = [
+            'companyName' => 'Consultoría Global', 
+            'email' => 'info@consultoriaglobal.org', 
+            'productType' => 'Servicios',
+            'invoiceNo' => 'INV-2025-004', 
+            'amount' => 5000.00, 
+            'currencySymbol' => '€', 
+            'paymentStatus' => 'paid'
+        ];
+        
+        $viewData['ecommerceOrders'][] = [
+            'companyName' => 'TecnoSoluciones SL', 
+            'email' => 'contacto@tecnosoluciones.es', 
+            'productType' => 'Software',
+            'invoiceNo' => 'INV-2025-005', 
+            'amount' => 750.00, 
+            'currencySymbol' => '€', 
+            'paymentStatus' => 'due'
         ];
 
+        // Update the analyticChartData with the latest ecommerce orders
+        $viewData['analyticChartData']['ecommerceOrders'] = $viewData['ecommerceOrders'];
+        
         // --- User Permissions (from Ecommerce Logic) ---
-        $user = Auth::user(); // Obtiene el usuario autenticado
-        $allowedButtons = []; // Array para almacenar botones permitidos
-        $allowedAddButtons = false; // Flag para permiso de añadir (ej: control de tiempo)
-
-        // Verifica si hay un usuario autenticado antes de acceder a sus métodos/propiedades
+        $user = \Illuminate\Support\Facades\Auth::user(); // Get authenticated user
+        $allowedButtons = []; // Array to store allowed buttons
+        $allowedAddButtons = false; // Flag for add permission (e.g., time control)
+        
+        // Check if there is an authenticated user before accessing their methods/properties
         if ($user) {
-            // Intenta obtener los botones permitidos. Asume que el método existe en el modelo User.
+            // Try to get allowed buttons. Assumes the method exists on the User model.
             if (method_exists($user, 'getAllowedButtons')) {
                 $allowedButtons = $user->getAllowedButtons();
             } else {
-                Log::warning("Method getAllowedButtons() not found on User model for user ID: " . $user->id);
-                // Puedes asignar permisos por defecto o dejarlo vacío si el método no existe
+                \Illuminate\Support\Facades\Log::warning("Method getAllowedButtons() not found on User model for user ID: " . $user->id);
+                // You can assign default permissions or leave it empty if the method doesn't exist
             }
 
-            // Verifica si la propiedad 'time_control_enable' existe y la asigna. Usa ?? para valor por defecto false.
+            // Check if the 'time_control_enable' property exists and assign it. Use ?? for default false value.
             $allowedAddButtons = $user->time_control_enable ?? false;
         } else {
-             Log::info("Unified dashboard accessed by non-authenticated user.");
-             // Puedes definir valores por defecto para usuarios no autenticados si es necesario
+            \Illuminate\Support\Facades\Log::info("Unified dashboard accessed by non-authenticated user.");
+            // You can define default values for non-authenticated users if needed
         }
-
-
-        // --- Return Combined Data to the View ---
-        // Retorna la vista 'dashboards.unified' con todos los datos compilados
-        return view('dashboards.unified', [
-            'pageTitle' => 'Dashboard',        // Título de la página para la vista
-            'data' => collect($combinedChartData),      // Datos principales (gráficos, etc.), como colección
-            'users' => $users,                          // Lista paginada de usuarios
-            'topCustomers' => $topCustomers,            // Lista de mejores clientes
-            'recentOrders' => $recentOrders,            // Lista de pedidos recientes
-            'allowedButtons' => $allowedButtons,        // Botones permitidos para el usuario
-            'allowedAddButtons' => $allowedAddButtons,  // Permiso específico de 'añadir'
+        
+        // Add user permissions to view data
+        $viewData['allowedButtons'] = $allowedButtons;
+        $viewData['allowedAddButtons'] = $allowedAddButtons;
+        
+        // Add users data if not already added
+        if (!isset($viewData['users'])) {
+            $viewData['users'] = class_exists('App\Models\User') ? 
+                \App\Models\User::latest()->take(5)->get() : collect();
+        }
+        
+        // Add the same data to analyticChartData for backward compatibility
+        $viewData['analyticChartData'] = array_merge($viewData['analyticChartData'], [
+            'allowedButtons' => $allowedButtons,
+            'allowedAddButtons' => $allowedAddButtons,
+            'users' => $viewData['users']
         ]);
+        
+        // Add recent orders data to view data
+        $viewData['recentOrders'] = $viewData['ecommerceOrders']; // Using ecommerce orders as recent orders
+        
+        // Add any additional data needed by the view
+        $viewData['data'] = collect($viewData['analyticChartData']);
+        
+        return view('dashboards.unified', $viewData);
     }
      public function analyticDashboard()
     {

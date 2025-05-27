@@ -419,6 +419,93 @@
             </div>
         </div>
 
+        {{-- Sección de Estadísticas --}}
+        <div class="grid grid-cols-12 gap-6 mb-6">
+            {{-- Estadísticas de Tareas --}}
+            <div class="lg:col-span-4 md:col-span-6 col-span-12">
+                <div class="card h-full">
+                    <div class="card-header">
+                        <h4 class="card-title">Estadísticas de Tareas</h4>
+                    </div>
+                    <div class="card-body p-6">
+                        <div class="h-64">
+                            <canvas id="taskStatsChart"></canvas>
+                        </div>
+                        <div class="grid grid-cols-2 gap-4 mt-4">
+                            @foreach($analyticChartData['taskStats']['data'] as $index => $count)
+                                <div class="text-center">
+                                    <div class="text-2xl font-bold" style="color: {{ $analyticChartData['taskStats']['colors'][$index] }}">
+                                        {{ $count }}
+                                    </div>
+                                    <div class="text-xs text-slate-500 dark:text-slate-300">
+                                        {{ $analyticChartData['taskStats']['labels'][$index] }}
+                                    </div>
+                                </div>
+                            @endforeach
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            {{-- Estadísticas de Proyectos --}}
+            <div class="lg:col-span-4 md:col-span-6 col-span-12">
+                <div class="card h-full">
+                    <div class="card-header">
+                        <h4 class="card-title">Estadísticas de Proyectos</h4>
+                    </div>
+                    <div class="card-body p-6">
+                        <div class="space-y-4">
+                            <div class="flex items-center justify-between">
+                                <span class="text-slate-500 dark:text-slate-300">Total de Proyectos</span>
+                                <span class="font-medium">{{ $analyticChartData['projectStats']['total'] }}</span>
+                            </div>
+                            <div class="flex items-center justify-between">
+                                <span class="text-slate-500 dark:text-slate-300">En Progreso</span>
+                                <span class="font-medium text-warning-500">{{ $analyticChartData['projectStats']['active'] }}</span>
+                            </div>
+                            <div class="flex items-center justify-between">
+                                <span class="text-slate-500 dark:text-slate-300">Completados</span>
+                                <span class="font-medium text-success-500">{{ $analyticChartData['projectStats']['completed'] }}</span>
+                            </div>
+                            <div class="flex items-center justify-between">
+                                <span class="text-slate-500 dark:text-slate-300">Atrasados</span>
+                                <span class="font-medium text-danger-500">{{ $analyticChartData['projectStats']['overdue'] }}</span>
+                            </div>
+                        </div>
+                        <div class="mt-6">
+                            <div class="h-40">
+                                <canvas id="projectProgressChart"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            {{-- Estadísticas de Ventas --}}
+            <div class="lg:col-span-4 col-span-12">
+                <div class="card h-full">
+                    <div class="card-header flex justify-between items-center">
+                        <h4 class="card-title">Ventas</h4>
+                        <div class="flex items-center">
+                            <span class="text-sm {{ $analyticChartData['yearlyRevenue']['growth'] >= 0 ? 'text-success-500' : 'text-danger-500' }}">
+                                {{ number_format($analyticChartData['yearlyRevenue']['growth'], 1) }}%
+                                <i class="fas {{ $analyticChartData['yearlyRevenue']['growth'] >= 0 ? 'fa-arrow-up' : 'fa-arrow-down' }} ml-1"></i>
+                            </span>
+                        </div>
+                    </div>
+                    <div class="card-body p-6">
+                        <div class="text-3xl font-bold mb-2">
+                            {{ number_format($analyticChartData['yearlyRevenue']['total'], 2) }}<span class="text-sm text-slate-400">€</span>
+                        </div>
+                        <p class="text-slate-500 dark:text-slate-300 text-sm mb-4">Ventas totales</p>
+                        <div class="h-40">
+                            <canvas id="salesChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         {{-- Tareas y Monitor de Servidor --}}
         <div class="grid grid-cols-12 gap-6">
             {{-- Resumen de Tareas Pendientes --}}
@@ -508,61 +595,121 @@
                                         </div>
                                     @endforeach
                                 @else
-                                    <p class="text-xs text-slate-500 dark:text-slate-400 text-center py-3">No hay tareas recientes</p>
+                                    <p class="text-sm text-slate-500 dark:text-slate-400">No hay tareas recientes</p>
                                 @endif
                             </div>
                         </div>
                     </div>
                 </div>
             </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
 
-            {{-- Server Monitor (REVERTED to original direct execution style) --}}
+            {{-- Server Monitor --}}
             <div class="lg:col-span-4 col-span-12">
-                <div class="card h-full">
+                <div class="card h-full flex flex-col">
                     <div class="card-header">
                         <h4 class="card-title">Monitor de Servidor</h4>
                     </div>
-                    <div class="card-body p-6">
+                    <div class="card-body p-6 flex-1 flex flex-col">
                         {{-- ApexCharts Pie chart for Load Average --}}
-                        <div id="cpu-load-chart" class="mb-4"></div> {{-- Target for load average pie chart --}}
+                        <div class="flex-1 min-h-[200px]">
+                            <div id="cpu-load-chart" class="w-full h-full"></div>
+                        </div>
 
-                        {{-- Server stats using direct shell_exec (similar to original, with basic fallback) --}}
-                        <div class="bg-slate-50 dark:bg-slate-900 rounded p-4 flex justify-between flex-wrap gap-4">
-                            <div class="space-y-1 basis-1/2 sm:basis-auto">
-                                <h4 class="text-slate-600 dark:text-slate-200 text-xs font-normal">Memoria RAM</h4>
-                                <div class="text-sm font-medium text-slate-900 dark:text-white">
-                                    {{-- Execute command directly, trim output, provide fallback 'N/A' --}}
-                                    {{-- Ensure $ variables for awk are escaped --}}
-                                    {{ trim(shell_exec("free -m | awk 'NR==2{printf \"%.1f%%\", \$3*100/\$2 }'")) ?: 'N/A' }}
+                        {{-- Server stats using direct shell_exec --}}
+                        <div class="mt-4 grid grid-cols-2 gap-4">
+                            {{-- Memoria RAM --}}
+                            <div class="bg-slate-50 dark:bg-slate-900 rounded-lg p-4">
+                                <div class="flex items-center justify-between mb-2">
+                                    <h4 class="text-slate-600 dark:text-slate-200 text-xs font-medium">Memoria RAM</h4>
+                                    <span class="text-xs px-2 py-1 bg-primary-100 dark:bg-primary-900 text-primary-800 dark:text-primary-200 rounded-full">
+                                        {{ trim(shell_exec("free -m | awk 'NR==2{printf \"%.1f%%\", \$3*100/\$2 }'")) ?: 'N/A' }}
+                                    </span>
                                 </div>
-                                <div class="text-slate-500 dark:text-slate-300 text-xs font-normal">
-                                    {{ trim(shell_exec("free -h | awk '/^Mem:/{print \$2}'")) ?: 'N/A' }} /
-                                    {{ trim(shell_exec("free -h | awk '/^Mem:/{print \$3}'")) ?: 'N/A' }} used
-                                </div>
-                            </div>
-                            <div class="space-y-1 basis-1/2 sm:basis-auto">
-                                <h4 class="text-slate-600 dark:text-slate-200 text-xs font-normal">Uso de Disco (/)</h4>
-                                <div class="text-sm font-medium text-slate-900 dark:text-white">
-                                     {{ trim(shell_exec("df -h | awk '\$NF==\"/\"{printf \"%s\", \$5}'")) ?: 'N/A' }}
-                                </div>
-                            </div>
-                            <div class="space-y-1 basis-1/2 sm:basis-auto">
-                                <h4 class="text-slate-600 dark:text-slate-200 text-xs font-normal">Carga de CPU</h4>
-                                <div class="text-sm font-medium text-slate-900 dark:text-white">
-                                     {{ trim(shell_exec("top -bn1 | grep '%Cpu(s):' | sed 's/.*, *\\([0-9.]*\\)%* id.*/\\1/' | awk '{printf \"%.1f%%\", 100 - \$1}'")) ?: 'N/A' }}
+                                <div class="text-sm text-slate-500 dark:text-slate-400">
+                                    <div class="flex justify-between text-xs mb-1">
+                                        <span>Usado: {{ trim(shell_exec("free -h | awk '/^Mem:/{print \$3}'")) ?: 'N/A' }}</span>
+                                        <span>Total: {{ trim(shell_exec("free -h | awk '/^Mem:/{print \$2}'")) ?: 'N/A' }}</span>
+                                    </div>
+                                    <div class="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-2">
+                                        @php
+                                            $ram_percent = trim(shell_exec("free -m | awk 'NR==2{printf \"%.0f\", \$3*100/\$2 }'")) ?: 0;
+                                        @endphp
+                                        <div class="bg-primary-500 h-2 rounded-full" style="width: {{ $ram_percent }}%"></div>
+                                    </div>
                                 </div>
                             </div>
-                             <div class="space-y-1 basis-full sm:basis-auto">
-                                <h4 class="text-slate-600 dark:text-slate-200 text-xs font-normal">Load Avg (1, 5, 15m)</h4>
-                                <div class="text-sm font-medium text-slate-900 dark:text-white">
-                                    {{-- Load average still comes from controller data for consistency --}}
-                                    {{ implode(', ', $data['loadAverage'] ?? ['N/A', 'N/A', 'N/A']) }}
+
+                            {{-- Uso de Disco --}}
+                            <div class="bg-slate-50 dark:bg-slate-900 rounded-lg p-4">
+                                <div class="flex items-center justify-between mb-2">
+                                    <h4 class="text-slate-600 dark:text-slate-200 text-xs font-medium">Disco (/)</h4>
+                                    <span class="text-xs px-2 py-1 bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200 rounded-full">
+                                        {{ trim(shell_exec("df -h | awk '\$NF==\"/\"{printf \"%s\", \$5}'") ?: 'N/A') }}
+                                    </span>
+                                </div>
+                                <div class="text-sm text-slate-500 dark:text-slate-400">
+                                    @php
+                                        $disk_used = trim(shell_exec("df -h | awk '\$NF==\"/\"{print \$3}'") ?: '0');
+                                        $disk_total = trim(shell_exec("df -h | awk '\$NF==\"/\"{print \$2}'") ?: '0');
+                                        $disk_percent = trim(shell_exec("df -h | awk '\$NF==\"/\"{gsub(\"%\",\"\",\$5); print \$5}'") ?: '0');
+                                    @endphp
+                                    <div class="flex justify-between text-xs mb-1">
+                                        <span>Usado: {{ $disk_used }}</span>
+                                        <span>Total: {{ $disk_total }}</span>
+                                    </div>
+                                    <div class="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-2">
+                                        <div class="bg-green-500 h-2 rounded-full" style="width: {{ $disk_percent }}%"></div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {{-- Carga de CPU --}}
+                            <div class="bg-slate-50 dark:bg-slate-900 rounded-lg p-4">
+                                <h4 class="text-slate-600 dark:text-slate-200 text-xs font-medium mb-2">Uso de CPU</h4>
+                                <div class="flex items-center">
+                                    @php
+                                        $cpu_usage = trim(shell_exec("top -bn1 | grep '%Cpu(s):' | sed 's/.*, *\\([0-9.]*\\)%* id.*/\\1/' | awk '{printf \"%.0f\", 100 - \$1}'") ?: '0');
+                                    @endphp
+                                    <div class="flex-1 mr-3">
+                                        <div class="flex justify-between text-xs mb-1">
+                                            <span>Uso actual</span>
+                                            <span>{{ $cpu_usage }}%</span>
+                                        </div>
+                                        <div class="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-2">
+                                            <div class="bg-yellow-500 h-2 rounded-full" style="width: {{ $cpu_usage }}%"></div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {{-- Load Average --}}
+                            <div class="bg-slate-50 dark:bg-slate-900 rounded-lg p-4">
+                                <h4 class="text-slate-600 dark:text-slate-200 text-xs font-medium mb-2">Carga del Sistema</h4>
+                                <div class="space-y-2">
+                                    @php
+                                        $load_avg = $data['loadAverage'] ?? [0, 0, 0];
+                                        $load_avg_display = array_map(function($value) {
+                                            return number_format((float)$value, 2);
+                                        }, $load_avg);
+                                    @endphp
+                                    <div class="flex items-center justify-between text-sm">
+                                        <span class="text-slate-500 dark:text-slate-400">1 min</span>
+                                        <span class="font-medium {{ $load_avg[0] > 1 ? 'text-red-500' : 'text-green-500' }}">
+                                            {{ $load_avg_display[0] ?? 'N/A' }}
+                                        </span>
+                                    </div>
+                                    <div class="flex items-center justify-between text-sm">
+                                        <span class="text-slate-500 dark:text-slate-400">5 min</span>
+                                        <span class="font-medium {{ $load_avg[1] > 1 ? 'text-orange-500' : 'text-green-500' }}">
+                                            {{ $load_avg_display[1] ?? 'N/A' }}
+                                        </span>
+                                    </div>
+                                    <div class="flex items-center justify-between text-sm">
+                                        <span class="text-slate-500 dark:text-slate-400">15 min</span>
+                                        <span class="font-medium {{ $load_avg[2] > 1 ? 'text-yellow-500' : 'text-green-500' }}">
+                                            {{ $load_avg_display[2] ?? 'N/A' }}
+                                        </span>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -576,7 +723,9 @@
 
     {{-- Combined JavaScript --}}
     @push('scripts')
-        {{-- Load jQuery from CDN FIRST --}}
+        {{-- Load Chart.js --}}
+        <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+        {{-- Load jQuery from CDN --}}
         <script src="https://code.jquery.com/jquery-3.7.1.min.js" integrity="sha256-/JqT3SQfawRcv/BIHPThkBvs0OEvtFFmqPF/lYI/Cxo=" crossorigin="anonymous"></script>
 
         {{-- Load jQuery Mousewheel Plugin (Required by jVectorMap for zoom) - CORRECTED SRI HASH --}}
@@ -1081,8 +1230,160 @@
                      if(loadingOverlay.length) loadingOverlay.hide(); // Hide loading
                 }
 
-            }); // End DOMContentLoaded
-        </script>
+                // Initialize Task Statistics Chart
+                const taskCtx = document.getElementById('taskStatsChart')?.getContext('2d');
+                if (taskCtx) {
+                    new Chart(taskCtx, {
+                        type: 'doughnut',
+                        data: {
+                            labels: @json($analyticChartData['taskStats']['labels'] ?? []),
+                            datasets: [{
+                                data: @json($analyticChartData['taskStats']['data'] ?? []),
+                                backgroundColor: @json($analyticChartData['taskStats']['colors'] ?? []),
+                                borderWidth: 0,
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            cutout: '70%',
+                            plugins: {
+                                legend: { display: false },
+                                tooltip: {
+                                    callbacks: {
+                                        label: function(context) {
+                                            const label = context.label || '';
+                                            const value = context.raw || 0;
+                                            const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                                            const percentage = total > 0 ? Math.round((value / total) * 100) : 0;
+                                            return `${label}: ${value} (${percentage}%)`;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    });
+                }
+
+                // Initialize Project Progress Chart
+                const projectCtx = document.getElementById('projectProgressChart')?.getContext('2d');
+                if (projectCtx) {
+                    const projectData = {
+                        completed: {{ $analyticChartData['projectStats']['completed'] ?? 0 }},
+                        inProgress: {{ $analyticChartData['projectStats']['active'] ?? 0 }},
+                        overdue: {{ $analyticChartData['projectStats']['overdue'] ?? 0 }}
+                    };
+                    
+                    const totalProjects = {{ $analyticChartData['projectStats']['total'] ?? 1 }} || 1;
+                    
+                    new Chart(projectCtx, {
+                        type: 'bar',
+                        data: {
+                            labels: ['Progreso'],
+                            datasets: [
+                                {
+                                    label: 'Completados',
+                                    data: [(projectData.completed / totalProjects) * 100],
+                                    backgroundColor: '#10B981',
+                                    barPercentage: 0.6
+                                },
+                                {
+                                    label: 'En Progreso',
+                                    data: [(projectData.inProgress / totalProjects) * 100],
+                                    backgroundColor: '#F59E0B',
+                                    barPercentage: 0.6
+                                },
+                                {
+                                    label: 'Atrasados',
+                                    data: [(projectData.overdue / totalProjects) * 100],
+                                    backgroundColor: '#EF4444',
+                                    barPercentage: 0.6
+                                }
+                            ]
+                        },
+                        options: {
+                            indexAxis: 'y',
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            scales: {
+                                x: {
+                                    stacked: true,
+                                    max: 100,
+                                    grid: { display: false },
+                                    ticks: { display: false }
+                                },
+                                y: {
+                                    stacked: true,
+                                    display: false
+                                }
+                            },
+                            plugins: { legend: { display: false } }
+                        }
+                    });
+                }
+
+
+                // Initialize Sales Chart
+                const salesCtx = document.getElementById('salesChart')?.getContext('2d');
+                if (salesCtx) {
+                    const salesData = @json($analyticChartData['yearlyRevenue']['revenue'] ?? []);
+                    const months = @json($analyticChartData['yearlyRevenue']['year'] ?? []);
+                    
+                    if (salesData.length > 0 && months.length > 0) {
+                        new Chart(salesCtx, {
+                            type: 'line',
+                            data: {
+                                labels: months,
+                                datasets: [{
+                                    data: salesData,
+                                    borderColor: '#3B82F6',
+                                    backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                                    borderWidth: 2,
+                                    tension: 0.3,
+                                    fill: true,
+                                    pointBackgroundColor: '#fff',
+                                    pointBorderColor: '#3B82F6',
+                                    pointBorderWidth: 2,
+                                    pointRadius: 3,
+                                    pointHoverRadius: 5
+                                }]
+                            },
+                            options: {
+                                responsive: true,
+                                maintainAspectRatio: false,
+                                plugins: {
+                                    legend: { display: false },
+                                    tooltip: {
+                                        mode: 'index',
+                                        intersect: false,
+                                        callbacks: {
+                                            label: function(context) {
+                                                const value = context.raw || 0;
+                                                return '€' + value.toLocaleString();
+                                            }
+                                        }
+                                    }
+                                },
+                                scales: {
+                                    x: {
+                                        grid: {
+                                            display: false,
+                                            drawBorder: false
+                                        },
+                                        ticks: {
+                                            maxRotation: 0,
+                                            autoSkipPadding: 10
+                                        }
+                                    },
+                                    y: {
+                                        display: false,
+                                        beginAtZero: true
+                                    }
+                                }
+                            }
+                        });
+                    }
+                }
         {{-- ** END: Javascript Block ** --}}
     @endpush
 
