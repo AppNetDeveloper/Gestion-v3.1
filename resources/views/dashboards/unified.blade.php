@@ -141,7 +141,16 @@
                         {{ __('Statistics') }}
                     </h3>
                     <div class="grid md:grid-cols-2 grid-cols-1 gap-4 p-6">
+                        @php
+                            // Verificar permisos para cada tarjeta
+                            $showOrders = auth()->user()->can('quotes index') || auth()->user()->can('invoices index');
+                            $showRevenue = auth()->user()->can('invoices index');
+                            $showProfit = auth()->user()->can('invoices index');
+                            $showGrowth = auth()->user()->can('quotes index') || auth()->user()->can('invoices index');
+                        @endphp
+
                         {{-- Pedidos --}}
+                        @if($showOrders)
                         <div class="statisticsChartCard">
                             <div>
                                 <h5 class="text-sm text-slate-600 dark:text-slate-300 mb-[6px]">{{ $stats['sales']['label'] ?? 'Pedidos' }}</h5>
@@ -153,9 +162,12 @@
                                     {{ __('From last week.') }}
                                 </p>
                             </div>
-                            <div id="columnChart" class="mt-1"></div> {{-- Target for orders column chart --}}
+                            <div id="columnChart" class="mt-1"></div>
                         </div>
+                        @endif
+
                         {{-- Ingresos --}}
+                        @if($showRevenue)
                         <div class="statisticsChartCard">
                             <div>
                                 <h5 class="text-sm text-slate-600 dark:text-slate-300 mb-[6px]">{{ $stats['revenue']['label'] ?? 'Ingresos' }}</h5>
@@ -169,9 +181,12 @@
                                     {{ __('From last week.') }}
                                 </p>
                             </div>
-                            <div id="revenueChart" class="mt-1"></div> {{-- Target for revenue chart --}}
+                            <div id="revenueChart" class="mt-1"></div>
                         </div>
+                        @endif
+
                         {{-- Beneficio --}}
+                        @if($showProfit)
                         <div class="statisticsChartCard">
                             <div>
                                 <h5 class="text-sm text-slate-600 dark:text-slate-300 mb-[6px]">{{ $stats['profit']['label'] ?? 'Beneficio' }}</h5>
@@ -185,9 +200,12 @@
                                     {{ __('From last week.') }}
                                 </p>
                             </div>
-                            <div id="profitChart" class="mt-1"></div> {{-- Target for profit chart --}}
+                            <div id="profitChart" class="mt-1"></div>
                         </div>
+                        @endif
+
                         {{-- Crecimiento --}}
+                        @if($showGrowth)
                         <div class="statisticsChartCard">
                             <div>
                                 <h5 class="text-sm text-slate-600 dark:text-slate-300 mb-[6px]">Crecimiento</h5>
@@ -201,8 +219,9 @@
                                     {{ __('From last week.') }}
                                 </p>
                             </div>
-                            <div id="growthChart" class="mt-1"></div> {{-- Target for growth chart --}}
+                            <div id="growthChart" class="mt-1"></div>
                         </div>
+                        @endif
                     </div>
                 </div>
             </div>
