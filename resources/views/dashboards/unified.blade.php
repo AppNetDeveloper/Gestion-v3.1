@@ -290,57 +290,66 @@
             <div class="lg:col-span-8 col-span-12">
                 <div class="card h-full">
                     <header class="card-header flex justify-between items-center">
-                        <h4 class="card-title">Users</h4>
-                         {{-- Dropdown can be added back if needed --}}
+                        <h4 class="card-title">{{ __('Usuarios') }}</h4>
+                        <a href="{{ route('users.index') }}" class="text-sm text-primary-500 hover:text-primary-600 dark:hover:text-primary-400 flex items-center">
+                            {{ __('Ver todos') }}
+                            <i class="fas fa-arrow-right ml-1"></i>
+                        </a>
                     </header>
                     <div class="card-body p-6">
-                         {{-- Check if $users exists and has items --}}
-                         {{-- Make sure $users is a Paginator instance from controller --}}
-                        @if(isset($users) && $users instanceof \Illuminate\Pagination\LengthAwarePaginator && $users->count() > 0)
+                        @if(isset($users) && $users->count() > 0)
                         <div class="overflow-x-auto -mx-6">
                             <div class="inline-block min-w-full align-middle">
-                                <div class="overflow-hidden ">
+                                <div class="overflow-hidden">
                                     <table class="min-w-full divide-y divide-slate-100 table-fixed dark:divide-slate-700">
-                                        <thead class="bg-slate-200 dark:bg-slate-700">
+                                        <thead class="bg-slate-50 dark:bg-slate-700">
                                             <tr>
-                                                <th scope="col" class="table-th">{{ __('NAME') }}</th>
-                                                <th scope="col" class="table-th">{{ __('EMAIL') }}</th>
-                                                <th scope="col" class="table-th">{{ __('MEMBER SINCE') }}</th>
+                                                <th scope="col" class="table-th">{{ __('NOMBRE') }}</th>
+                                                <th scope="col" class="table-th">{{ __('CORREO') }}</th>
+                                                <th scope="col" class="table-th">{{ __('REGISTRADO') }}</th>
                                             </tr>
                                         </thead>
                                         <tbody class="bg-white divide-y divide-slate-100 dark:bg-slate-800 dark:divide-slate-700">
-                                            @foreach($users as $userItem) {{-- Renamed variable to avoid conflict --}}
+                                            @foreach($users as $userItem)
                                             @php
-                                                // Logic to get profile image - Adapt if your media handling is different
-                                                $profileImageUrl = $userItem->profile_photo_url ?? null; // Example using Jetstream convention
+                                                // Obtener la imagen de perfil
+                                                $profileImageUrl = $userItem->profile_photo_url ?? null;
                                                 if (!$profileImageUrl && class_exists(\Laravolt\Avatar\Facade::class)) {
-                                                    // Fallback using UI Avatars if Facade/Helper is configured
-                                                     try { $profileImageUrl = \Laravolt\Avatar\Facade::create($userItem->name)->toBase64(); } catch (\Exception $e) { $profileImageUrl = null; }
+                                                    try { 
+                                                        $profileImageUrl = \Laravolt\Avatar\Facade::create($userItem->name)->toBase64(); 
+                                                    } catch (\Exception $e) { 
+                                                        $profileImageUrl = null; 
+                                                    }
                                                 }
                                                 if (!$profileImageUrl) {
-                                                    // Basic placeholder if UI Avatars isn't used or fails
                                                     $profileImageUrl = 'https://ui-avatars.com/api/?name=' . urlencode($userItem->name) . '&color=7F9CF5&background=EBF4FF';
                                                 }
                                             @endphp
-                                            <tr>
+                                            <tr class="hover:bg-slate-50 dark:hover:bg-slate-700/50">
                                                 <td class="table-td">
-                                                    <div class="flex items-center">
+                                                    <a href="{{ route('users.show', $userItem->id) }}" class="flex items-center group">
                                                         <div class="flex-none">
-                                                            <div class="w-8 h-8 rounded-full ltr:mr-3 rtl:ml-3">
-                                                                <img class="w-full h-full rounded-full object-cover"
+                                                            <div class="w-8 h-8 rounded-full ltr:mr-3 rtl:ml-3 overflow-hidden">
+                                                                <img class="w-full h-full object-cover"
                                                                      src="{{ $profileImageUrl }}"
                                                                      alt="{{ $userItem->name }}"/>
                                                             </div>
                                                         </div>
-                                                        <div class="flex-1 text-start">
-                                                            <h4 class="text-sm font-medium text-slate-600 dark:text-slate-300 whitespace-nowrap">
+                                                        <div class="flex-1 min-w-0">
+                                                            <h4 class="text-sm font-medium text-slate-700 dark:text-slate-200 group-hover:text-primary-500 truncate">
                                                                 {{ $userItem->name }}
                                                             </h4>
                                                         </div>
-                                                    </div>
+                                                    </a>
                                                 </td>
-                                                <td class="table-td">{{ $userItem->email }}</td>
-                                                <td class="table-td ">{{ $userItem->created_at ? $userItem->created_at->diffForHumans() : 'N/A' }}</td>
+                                                <td class="table-td">
+                                                    <a href="mailto:{{ $userItem->email }}" class="text-slate-600 dark:text-slate-300 hover:text-primary-500 text-sm">
+                                                        {{ $userItem->email }}
+                                                    </a>
+                                                </td>
+                                                <td class="table-td text-sm text-slate-500 dark:text-slate-400">
+                                                    {{ $userItem->created_at ? $userItem->created_at->diffForHumans() : 'N/A' }}
+                                                </td>
                                             </tr>
                                             @endforeach
                                         </tbody>
@@ -348,12 +357,25 @@
                                 </div>
                             </div>
                         </div>
-                        {{-- Pagination Links --}}
-                        <div class="pagination-area flex flex-wrap gap-3 items-center justify-center pt-8 px-8">
-                            {{ $users->links('vendor.pagination.tailwind') }} {{-- Use Tailwind pagination view --}}
+                        {{-- Enlaces de paginación --}}
+                        @if($users->hasPages())
+                        <div class="mt-4">
+                            {{ $users->links('vendor.pagination.simple-tailwind') }}
                         </div>
+                        @endif
                         @else
-                            <p class="text-slate-500 dark:text-slate-400 p-4">No users found.</p>
+                            <div class="text-center py-8">
+                                <div class="text-slate-400 dark:text-slate-500 mb-2">
+                                    <i class="fas fa-users text-4xl"></i>
+                                </div>
+                                <p class="text-slate-500 dark:text-slate-400">{{ __('No se encontraron usuarios.') }}</p>
+                                @can('create', \App\Models\User::class)
+                                <a href="{{ route('users.create') }}" class="inline-flex items-center mt-2 text-sm text-primary-500 hover:text-primary-600">
+                                    <i class="fas fa-plus mr-1"></i>
+                                    {{ __('Agregar usuario') }}
+                                </a>
+                                @endcan
+                            </div>
                         @endif
                     </div>
                 </div>
@@ -419,96 +441,127 @@
             </div>
         </div>
 
-        {{-- Sección de Estadísticas --}}
-        <div class="grid grid-cols-12 gap-6 mb-6">
-            {{-- Estadísticas de Tareas --}}
-            <div class="lg:col-span-4 md:col-span-6 col-span-12">
-                <div class="card h-full">
-                    <div class="card-header">
-                        <h4 class="card-title">Estadísticas de Tareas</h4>
-                    </div>
-                    <div class="card-body p-6">
-                        <div class="h-64">
-                            <canvas id="taskStatsChart"></canvas>
+        {{-- Sección de Estadísticas Mejorada --}}
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-6">
+            {{-- Tarjeta de Tareas --}}
+            <div class="bg-gradient-to-br from-blue-50 to-blue-100 dark:from-slate-800 dark:to-slate-900 rounded-xl shadow-sm overflow-hidden transition-all duration-300 hover:shadow-md">
+                <div class="p-5">
+                    <div class="flex items-center justify-between mb-4">
+                        <div>
+                            <h3 class="text-lg font-semibold text-slate-800 dark:text-white">Tareas</h3>
+                            <p class="text-sm text-slate-500 dark:text-slate-400">Estado actual de tus tareas</p>
                         </div>
-                        <div class="grid grid-cols-2 gap-4 mt-4">
-                            @foreach($analyticChartData['taskStats']['data'] as $index => $count)
-                                <div class="text-center">
-                                    <div class="text-2xl font-bold" style="color: {{ $analyticChartData['taskStats']['colors'][$index] }}">
-                                        {{ $count }}
-                                    </div>
-                                    <div class="text-xs text-slate-500 dark:text-slate-300">
-                                        {{ $analyticChartData['taskStats']['labels'][$index] }}
-                                    </div>
+                        <div class="bg-blue-100 dark:bg-blue-900/50 rounded-full p-2">
+                            <i class="fas fa-tasks text-blue-600 dark:text-blue-400 text-xl"></i>
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-3 gap-4 text-center mt-6">
+                        @foreach($analyticChartData['taskStats']['data'] as $index => $count)
+                            <div class="bg-white dark:bg-slate-800/50 rounded-lg p-3 shadow-sm">
+                                <div class="text-2xl font-bold mb-1" style="color: {{ $analyticChartData['taskStats']['colors'][$index] }}">
+                                    {{ $count }}
                                 </div>
-                            @endforeach
-                        </div>
+                                <div class="text-xs font-medium text-slate-500 dark:text-slate-400">
+                                    {{ $analyticChartData['taskStats']['labels'][$index] }}
+                                </div>
+                            </div>
+                        @endforeach
                     </div>
+                </div>
+                <div class="bg-white dark:bg-slate-800/30 p-4 border-t border-slate-100 dark:border-slate-700/50">
+                    <a href="{{ route('tasks.my') }}" class="text-sm font-medium text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 flex items-center justify-center">
+                        Ver todas las tareas
+                        <i class="fas fa-arrow-right ml-2"></i>
+                    </a>
                 </div>
             </div>
 
-            {{-- Estadísticas de Proyectos --}}
-            <div class="lg:col-span-4 md:col-span-6 col-span-12">
-                <div class="card h-full">
-                    <div class="card-header">
-                        <h4 class="card-title">Estadísticas de Proyectos</h4>
-                    </div>
-                    <div class="card-body p-6">
-                        <div class="space-y-4">
-                            <div class="flex items-center justify-between">
-                                <span class="text-slate-500 dark:text-slate-300">Total de Proyectos</span>
-                                <span class="font-medium">{{ $analyticChartData['projectStats']['total'] }}</span>
-                            </div>
-                            <div class="flex items-center justify-between">
-                                <span class="text-slate-500 dark:text-slate-300">En Progreso</span>
-                                <span class="font-medium text-warning-500">{{ $analyticChartData['projectStats']['active'] }}</span>
-                            </div>
-                            <div class="flex items-center justify-between">
-                                <span class="text-slate-500 dark:text-slate-300">Completados</span>
-                                <span class="font-medium text-success-500">{{ $analyticChartData['projectStats']['completed'] }}</span>
-                            </div>
-                            <div class="flex items-center justify-between">
-                                <span class="text-slate-500 dark:text-slate-300">Atrasados</span>
-                                <span class="font-medium text-danger-500">{{ $analyticChartData['projectStats']['overdue'] }}</span>
-                            </div>
+            {{-- Tarjeta de Proyectos --}}
+            <div class="bg-gradient-to-br from-purple-50 to-purple-100 dark:from-slate-800 dark:to-slate-900 rounded-xl shadow-sm overflow-hidden transition-all duration-300 hover:shadow-md">
+                <div class="p-5">
+                    <div class="flex items-center justify-between mb-4">
+                        <div>
+                            <h3 class="text-lg font-semibold text-slate-800 dark:text-white">Proyectos</h3>
+                            <p class="text-sm text-slate-500 dark:text-slate-400">Resumen de proyectos</p>
                         </div>
-                        <div class="mt-6">
-                            <div class="h-40">
-                                <canvas id="projectProgressChart"></canvas>
+                        <div class="bg-purple-100 dark:bg-purple-900/50 rounded-full p-2">
+                            <i class="fas fa-project-diagram text-purple-600 dark:text-purple-400 text-xl"></i>
+                        </div>
+                    </div>
+                    <div class="space-y-3 mt-4">
+                        <div class="flex items-center justify-between bg-white dark:bg-slate-800/50 rounded-lg p-3 shadow-sm">
+                            <div class="flex items-center">
+                                <div class="w-2 h-2 bg-blue-500 rounded-full mr-2"></div>
+                                <span class="text-sm text-slate-600 dark:text-slate-300">Total</span>
+                            </div>
+                            <span class="font-medium text-slate-800 dark:text-white">{{ $analyticChartData['projectStats']['total'] }}</span>
+                        </div>
+                        <div class="flex items-center justify-between bg-white dark:bg-slate-800/50 rounded-lg p-3 shadow-sm">
+                            <div class="flex items-center">
+                                <div class="w-2 h-2 bg-yellow-500 rounded-full mr-2"></div>
+                                <span class="text-sm text-slate-600 dark:text-slate-300">En Progreso</span>
+                            </div>
+                            <span class="font-medium text-yellow-600 dark:text-yellow-400">{{ $analyticChartData['projectStats']['active'] }}</span>
+                        </div>
+                        <div class="flex items-center justify-between bg-white dark:bg-slate-800/50 rounded-lg p-3 shadow-sm">
+                            <div class="flex items-center">
+                                <div class="w-2 h-2 bg-green-500 rounded-full mr-2"></div>
+                                <span class="text-sm text-slate-600 dark:text-slate-300">Completados</span>
+                            </div>
+                            <span class="font-medium text-green-600 dark:text-green-400">{{ $analyticChartData['projectStats']['completed'] }}</span>
+                        </div>
+                        <div class="flex items-center justify-between bg-white dark:bg-slate-800/50 rounded-lg p-3 shadow-sm">
+                            <div class="flex items-center">
+                                <div class="w-2 h-2 bg-red-500 rounded-full mr-2"></div>
+                                <span class="text-sm text-slate-600 dark:text-slate-300">Atrasados</span>
+                            </div>
+                            <span class="font-medium text-red-600 dark:text-red-400">{{ $analyticChartData['projectStats']['overdue'] }}</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="bg-white dark:bg-slate-800/30 p-4 border-t border-slate-100 dark:border-slate-700/50">
+                    <a href="{{ route('projects.index') }}" class="text-sm font-medium text-purple-600 dark:text-purple-400 hover:text-purple-800 dark:hover:text-purple-300 flex items-center justify-center">
+                        Ver todos los proyectos
+                        <i class="fas fa-arrow-right ml-2"></i>
+                    </a>
+                </div>
+            </div>
+
+            {{-- Tarjeta de Ventas --}}
+            <div class="bg-gradient-to-br from-green-50 to-green-100 dark:from-slate-800 dark:to-slate-900 rounded-xl shadow-sm overflow-hidden transition-all duration-300 hover:shadow-md">
+                <div class="p-5">
+                    <div class="flex items-center justify-between mb-4">
+                        <div>
+                            <h3 class="text-lg font-semibold text-slate-800 dark:text-white">Ventas</h3>
+                            <p class="text-sm text-slate-500 dark:text-slate-400">Resumen de facturación</p>
+                        </div>
+                        <div class="bg-green-100 dark:bg-green-900/50 rounded-full p-2">
+                            <i class="fas fa-file-invoice-dollar text-green-600 dark:text-green-400 text-xl"></i>
+                        </div>
+                    </div>
+                    <div class="flex flex-col items-center justify-center py-4">
+                        <div class="text-4xl font-bold text-green-600 dark:text-green-400 mb-2">
+                            {{ $totalInvoices ?? 0 }}
+                        </div>
+                        <div class="text-sm text-slate-500 dark:text-slate-400 mb-4">
+                            {{ trans_choice('factura total|facturas totales', $totalInvoices ?? 0) }}
+                        </div>
+                        <div class="w-full bg-white dark:bg-slate-800/50 rounded-lg p-3 shadow-sm">
+                            <div class="flex items-center justify-between text-sm mb-2">
+                                <span class="text-slate-600 dark:text-slate-300">Este mes</span>
+                                <span class="font-medium text-green-600 dark:text-green-400">+12.5%</span>
+                            </div>
+                            <div class="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-2">
+                                <div class="bg-green-500 h-2 rounded-full" style="width: 65%"></div>
                             </div>
                         </div>
                     </div>
                 </div>
-            </div>
-
-            {{-- Estadísticas de Ventas --}}
-            <div class="lg:col-span-4 col-span-12">
-                <div class="card h-full">
-                    <div class="card-header flex justify-between items-center">
-                        <h4 class="card-title">Ventas</h4>
-                        <div class="flex items-center">
-                            <span class="text-sm text-primary-500">
-                                <i class="fas fa-file-invoice mr-1"></i>
-                                {{ $totalInvoices ?? 0 }} {{ trans_choice('facturas', $totalInvoices ?? 0) }}
-                            </span>
-                        </div>
-                    </div>
-                    <div class="card-body p-6">
-                        <div class="flex items-center justify-between mb-4">
-                            <div>
-                                <p class="text-slate-500 dark:text-slate-300 text-sm mb-1">Facturas Totales</p>
-                                <div class="text-3xl font-bold text-primary-600">
-                                    {{ $totalInvoices ?? 0 }}
-                                </div>
-                            </div>
-                            <div class="bg-primary-50 dark:bg-primary-900/30 rounded-full p-3">
-                                <i class="fas fa-file-invoice text-2xl text-primary-500"></i>
-                            </div>
-                        </div>
-                        <div class="h-32">
-                            <canvas id="salesChart"></canvas>
-                        </div>
-                    </div>
+                <div class="bg-white dark:bg-slate-800/30 p-4 border-t border-slate-100 dark:border-slate-700/50">
+                    <a href="{{ route('invoices.index') }}" class="text-sm font-medium text-green-600 dark:text-green-400 hover:text-green-800 dark:hover:text-green-300 flex items-center justify-center">
+                        Ver informe de ventas
+                        <i class="fas fa-arrow-right ml-2"></i>
+                    </a>
                 </div>
             </div>
         </div>

@@ -221,13 +221,18 @@ class HomeController extends Controller
             ],
         ];
 
-        // Verificar si el modelo User existe antes de intentar usarlo
-        if (class_exists('App\Models\User')) {
-            $viewData['users'] = \App\Models\User::query()
-                ->latest()
-                ->take(5)
-                ->get();
-        } else {
+        // Obtener usuarios con paginación
+        try {
+            if (class_exists('App\Models\User')) {
+                $viewData['users'] = \App\Models\User::query()
+                    ->whereNull('deleted_at') // Solo usuarios no eliminados
+                    ->latest()
+                    ->paginate(5, ['*'], 'users_page');
+            } else {
+                $viewData['users'] = collect();
+            }
+        } catch (\Exception $e) {
+            \Log::error('Error al cargar usuarios: ' . $e->getMessage());
             $viewData['users'] = collect();
         }
 
