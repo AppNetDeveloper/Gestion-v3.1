@@ -56,3 +56,6 @@ email/files/*
 email/imap_config.json
 python/scraping/venv-email/
 /python/scraping/venv-email/
+python/venv/
+python/venv-*/
+__pycache__/
