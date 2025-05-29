@@ -2346,3 +2346,28 @@ AttributeError: type object 'datetime.datetime' has no attribute 'datetime'
 2025-05-29 19:15:33,439 - search_engines - INFO - Búsqueda en bing completada con 0 resultados
 2025-05-29 19:15:33,458 - search_engines - INFO - Búsqueda en bing completada con 10 resultados
 2025-05-29 19:15:33,528 - search_engines - INFO - Búsqueda en gigablast completada con 0 resultados
+2025-05-29 19:16:37,549 - search_engines - WARNING - Tiempo de espera agotado para brave (65s)
+2025-05-29 19:16:37,550 - search_engines - WARNING - Tiempo de espera agotado para brave (65s)
+2025-05-29 19:16:37,550 - search_engines - WARNING - Tiempo de espera agotado para brave (65s)
+2025-05-29 19:16:37,550 - search_engines - WARNING - Tiempo de espera agotado para brave (65s)
+2025-05-29 19:16:37,551 - search_engines - WARNING - Tiempo de espera agotado para brave (65s)
+2025-05-29 19:16:37,551 - search_engines - WARNING - Tiempo de espera agotado para brave (65s)
+2025-05-29 19:16:37,551 - search_engines - WARNING - Tiempo de espera agotado para brave (65s)
+2025-05-29 19:16:37,552 - search_engines - WARNING - Tiempo de espera agotado para brave (65s)
+2025-05-29 19:16:37,552 - search_engines - WARNING - Tiempo de espera agotado para brave (65s)
+2025-05-29 19:16:37,552 - search_engines - WARNING - Tiempo de espera agotado para brave (65s)
+2025-05-29 19:16:37,552 - search_engines - INFO - Búsqueda completada. Resultados: {'google': 0, 'duckduckgo': 0, 'gigablast': 0, 'bing': 0, 'brave': 0}
+2025-05-29 19:16:37,553 - scraping - WARNING - [Task 6d5ec812-0b53-4658-a61f-0638bdb57366] GOOGLE no devolvió resultados o devolvió un tipo inesperado: <class 'list'>
+2025-05-29 19:16:37,553 - scraping - WARNING - [Task 6d5ec812-0b53-4658-a61f-0638bdb57366] DUCKDUCKGO no devolvió resultados o devolvió un tipo inesperado: <class 'list'>
+2025-05-29 19:16:37,553 - scraping - WARNING - [Task 6d5ec812-0b53-4658-a61f-0638bdb57366] GIGABLAST no devolvió resultados o devolvió un tipo inesperado: <class 'list'>
+2025-05-29 19:16:37,553 - scraping - WARNING - [Task 6d5ec812-0b53-4658-a61f-0638bdb57366] BING no devolvió resultados o devolvió un tipo inesperado: <class 'list'>
+2025-05-29 19:16:37,553 - scraping - WARNING - [Task 6d5ec812-0b53-4658-a61f-0638bdb57366] BRAVE no devolvió resultados o devolvió un tipo inesperado: <class 'list'>
+2025-05-29 19:16:37,554 - scraping - INFO - [Task 6d5ec812-0b53-4658-a61f-0638bdb57366] Total de URLs únicas encontradas: 0
+2025-05-29 19:16:37,554 - scraping - WARNING - [Task 6d5ec812-0b53-4658-a61f-0638bdb57366] No se encontraron URLs para procesar
+2025-05-29 19:16:37,554 - scraping - INFO - [Task 6d5ec812-0b53-4658-a61f-0638bdb57366] Resumen: 0 URLs con datos, 0 correos, 0 teléfonos
+2025-05-29 19:16:37,554 - scraping - INFO - [Task 6d5ec812-0b53-4658-a61f-0638bdb57366] Enviando resultados a https://app.appnet.dev/api/scraping-callback
+2025-05-29 19:16:37,879 - scraping - INFO - [Task 6d5ec812-0b53-4658-a61f-0638bdb57366] Resultados enviados correctamente. Respuesta: 200
+2025-05-29 19:16:37,879 - scraping - INFO - [Task 6d5ec812-0b53-4658-a61f-0638bdb57366] Tarea completada en 68.01 segundos
+2025-05-29 19:16:37,879 - scraping - WARNING - [Task 6d5ec812-0b53-4658-a61f-0638bdb57366] No se encontraron resultados para la búsqueda
+2025-05-29 19:16:38,123 - scraping - INFO - [Queue] Tarea 6d5ec812-0b53-4658-a61f-0638bdb57366 completada exitosamente
+2025-05-29 19:16:38,124 - scraping - INFO - [Queue] Tarea 6d5ec812-0b53-4658-a61f-0638bdb57366 finalizada y eliminada del seguimiento
