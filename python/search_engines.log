@@ -1,0 +1,134 @@
+2025-05-29 13:03:49,228 - scraping.search_engines - INFO - Programando búsqueda en Google: test
+2025-05-29 13:03:49,229 - scraping.search_engines - INFO - Programando búsqueda en DuckDuckGo: test
+2025-05-29 13:03:49,677 - scraping.search_engines - ERROR - Error en búsqueda Google: 429, message='Too Many Requests', url='https://www.google.com/sorry/index?continue=https://www.google.com/search?q%3Dtest%26num%3D2%26hl%3Des%26start%3D0%26safe%3Dactive%26filter%3D0&hl=es&q=EgQCO3DnGLW24cEGIjBa5RWW-fzQYBL1f04dbsgDUf4vDWgxaCxiOKKPoLLUPkIoenCy_dqhFD5rSxPTg7kyAnJSWgFD'
+2025-05-29 13:17:53,438 - scraping.scraping - INFO - Iniciando el servicio de búsqueda...
+2025-05-29 13:17:53,439 - scraping.scraping - INFO - Iniciando procesador de cola de búsquedas...
+2025-05-29 13:17:53,439 - scraping.scraping - INFO - Procesador de cola iniciado correctamente
+2025-05-29 13:19:55,599 - scraping.scraping - INFO - Iniciando el servicio de búsqueda...
+2025-05-29 13:19:55,599 - scraping.scraping - INFO - Iniciando procesador de cola de búsquedas...
+2025-05-29 13:19:55,599 - scraping.scraping - INFO - Procesador de cola iniciado correctamente
+2025-05-29 13:20:27,098 - scraping.scraping - INFO - [API] Iniciando búsqueda - Task ID: 241acdce-7b2c-4997-8f33-28047096d940, Keyword: ceo empresa murcia Linkedin
+2025-05-29 13:20:27,098 - scraping.scraping - INFO - [Queue] Agregando búsqueda a la cola - ID: 241acdce-7b2c-4997-8f33-28047096d940, Keyword: ceo empresa murcia Linkedin, Callback: https://app.appnet.dev/api/scraping-callback
+2025-05-29 13:20:27,098 - scraping.scraping - INFO - [Queue] Búsqueda 241acdce-7b2c-4997-8f33-28047096d940 agregada a la cola. Posición: 1
+2025-05-29 13:20:27,099 - scraping.scraping - INFO - [Queue] Procesando tarea 241acdce-7b2c-4997-8f33-28047096d940: ceo empresa murcia Linkedin
+2025-05-29 13:20:27,099 - scraping.scraping - INFO - [Task 241acdce-7b2c-4997-8f33-28047096d940] Iniciando búsqueda para keyword: 'ceo empresa murcia Linkedin'
+2025-05-29 13:20:27,099 - scraping.scraping - INFO - [Task 241acdce-7b2c-4997-8f33-28047096d940] Usando motores de búsqueda: google, duckduckgo, gigablast, bing, brave
+2025-05-29 13:20:27,099 - scraping.scraping - INFO - [Task 241acdce-7b2c-4997-8f33-28047096d940] Configuración de timeouts: {'google': 90, 'duckduckgo': 90, 'gigablast': 60, 'bing': 60, 'brave': 60}
+2025-05-29 13:20:27,099 - scraping.search_engines - INFO - Ejecutando búsquedas en paralelo: ['google', 'duckduckgo', 'gigablast', 'bing', 'brave']
+2025-05-29 13:20:27,099 - scraping.search_engines - INFO - Iniciando búsqueda en google
+2025-05-29 13:20:27,102 - scraping.search_engines - INFO - Iniciando búsqueda en duckduckgo
+2025-05-29 13:20:27,104 - scraping.search_engines - INFO - Iniciando búsqueda en gigablast
+2025-05-29 13:20:27,305 - scraping.search_engines - ERROR - Error en búsqueda Gigablast: HTTPSConnectionPool(host='gigablast.com', port=443): Max retries exceeded with url: /search?q=ceo+empresa+murcia+Linkedin&n=10&format=json (Caused by NameResolutionError("<urllib3.connection.HTTPSConnection object at 0xffff8f5a4bf0>: Failed to resolve 'gigablast.com' ([Errno -5] No address associated with hostname)"))
+2025-05-29 13:20:27,306 - scraping.search_engines - INFO - Búsqueda en gigablast completada con 0 resultados
+2025-05-29 13:20:27,306 - scraping.search_engines - INFO - Iniciando búsqueda en bing
+2025-05-29 13:20:27,593 - scraping.search_engines - INFO - Búsqueda en bing completada con 0 resultados
+2025-05-29 13:20:27,593 - scraping.search_engines - INFO - Iniciando búsqueda en brave
+2025-05-29 13:20:28,921 - scraping.search_engines - INFO - Búsqueda en brave completada con 10 resultados
+2025-05-29 13:20:29,222 - scraping.search_engines - INFO - Búsqueda en duckduckgo completada con 0 resultados
+2025-05-29 13:20:29,558 - scraping.search_engines - ERROR - Error en búsqueda Google: 429, message='Too Many Requests', url='https://www.google.com/sorry/index?continue=https://www.google.com/search?q%3Dceo%2Bempresa%2Bmurcia%2BLinkedin%26num%3D10%26hl%3Des%26start%3D0%26safe%3Dactive%26filter%3D0&hl=es&q=EgQCO3DnGJ2-4cEGIjC74QwSR3S1DphJFAD1Zff528Z6tzfGJ8rL2KPkqy_VG3L3h5dzf0WRwRCBl-x24wsyAnJSWgFD'
+2025-05-29 13:20:29,559 - scraping.search_engines - INFO - Búsqueda en google completada con 0 resultados
+2025-05-29 13:20:29,560 - scraping.search_engines - INFO - Búsqueda completada. Resultados: {'google': 0, 'duckduckgo': 0, 'gigablast': 0, 'bing': 0, 'brave': 10}
+2025-05-29 13:20:29,560 - scraping.scraping - WARNING - [Task 241acdce-7b2c-4997-8f33-28047096d940] GOOGLE no devolvió resultados
+2025-05-29 13:20:29,561 - scraping.scraping - WARNING - [Task 241acdce-7b2c-4997-8f33-28047096d940] DUCKDUCKGO no devolvió resultados
+2025-05-29 13:20:29,561 - scraping.scraping - WARNING - [Task 241acdce-7b2c-4997-8f33-28047096d940] GIGABLAST no devolvió resultados
+2025-05-29 13:20:29,561 - scraping.scraping - WARNING - [Task 241acdce-7b2c-4997-8f33-28047096d940] BING no devolvió resultados
+2025-05-29 13:20:29,561 - scraping.scraping - INFO - [Task 241acdce-7b2c-4997-8f33-28047096d940] BRAVE devolvió 10 resultados
+2025-05-29 13:20:29,562 - scraping.scraping - INFO - [Task 241acdce-7b2c-4997-8f33-28047096d940] Total de URLs únicas encontradas: 10
+2025-05-29 13:20:29,562 - scraping.scraping - INFO - [Task 241acdce-7b2c-4997-8f33-28047096d940] Procesando 10 URLs para extraer información de contacto...
+2025-05-29 13:20:29,562 - scraping.scraping - INFO - [Task 241acdce-7b2c-4997-8f33-28047096d940] Procesando lote 1/1
+2025-05-29 13:20:31,937 - scraping.scraping - INFO - [Task 241acdce-7b2c-4997-8f33-28047096d940] Datos encontrados en https://forbes.es/empresas/161749/quienes-son-las-familias-empresariales-de-murcia/
+2025-05-29 13:20:31,937 - scraping.scraping - INFO - [Task 241acdce-7b2c-4997-8f33-28047096d940] Datos encontrados en https://ceocongressmurcia.com/
+2025-05-29 13:20:31,937 - scraping.scraping - INFO - [Task 241acdce-7b2c-4997-8f33-28047096d940] Procesamiento completado. URLs con datos: 2/10
+2025-05-29 13:20:31,937 - scraping.scraping - INFO - [Task 241acdce-7b2c-4997-8f33-28047096d940] Tarea completada en 4.84 segundos. Resultados: 2
+2025-05-29 13:20:31,937 - scraping.scraping - ERROR - [Queue] Error procesando tarea 241acdce-7b2c-4997-8f33-28047096d940: 'correo'
+Traceback (most recent call last):
+  File "/var/www/html/python/scraping/scraping.py", line 1033, in process_search_queue
+    await asyncio.wait_for(
+  File "/usr/lib/python3.12/asyncio/tasks.py", line 520, in wait_for
+    return await fut
+           ^^^^^^^^^
+  File "/var/www/html/python/scraping/scraping.py", line 853, in run_google_ddg_limpio_task
+    'correos': [item['correo']] if item['correo'] != 'No encontrado' else [],
+                                   ~~~~^^^^^^^^^^
+KeyError: 'correo'
+2025-05-29 13:20:31,939 - scraping.scraping - ERROR - [Queue] Error crítico en el procesador de cola: name 'current_tasks' is not defined
+Traceback (most recent call last):
+  File "/var/www/html/python/scraping/scraping.py", line 1033, in process_search_queue
+    await asyncio.wait_for(
+  File "/usr/lib/python3.12/asyncio/tasks.py", line 520, in wait_for
+    return await fut
+           ^^^^^^^^^
+  File "/var/www/html/python/scraping/scraping.py", line 853, in run_google_ddg_limpio_task
+    'correos': [item['correo']] if item['correo'] != 'No encontrado' else [],
+                                   ~~~~^^^^^^^^^^
+KeyError: 'correo'
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/var/www/html/python/scraping/scraping.py", line 1062, in process_search_queue
+    if task_id in current_tasks:
+                  ^^^^^^^^^^^^^
+NameError: name 'current_tasks' is not defined
+2025-05-29 13:20:41,947 - asyncio - ERROR - Task exception was never retrieved
+future: <Task finished name='Task-3' coro=<process_search_queue() done, defined at /var/www/html/python/scraping/scraping.py:1003> exception=NameError("name 'current_tasks' is not defined")>
+Traceback (most recent call last):
+  File "/var/www/html/python/scraping/scraping.py", line 1099, in process_search_queue
+    if task_id in current_tasks:
+                  ^^^^^^^^^^^^^
+NameError: name 'current_tasks' is not defined
+2025-05-29 13:21:40,181 - scraping.scraping - INFO - Iniciando el servicio de búsqueda...
+2025-05-29 13:21:40,181 - scraping.scraping - INFO - Iniciando procesador de cola de búsquedas...
+2025-05-29 13:21:40,181 - scraping.scraping - INFO - Procesador de cola iniciado correctamente
+2025-05-29 13:21:53,123 - scraping.scraping - INFO - Iniciando el servicio de búsqueda...
+2025-05-29 13:21:53,123 - scraping.scraping - INFO - Iniciando procesador de cola de búsquedas...
+2025-05-29 13:21:53,123 - scraping.scraping - INFO - Procesador de cola iniciado correctamente
+2025-05-29 13:22:45,128 - scraping.scraping - INFO - Iniciando el servicio de búsqueda...
+2025-05-29 13:22:45,128 - scraping.scraping - INFO - Iniciando procesador de cola de búsquedas...
+2025-05-29 13:22:45,128 - scraping.scraping - INFO - Procesador de cola iniciado correctamente
+2025-05-29 13:29:19,377 - scraping.scraping - INFO - Iniciando el servicio de búsqueda...
+2025-05-29 13:29:19,377 - scraping.scraping - INFO - Iniciando procesador de cola de búsquedas...
+2025-05-29 13:29:19,377 - scraping.scraping - INFO - Procesador de cola iniciado correctamente
+2025-05-29 13:30:27,179 - scraping.scraping - INFO - [API] Iniciando búsqueda - Task ID: 02cdff33-fe59-4a6c-a9bf-3eb1ba1ec8a3, Keyword: ceo empresa murcia Linkedin
+2025-05-29 13:30:27,180 - scraping.scraping - INFO - [Queue] Agregando búsqueda a la cola - ID: 02cdff33-fe59-4a6c-a9bf-3eb1ba1ec8a3, Keyword: ceo empresa murcia Linkedin, Callback: https://app.appnet.dev/api/scraping-callback
+2025-05-29 13:30:27,180 - scraping.scraping - INFO - [Queue] Búsqueda 02cdff33-fe59-4a6c-a9bf-3eb1ba1ec8a3 agregada a la cola. Posición: 1
+2025-05-29 13:30:27,181 - scraping.scraping - INFO - [Queue] Procesando tarea 02cdff33-fe59-4a6c-a9bf-3eb1ba1ec8a3: ceo empresa murcia Linkedin
+2025-05-29 13:30:27,182 - scraping.scraping - INFO - [Task 02cdff33-fe59-4a6c-a9bf-3eb1ba1ec8a3] Iniciando búsqueda para keyword: 'ceo empresa murcia Linkedin'
+2025-05-29 13:30:27,182 - scraping.scraping - INFO - [Task 02cdff33-fe59-4a6c-a9bf-3eb1ba1ec8a3] Usando motores de búsqueda: google, duckduckgo, gigablast, bing, brave
+2025-05-29 13:30:27,182 - scraping.scraping - INFO - [Task 02cdff33-fe59-4a6c-a9bf-3eb1ba1ec8a3] Configuración de timeouts: {'google': 90, 'duckduckgo': 90, 'gigablast': 60, 'bing': 60, 'brave': 60}
+2025-05-29 13:30:27,182 - scraping.search_engines - INFO - Ejecutando búsquedas en paralelo: ['google', 'duckduckgo', 'gigablast', 'bing', 'brave']
+2025-05-29 13:30:27,183 - scraping.search_engines - INFO - Iniciando búsqueda en google
+2025-05-29 13:30:27,187 - scraping.search_engines - INFO - Iniciando búsqueda en duckduckgo
+2025-05-29 13:30:27,189 - scraping.search_engines - INFO - Iniciando búsqueda en gigablast
+2025-05-29 13:30:27,197 - scraping.search_engines - ERROR - Error en búsqueda Gigablast: HTTPSConnectionPool(host='gigablast.com', port=443): Max retries exceeded with url: /search?q=ceo+empresa+murcia+Linkedin&n=10&format=json (Caused by NameResolutionError("<urllib3.connection.HTTPSConnection object at 0xffff8a874d10>: Failed to resolve 'gigablast.com' ([Errno -5] No address associated with hostname)"))
+2025-05-29 13:30:27,197 - scraping.search_engines - INFO - Búsqueda en gigablast completada con 0 resultados
+2025-05-29 13:30:27,197 - scraping.search_engines - INFO - Iniciando búsqueda en bing
+2025-05-29 13:30:27,494 - scraping.search_engines - INFO - Búsqueda en bing completada con 0 resultados
+2025-05-29 13:30:27,494 - scraping.search_engines - INFO - Iniciando búsqueda en brave
+2025-05-29 13:30:28,222 - scraping.search_engines - INFO - Búsqueda en brave completada con 10 resultados
+2025-05-29 13:30:28,522 - scraping.search_engines - INFO - Búsqueda en duckduckgo completada con 0 resultados
+2025-05-29 13:30:28,851 - scraping.search_engines - ERROR - Error en búsqueda Google: 429, message='Too Many Requests', url='https://www.google.com/sorry/index?continue=https://www.google.com/search?q%3Dceo%2Bempresa%2Bmurcia%2BLinkedin%26num%3D10%26hl%3Des%26start%3D0%26safe%3Dactive%26filter%3D0&hl=es&q=EgQCO3DnGPTC4cEGIjCtqjg7XtcqKhVIrLTtXmy_5w6JP9oRbQ4O_JMYMBFZKyP3DRYMfr00_bZCK__-rhQyAnJSWgFD'
+2025-05-29 13:30:28,852 - scraping.search_engines - INFO - Búsqueda en google completada con 0 resultados
+2025-05-29 13:30:28,852 - scraping.search_engines - INFO - Búsqueda completada. Resultados: {'google': 0, 'duckduckgo': 0, 'gigablast': 0, 'bing': 0, 'brave': 10}
+2025-05-29 13:30:28,853 - scraping.scraping - WARNING - [Task 02cdff33-fe59-4a6c-a9bf-3eb1ba1ec8a3] GOOGLE no devolvió resultados
+2025-05-29 13:30:28,853 - scraping.scraping - WARNING - [Task 02cdff33-fe59-4a6c-a9bf-3eb1ba1ec8a3] DUCKDUCKGO no devolvió resultados
+2025-05-29 13:30:28,853 - scraping.scraping - WARNING - [Task 02cdff33-fe59-4a6c-a9bf-3eb1ba1ec8a3] GIGABLAST no devolvió resultados
+2025-05-29 13:30:28,853 - scraping.scraping - WARNING - [Task 02cdff33-fe59-4a6c-a9bf-3eb1ba1ec8a3] BING no devolvió resultados
+2025-05-29 13:30:28,854 - scraping.scraping - INFO - [Task 02cdff33-fe59-4a6c-a9bf-3eb1ba1ec8a3] BRAVE devolvió 10 resultados
+2025-05-29 13:30:28,854 - scraping.scraping - INFO - [Task 02cdff33-fe59-4a6c-a9bf-3eb1ba1ec8a3] Total de URLs únicas encontradas: 10
+2025-05-29 13:30:28,854 - scraping.scraping - INFO - [Task 02cdff33-fe59-4a6c-a9bf-3eb1ba1ec8a3] Procesando 10 URLs para extraer información de contacto...
+2025-05-29 13:30:28,854 - scraping.scraping - INFO - [Task 02cdff33-fe59-4a6c-a9bf-3eb1ba1ec8a3] Procesando lote 1/1
+2025-05-29 13:30:31,161 - scraping.scraping - INFO - [Task 02cdff33-fe59-4a6c-a9bf-3eb1ba1ec8a3] Datos encontrados en https://forbes.es/empresas/161749/quienes-son-las-familias-empresariales-de-murcia/
+2025-05-29 13:30:31,161 - scraping.scraping - INFO - [Task 02cdff33-fe59-4a6c-a9bf-3eb1ba1ec8a3] Datos encontrados en https://ceocongressmurcia.com/
+2025-05-29 13:30:31,161 - scraping.scraping - INFO - [Task 02cdff33-fe59-4a6c-a9bf-3eb1ba1ec8a3] Procesamiento completado. URLs con datos: 2/10
+2025-05-29 13:30:31,161 - scraping.scraping - INFO - [Task 02cdff33-fe59-4a6c-a9bf-3eb1ba1ec8a3] Tarea completada en 3.98 segundos. Resultados: 2
+2025-05-29 13:30:31,161 - scraping.scraping - INFO - [Task 02cdff33-fe59-4a6c-a9bf-3eb1ba1ec8a3] Enviando callback a https://app.appnet.dev/api/scraping-callback
+2025-05-29 13:30:31,413 - scraping.scraping - INFO - [Task 02cdff33-fe59-4a6c-a9bf-3eb1ba1ec8a3] Callback enviado exitosamente
+2025-05-29 13:30:31,413 - scraping.scraping - INFO - [Queue] Tarea 02cdff33-fe59-4a6c-a9bf-3eb1ba1ec8a3 completada exitosamente
+2025-05-29 13:30:31,413 - scraping.scraping - INFO - [Queue] Tarea 02cdff33-fe59-4a6c-a9bf-3eb1ba1ec8a3 finalizada y eliminada del seguimiento
+2025-05-29 13:42:04,617 - scraping.scraping - INFO - Iniciando el servicio de búsqueda...
+2025-05-29 13:42:04,617 - scraping.scraping - INFO - Iniciando procesador de cola de búsquedas...
+2025-05-29 13:42:04,617 - scraping.scraping - INFO - Procesador de cola iniciado correctamente
+2025-05-29 13:44:36,132 - scraping.scraping - INFO - Iniciando el servicio de búsqueda...
+2025-05-29 13:44:36,133 - scraping.scraping - INFO - Iniciando procesador de cola de búsquedas...
+2025-05-29 13:44:36,133 - scraping.scraping - INFO - Procesador de cola iniciado correctamente

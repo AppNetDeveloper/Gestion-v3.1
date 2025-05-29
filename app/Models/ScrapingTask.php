@@ -23,7 +23,11 @@ class ScrapingTask extends Model
         'status',
         'api_task_id',
         'ollama_task_id',
-        'source', // <-- Añadir el nuevo campo aquí
+        'source',
+        'retry_attempts',
+        'last_attempt_at',
+        'failed_at',
+        'error_message',
     ];
 
     /**

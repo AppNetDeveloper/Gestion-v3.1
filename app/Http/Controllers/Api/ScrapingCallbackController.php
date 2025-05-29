@@ -104,16 +104,12 @@ class ScrapingCallbackController extends Controller
             ], 404);
         }
 
-        // Solo procesamos si está en 'processing'
-        if ($task->status !== 'processing') {
-            Log::warning(
+        // Verificamos si la tarea ya estaba completada
+        if ($task->status === 'completed') {
+            Log::info(
                 "Callback recibido para Tarea ID {$task->id} (API Task ID: {$apiTaskId}) " .
-                "que no está en estado 'processing'. Estado actual: {$task->status}. Ignorando."
+                "que ya estaba completada. Procesando datos adicionales."
             );
-            return response()->json([
-                'status'  => 'ignored',
-                'message' => 'La tarea ya no estaba en procesamiento.',
-            ]);
         }
 
         if ($status === 'completed') {
@@ -136,15 +132,26 @@ class ScrapingCallbackController extends Controller
                 }
             }
 
-            // Si no hay resultados, marcamos completada y devolvemos sin errores
+            // Si no hay resultados, manejamos según la fuente
             if (empty($resultsData)) {
-                $task->status = 'completed';
-                $task->save();
+                $singleCallbackSources = ['brave', 'duckduckgo', 'google'];
+                $shouldMarkComplete = in_array(strtolower($validatedData['fuente']), $singleCallbackSources);
+                
+                if ($shouldMarkComplete) {
+                    $task->status = 'completed';
+                    $task->save();
+                    Log::info("Tarea ID {$task->id}: callback procesado exitosamente. Tarea marcada como completada.");
+                } else {
+                    Log::info("Tarea ID {$task->id}: callback procesado exitosamente. Esperando más datos...");
+                }
+                
+                DB::commit();
 
-                Log::info("Tarea ID {$task->id} completada sin resultados.");
                 return response()->json([
                     'status'  => 'success',
-                    'message' => 'Callback procesado: no se encontraron empresas.'
+                    'message' => $shouldMarkComplete 
+                        ? 'Callback procesado correctamente. Tarea completada.' 
+                        : 'Callback procesado correctamente. Se pueden enviar más datos para esta tarea.'
                 ]);
             }
 
@@ -224,16 +231,30 @@ class ScrapingCallbackController extends Controller
                     }
                 }
 
-                // Marcamos la tarea como completada
-                $task->status = 'completed';
-                $task->save();
-
+                // Verificamos si debemos marcar como completada basado en la fuente
+                // Algunas fuentes envían múltiples callbacks, otras solo uno
+                $singleCallbackSources = ['brave', 'duckduckgo', 'google'];
+                $shouldMarkComplete = in_array(strtolower($validatedData['fuente']), $singleCallbackSources);
+                
+                if ($shouldMarkComplete) {
+                    $task->status = 'completed';
+                    $task->save();
+                    Log::info(
+                        "Callback procesado para Tarea ID {$task->id}. " .
+                        "Contactos nuevos: {$contactsAddedCount}. " .
+                        "Relaciones añadidas: {$relationsCreatedCount}. " .
+                        "Tarea marcada como completada."
+                    );
+                } else {
+                    Log::info(
+                        "Callback procesado para Tarea ID {$task->id}. " .
+                        "Contactos nuevos: {$contactsAddedCount}. " .
+                        "Relaciones añadidas: {$relationsCreatedCount}. " .
+                        "La tarea permanece activa para más callbacks."
+                    );
+                }
+                
                 DB::commit();
-                Log::info(
-                    "Callback procesado para Tarea ID {$task->id}. " .
-                    "Contactos nuevos: {$contactsAddedCount}. " .
-                    "Relaciones añadidas: {$relationsCreatedCount}."
-                );
 
             } catch (Throwable $e) {
                 DB::rollBack();

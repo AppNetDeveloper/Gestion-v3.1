@@ -50,7 +50,7 @@
         <div class="p-6 bg-white dark:bg-slate-800">
             <div class="overflow-x-auto -mx-6 px-6">
                 {{-- Tabla para mostrar contactos asociados a ESTA tarea --}}
-                <table class="w-full min-w-[800px]">
+                <table id="contactsTable" class="w-full min-w-[800px] display">
                     <thead class="bg-slate-100 dark:bg-slate-700 text-xs uppercase text-slate-500 dark:text-slate-400">
                         <tr>
                             <th class="px-4 py-3 font-medium text-left">{{ __('Name') }}</th>
@@ -115,7 +115,8 @@
     {{-- Estilos y Scripts --}}
     @push('styles')
         <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css">
-        {{-- Añadir aquí otros CSS si son necesarios para esta página --}}
+        <link rel="stylesheet" type="text/css" href="https://cdn.datatables.net/1.11.5/css/dataTables.bootstrap5.min.css"/>
+        <link rel="stylesheet" type="text/css" href="https://cdn.datatables.net/buttons/2.2.2/css/buttons.bootstrap5.min.css"/>
         <style>
              /* Estilos básicos para los iconos de acción (puedes copiarlos de la otra vista si quieres) */
             .actions-wrapper { display: inline-flex; gap: 0.75rem; align-items: center; }
@@ -136,15 +137,102 @@
     @push('scripts')
         <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
         <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+        <script type="text/javascript" src="https://cdn.datatables.net/1.11.5/js/jquery.dataTables.min.js"></script>
+        <script type="text/javascript" src="https://cdn.datatables.net/1.11.5/js/dataTables.bootstrap5.min.js"></script>
+        <script type="text/javascript" src="https://cdn.datatables.net/buttons/2.2.2/js/dataTables.buttons.min.js"></script>
+        <script type="text/javascript" src="https://cdn.datatables.net/buttons/2.2.2/js/buttons.bootstrap5.min.js"></script>
+        <script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+        <script type="text/javascript" src="https://cdn.datatables.net/buttons/2.2.2/js/buttons.html5.min.js"></script>
+        <script type="text/javascript" src="https://cdn.datatables.net/buttons/2.2.2/js/buttons.print.min.js"></script>
         <script>
              $(document).ready(function() {
-                 // --- Toast ---
-                 function buildToast () {
+                // Add a container for the buttons above the table
+                $('.card').find('.bg-white.dark\:bg-slate-800.px-6.py-4').append(
+                    '<div class="mt-3 flex justify-end">' +
+                    '   <button id="exportExcelBtn" class="btn btn-primary btn-sm">' +
+                    '       <i class="mr-1"></i> {{ __("Export to Excel") }}' +
+                    '   </button>' +
+                    '</div>'
+                );
+
+                var table = $('#contactsTable').DataTable({
+                    dom: "<'row'<'col-sm-12 col-md-6'l><'col-sm-12 col-md-6'f>>" +
+                         "<'row'<'col-sm-12'tr>>" +
+                         "<'row'<'col-sm-12 col-md-5'i><'col-sm-12 col-md-7'p>>",
+                    language: {
+                        url: '//cdn.datatables.net/plug-ins/1.11.5/i18n/es-ES.json' // Spanish language file
+                    },
+                    pageLength: 25,
+                    responsive: true,
+                    order: [[0, 'asc']],
+                    columnDefs: [
+                        { orderable: false, targets: -1 } // Disable sorting on Actions column
+                    ]
+                });
+
+
+                // Add Excel export button functionality
+                $('#exportExcelBtn').on('click', function() {
+                    let excelButton = $('.buttons-excel');
+                    if (excelButton.length) {
+                        excelButton[0].click(); // Trigger the export
+                    } else {
+                        // Fallback if DataTables buttons not initialized
+                        table.button('.buttons-excel').trigger();
+                    }
+                });
+
+                // Initialize the Excel button (hidden)
+                new $.fn.dataTable.Buttons(table, {
+                    buttons: [
+                        {
+                            extend: 'excel',
+                            className: 'd-none',
+                            exportOptions: {
+                                columns: [0, 1, 2, 3] // Export all columns except Actions
+                            },
+                            title: 'Contacts_Task_{{ $task->id }}',
+                            filename: 'contacts_task_{{ $task->id }}',
+                            titleAttr: '{{ __("Export to Excel") }}',
+                            text: '{{ __("Export to Excel") }}'
+                        }
+                    ]
+                });
+
+                // Add the hidden buttons to the document
+                table.buttons(0, null).container().appendTo($('#exportExcelBtn').closest('.flex'));
+                
+                // --- Toast ---
+                function buildToast() {
                     const isDark = document.documentElement.classList.contains('dark');
-                    return Swal.mixin({ toast: true, position: 'top-end', showConfirmButton: false, timer: 3000, timerProgressBar: true, backdrop: false, heightAuto: false, allowOutsideClick: false, allowEnterKey: false, returnFocus: false, focusConfirm: false, focusCancel: false, focusDeny: false, draggable: false, keydownListenerCapture: false, customClass: { popup: isDark ? 'dark' : '' }, didOpen: (toast) => { toast.addEventListener('mouseenter', Swal.stopTimer); toast.addEventListener('mouseleave', Swal.resumeTimer); } });
+                    return Swal.mixin({ 
+                        toast: true, 
+                        position: 'top-end', 
+                        showConfirmButton: false, 
+                        timer: 3000, 
+                        timerProgressBar: true, 
+                        backdrop: false, 
+                        heightAuto: false, 
+                        allowOutsideClick: false, 
+                        allowEnterKey: false, 
+                        returnFocus: false, 
+                        focusConfirm: false, 
+                        focusCancel: false, 
+                        focusDeny: false, 
+                        draggable: false, 
+                        keydownListenerCapture: false, 
+                        customClass: { popup: isDark ? 'dark' : '' }, 
+                        didOpen: (toast) => { 
+                            toast.addEventListener('mouseenter', Swal.stopTimer); 
+                            toast.addEventListener('mouseleave', Swal.resumeTimer); 
+                        } 
+                    });
                 }
+                
                 let Toast = buildToast();
-                const observer = new MutationObserver(() => { Toast = buildToast(); });
+                const observer = new MutationObserver(() => { 
+                    Toast = buildToast(); 
+                });
                 observer.observe(document.documentElement, { attributes: true });
                 // --- End Toast ---
 

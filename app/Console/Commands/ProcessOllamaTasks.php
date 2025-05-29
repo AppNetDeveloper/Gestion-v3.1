@@ -96,8 +96,8 @@ class ProcessOllamaTasks extends Command
                     ->get();
 
                 if ($tasks->isEmpty()) {
-                    $this->info("No pending Ollama tasks found. Sleeping for 10 seconds.");
-                    sleep(10);
+                    $this->info("No pending Ollama tasks found. Sleeping for 0.5 seconds.");
+                    sleep(0.5);
                     continue;
                 }
 
@@ -242,8 +242,8 @@ class ProcessOllamaTasks extends Command
                 sleep(30); // Esperar un poco más si hay un error general
             }
 
-            $this->info("Loop finished, sleeping for 5 seconds before next check.");
-            sleep(5);
+            $this->info("Loop finished, sleeping for 0.5 seconds before next check.");
+            sleep(0.5);
         }
 
         return Command::SUCCESS; // o 0

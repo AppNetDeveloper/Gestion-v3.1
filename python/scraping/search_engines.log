@@ -2335,3 +2335,14 @@ AttributeError: type object 'datetime.datetime' has no attribute 'datetime'
 2025-05-29 19:15:32,808 - search_engines - INFO - Búsqueda en google completada con 0 resultados
 2025-05-29 19:15:33,049 - search_engines - INFO - Búsqueda en bing completada con 10 resultados
 2025-05-29 19:15:33,070 - search_engines - INFO - Búsqueda en bing completada con 10 resultados
+2025-05-29 19:15:33,105 - search_engines - INFO - Búsqueda en bing completada con 0 resultados
+2025-05-29 19:15:33,141 - search_engines - INFO - Búsqueda en bing completada con 10 resultados
+2025-05-29 19:15:33,353 - search_engines - INFO - Búsqueda en bing completada con 0 resultados
+2025-05-29 19:15:33,360 - search_engines - WARNING - Error de conexión (intento 1/3): 422, message='Unprocessable Entity', url=URL('https://api.search.brave.com/res/v1/web/search?q=ceo+empresa+murcia+Linkedin&count=10&offset=0&safesearch=moderate&result_filter=web&country=es&ui_lang=es')
+2025-05-29 19:15:33,360 - search_engines - WARNING - Reintento 1/3 después de 10.0 segundos...
+2025-05-29 19:15:33,378 - search_engines - INFO - Búsqueda en bing completada con 10 resultados
+2025-05-29 19:15:33,397 - search_engines - INFO - Búsqueda en bing completada con 0 resultados
+2025-05-29 19:15:33,415 - search_engines - INFO - Búsqueda en bing completada con 0 resultados
+2025-05-29 19:15:33,439 - search_engines - INFO - Búsqueda en bing completada con 0 resultados
+2025-05-29 19:15:33,458 - search_engines - INFO - Búsqueda en bing completada con 10 resultados
+2025-05-29 19:15:33,528 - search_engines - INFO - Búsqueda en gigablast completada con 0 resultados
