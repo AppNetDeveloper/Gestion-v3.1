@@ -85,13 +85,34 @@ python -m playwright install chromium
 # En algunos casos se necesitan dependencias extra:
 as_root playwright install-deps
 as_root playwright install --with-deps
+apt -y install pipx
+pipx install aiohttp
+pipx install beautifulsoup4
+pipx install requests
+pipx install duckduckgo-search
+pipx install playwright
+pipx install httpx
+pipx install pathlib
+pipx install pathlib2
+pipx install python-dotenv
+pipx install python-multipart
+pipx install pydantic 
+pipx install fastapi
+pipx install uvicorn
 
 # ------------- 6. Fin --------------------------------------------------------
 deactivate
-
+python3 -m venv venv && source venv/bin/activate && pip install requests beautifulsoup4 
+pip install aiohttp beautifulsoup4 --break-system-packages
+pip install aiohttp --break-system-packages
+which python3 && python3 -c "import sys; print(sys.path)"
+which python3 && python3 -c "import sys; print(sys.path)"
+source /var/www/html/python/venv/bin/activate && pip install uvicorn
 python3 -m venv venv-email
 source venv-email/bin/activate
 pip install -r requirements.txt
-
+pip install --upgrade httpx --break-system-packages
 info "¡Entorno listo! Actívalo cuando quieras con:"
 printf "    source %s/bin/activate\n" "$VENV_DIR"
+pip install aiohttp beautifulsoup4 --break-system-packages
+python3 -m pip install aiohttp --break-system-packages

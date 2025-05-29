@@ -3,9 +3,9 @@ import os
 
 if __name__ == "__main__":
     uvicorn.run(
-        "scraping:app",  # <- aquí va el nombre real de tu archivo sin .py
+        "scraping:app",
         host="0.0.0.0",
-        port=9000,
-        reload=True,
-        reload_dirs=[os.path.dirname(__file__)]
+        port=9001,  # Cambiado a puerto 9001
+        reload=False,  # Desactivado para producción
+        workers=1
     )

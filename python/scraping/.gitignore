@@ -1,4 +1,5 @@
 # Python
-venv-*/
 __pycache__/
-
+screenshots_pa/
+venv*/
+venv-*/
