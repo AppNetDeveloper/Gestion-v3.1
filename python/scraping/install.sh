@@ -1,118 +1,182 @@
 #!/usr/bin/env bash
 # -----------------------------------------------------------------------------
 # setup_env.sh – Prepara un entorno Python con FastAPI, Playwright, etc.
-# Requiere: Debian/Ubuntu 22.04 o superior. Ejecuta con:
-#   ./setup_env.sh
+# Requiere: Debian/Ubuntu 22.04 o superior.
+# Uso: sudo ./install.sh
 # -----------------------------------------------------------------------------
-python3 -m pip install --break-system-packages \
-       --ignore-installed typing_extensions==4.13.2
 
-python3 -m pip install --break-system-packages -r requirements.txt
+set -e  # Detener el script si hay algún error
 
-# ------------- Parámetros ----------------------------------------------------
-VENV_DIR="venv-email"                # Nombre/directorio del entorno virtual
-REQ_FILE="requirements.txt"          # Fichero de dependencias (si existe)
+# ------------- Configuración -------------------------------------------------
+VENV_DIR="venv"                      # Directorio del entorno virtual
+REQ_FILE="requirements.txt"          # Fichero de dependencias
 PYTHON_BIN="/usr/bin/python3"        # Ruta a Python
-PLAYWRIGHT_CACHE="/var/www/.cache/ms-playwright"
+PLAYWRIGHT_CACHE="${HOME}/.cache/ms-playwright"
 
 # ------------- Funciones auxiliares -----------------------------------------
 info()  { printf "\e[34m[INFO]\e[0m  %s\n" "$*"; }
 warn()  { printf "\e[33m[WARN]\e[0m  %s\n" "$*"; }
 error() { printf "\e[31m[ERROR]\e[0m %s\n" "$*" >&2; exit 1; }
 
-as_root() {
-  if [[ $EUID -ne 0 ]]; then sudo "$@"; else "$@"; fi
+# Verificar si el comando existe
+command_exists() {
+    command -v "$1" >/dev/null 2>&1
 }
 
-# ------------- 1. Repositorios APT ------------------------------------------
-info "Añadiendo repositorios main, universe, restricted, multiverse…"
-as_root add-apt-repository -y main
-as_root add-apt-repository -y universe
-as_root add-apt-repository -y restricted
-as_root add-apt-repository -y multiverse
+# Ejecutar como root si es necesario
+as_root() {
+    if [[ $EUID -ne 0 ]]; then
+        sudo "$@"
+    else
+        "$@"
+    fi
+}
+
+# Instalar paquete usando pipx
+pipx_install() {
+    if ! pipx list | grep -q "$1"; then
+        info "Instalando $1 con pipx..."
+        pipx install "$1" || warn "No se pudo instalar $1 con pipx"
+    else
+        info "$1 ya está instalado con pipx"
+    fi
+}
+
+# Verificar e instalar pipx
+install_pipx() {
+    if ! command -v pipx >/dev/null 2>&1; then
+        info "Instalando pipx..."
+        python3 -m pip install --user pipx
+        python3 -m pipx ensurepath
+        export PATH="$PATH:$HOME/.local/bin"
+        
+        # Recargar el perfil para asegurar que pipx esté en el PATH
+        if [ -f ~/.bashrc ]; then
+            source ~/.bashrc
+        fi
+    fi
+    
+    # Verificar que pipx esté disponible
+    if ! command -v pipx >/dev/null 2>&1; then
+        error "No se pudo instalar pipx. Por favor, instálalo manualmente:"
+        echo "  python3 -m pip install --user pipx"
+        echo "  python3 -m pipx ensurepath"
+        exit 1
+    fi
+}
+
+# Crear o actualizar entorno virtual
+setup_venv() {
+    local venv_dir="$1"
+    
+    if [[ ! -d "$venv_dir" ]]; then
+        info "Creando entorno virtual en ${venv_dir}..."
+        "$PYTHON_BIN" -m venv "$venv_dir"
+    else
+        warn "El entorno virtual ${venv_dir} ya existe, actualizando..."
+    fi
+    
+    # Activar el entorno virtual
+    # shellcheck disable=SC1090
+    source "${venv_dir}/bin/activate"
+    
+    # Actualizar pip y herramientas básicas
+    python -m pip install --upgrade pip setuptools wheel
+    
+    # Instalar dependencias si existen
+    if [[ -f "$REQ_FILE" ]]; then
+        info "Instalando dependencias desde ${REQ_FILE}..."
+        python -m pip install -r "$REQ_FILE"
+    else
+        warn "No se encontró ${REQ_FILE}, instalando dependencias por defecto..."
+        python -m pip install \
+            fastapi \
+            uvicorn \
+            python-multipart \
+            pydantic \
+            python-dotenv \
+            requests \
+            beautifulsoup4 \
+            duckduckgo-search \
+            playwright \
+            httpx \
+            aiohttp \
+            googlesearch-python
+    fi
+    
+    # Instalar Playwright
+    info "Configurando Playwright..."
+    export PLAYWRIGHT_BROWSERS_PATH="$PLAYWRIGHT_CACHE"
+    python -m playwright install chromium
+    python -m playwright install-deps
+    
+    # Instalar herramientas útiles con pipx
+    for pkg in "black" "flake8" "isort" "mypy"; do
+        pipx_install "$pkg"
+    done
+    
+    deactivate
+}
+
+# ------------- 1. Verificar sistema operativo --------------------------------
+if ! command -v apt-get >/dev/null 2>&1; then
+    error "Este script solo es compatible con distribuciones basadas en Debian/Ubuntu"
+fi
+
+# ------------- 2. Instalar dependencias del sistema -------------------------
+info "Actualizando lista de paquetes..."
 as_root apt-get update -qq
 
-# ------------- 2. Paquetes de sistema ---------------------------------------
-info "Instalando python3-venv, python3-pip y dependencias de Playwright…"
-as_root apt-get install -y python3-venv python3-pip
+info "Instalando dependencias del sistema..."
+as_root apt-get install -y --no-install-recommends \
+    python3-venv \
+    python3-pip \
+    python3-dev \
+    libgtk-4-1 \
+    libgraphene-1.0-0 \
+    libgstreamer-gl1.0-0 \
+    gstreamer1.0-plugins-bad \
+    gstreamer1.0-plugins-base \
+    libenchant-2-2 \
+    libsecret-1-0 \
+    libmanette-0.2-0 \
+    wget \
+    curl \
+    git \
+    pipx
 
-# Dependencias nativas requeridas por Playwright/Chromium
-as_root apt-get install -y \
-  libgtk-4-1 libgraphene-1.0-0 libgstreamer-gl1.0-0 \
-  gstreamer1.0-plugins-bad gstreamer1.0-plugins-base \
-  libenchant-2-2 libsecret-1-0 libmanette-0.2-0
+# ------------- 3. Configurar pipx ------------------------------------------
+install_pipx
 
-# ------------- 3. Entorno virtual -------------------------------------------
-if [[ ! -d "$VENV_DIR" ]]; then
-  info "Creando entorno virtual “${VENV_DIR}”…"
-  "$PYTHON_BIN" -m venv "$VENV_DIR"
-else
-  warn "Entorno virtual ya existe; se reutilizará."
-fi
+# ------------- 4. Configurar entorno virtual -------------------------------
+setup_venv "$VENV_DIR"
 
-# Activamos el entorno
+# ------------- 5. Verificación final ---------------------------------------
+info "Verificando instalación..."
 # shellcheck disable=SC1090
 source "${VENV_DIR}/bin/activate"
-info "Entorno virtual activado."
+python -c "import fastapi, uvicorn, playwright; print('✓ Todas las dependencias están instaladas correctamente')"
+deactivate
 
-# ------------- 4. Instalación de requisitos ---------------------------------
-PIP_FLAGS="--break-system-packages --upgrade pip"
-info "Actualizando pip…"
-pip install $PIP_FLAGS
+# ------------- 6. Mensaje final --------------------------------------------
+echo -e "\n\e[32m✅ Instalación completada\e[32m\e[0m"
+echo "Para activar el entorno virtual, ejecuta:"
+echo "    source ${VENV_DIR}/bin/activate"
+echo ""
+echo "Para ejecutar el servidor:"
+echo "    uvicorn main:app --reload"
+echo ""
 
-# (4a) requirements.txt opcional
-if [[ -f "$REQ_FILE" ]]; then
-  info "Instalando dependencias de ${REQ_FILE}…"
-  pip install --break-system-packages -r "$REQ_FILE"
-else
-  warn "No se encontró ${REQ_FILE}; se omite."
+# Verificar que todo funciona
+info "Verificando que todo funciona correctamente..."
+if [ -f "test_install.py" ]; then
+    source "${VENV_DIR}/bin/activate"
+    if python test_install.py; then
+        info "✓ Todas las pruebas pasaron correctamente"
+    else
+        warn "Algunas pruebas fallaron"
+    fi
+    deactivate
 fi
 
-# (4b) Paquetes adicionales explícitos
-info "Instalando paquetes Python solicitados…"
-pip install --break-system-packages \
-  fastapi uvicorn googlesearch-python beautifulsoup4 requests \
-  duckduckgo-search playwright pathlib httpx
-
-# Garantizamos la última versión de duckduckgo-search
-pip install --break-system-packages --upgrade duckduckgo-search
-
-# ------------- 5. Playwright -------------------------------------------------
-info "Instalando navegadores de Playwright…"
-export PLAYWRIGHT_BROWSERS_PATH="$PLAYWRIGHT_CACHE"
-python -m playwright install chromium
-
-# En algunos casos se necesitan dependencias extra:
-as_root playwright install-deps
-as_root playwright install --with-deps
-apt -y install pipx
-pipx install aiohttp
-pipx install beautifulsoup4
-pipx install requests
-pipx install duckduckgo-search
-pipx install playwright
-pipx install httpx
-pipx install pathlib
-pipx install pathlib2
-pipx install python-dotenv
-pipx install python-multipart
-pipx install pydantic 
-pipx install fastapi
-pipx install uvicorn
-
-# ------------- 6. Fin --------------------------------------------------------
-deactivate
-python3 -m venv venv && source venv/bin/activate && pip install requests beautifulsoup4 
-pip install aiohttp beautifulsoup4 --break-system-packages
-pip install aiohttp --break-system-packages
-which python3 && python3 -c "import sys; print(sys.path)"
-which python3 && python3 -c "import sys; print(sys.path)"
-source /var/www/html/python/venv/bin/activate && pip install uvicorn
-python3 -m venv venv-email
-source venv-email/bin/activate
-pip install -r requirements.txt
-pip install --upgrade httpx --break-system-packages
-info "¡Entorno listo! Actívalo cuando quieras con:"
-printf "    source %s/bin/activate\n" "$VENV_DIR"
-pip install aiohttp beautifulsoup4 --break-system-packages
-python3 -m pip install aiohttp --break-system-packages
+exit 0
