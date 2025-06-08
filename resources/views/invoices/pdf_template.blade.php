@@ -36,12 +36,23 @@
         }
 
         .qr-code {
-            width: 110px; /* Como se sugirió para tamaño VeriFactu */
+            width: 110px; /* Tamaño fijo para el contenedor */
+            height: 110px; /* Mismo valor que el ancho para hacerlo cuadrado */
             border: 1px solid #e2e8f0;
             background: white;
             padding: 5px;
             text-align: center;
-            margin-bottom: 10px; /* Si hay algo debajo en esta celda */
+            margin-bottom: 10px;
+            overflow: hidden; /* Para asegurar que nada se salga */
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .qr-code svg {
+            width: 100%;
+            height: 100%;
+            max-width: 100%;
+            max-height: 100%;
         }
         .qr-code img {
             max-width: 100%;
@@ -180,7 +191,23 @@
             <div class="invoice-qr-side">
                 @if($invoice->verifactu_qr_code_data)
                 <div class="qr-code">
-                    <img src="{{ $invoice->verifactu_qr_code_data }}" alt="Código QR Factura">
+                    @php
+                        $qrCode = trim($invoice->verifactu_qr_code_data);
+                        $isSvg = str_starts_with($qrCode, '<?xml') || str_contains($qrCode, '<svg');
+                        $isBase64 = str_starts_with($qrCode, 'data:image/');
+                        
+                        // Si es SVG, convertirlo a base64
+                        if ($isSvg) {
+                            $base64 = 'data:image/svg+xml;base64,' . base64_encode($qrCode);
+                        } elseif ($isBase64) {
+                            $base64 = $qrCode;
+                        }
+                    @endphp
+                    
+                    @if(isset($base64))
+                        <img src="{{ $base64 }}" alt="Código QR Factura" style="max-width: 100%; height: auto;">
+                    @endif
+                    
                     @if($invoice->verifactu_id)
                     <div class="qr-id">
                         {{ substr($invoice->verifactu_id, 0, 12) }}...
@@ -291,6 +318,12 @@
                     <td>{{ __('Total Tax') }} ({{ $invoice->client->vat_rate ?? config('app.vat_rate', 21) }}%):</td>
                     <td class="text-right">{{ number_format($invoice->tax_amount, 2, ',', '.') }} {{ $invoice->currency }}</td>
                 </tr>
+                @if($invoice->irpf > 0)
+                <tr>
+                    <td>{{ __('IRPF') }} ({{ number_format($invoice->irpf, 2, ',', '.') }}%):</td>
+                    <td class="text-right" style="color: #dc2626;">-{{ number_format($invoice->irpf_amount, 2, ',', '.') }} {{ $invoice->currency }}</td>
+                </tr>
+                @endif
                 <tr class="grand-total">
                     <td>{{ __('Total Amount') }}:</td>
                     <td class="text-right">{{ number_format($invoice->total_amount, 2, ',', '.') }} {{ $invoice->currency }}</td>
@@ -299,18 +332,46 @@
         </div>
         <div class="clearfix"></div>
 
-        @if($invoice->payment_terms || $invoice->notes_to_client)
         <div class="footer-notes">
-            @if($invoice->payment_terms)
-                <h4 class="section-title" style="font-size: 12px; margin-bottom: 5px;">{{ __('Payment Terms') }}</h4>
-                <p class="whitespace-pre-wrap" style="font-size: 10px;">{{ $invoice->payment_terms }}</p>
+            @if($invoice->payment_terms || $invoice->notes_to_client)
+                @if($invoice->payment_terms)
+                    <h4 class="section-title" style="font-size: 12px; margin-bottom: 5px;">{{ __('Payment Terms') }}</h4>
+                    <p class="whitespace-pre-wrap" style="font-size: 10px;">{{ $invoice->payment_terms }}</p>
+                @endif
+                @if($invoice->notes_to_client)
+                    <h4 class="section-title" style="font-size: 12px; margin-top: 15px; margin-bottom: 5px;">{{ __('Notes to Client') }}</h4>
+                    <p class="whitespace-pre-wrap" style="font-size: 10px;">{{ $invoice->notes_to_client }}</p>
+                @endif
             @endif
-            @if($invoice->notes_to_client)
-                <h4 class="section-title" style="font-size: 12px; margin-top: 15px; margin-bottom: 5px;">{{ __('Notes to Client') }}</h4>
-                <p class="whitespace-pre-wrap" style="font-size: 10px;">{{ $invoice->notes_to_client }}</p>
-            @endif
+            
+            <!-- Bank Account Information -->
+            <div style="margin-top: 20px; padding: 10px; background-color: #f8f9fa; border: 1px solid #e9ecef; border-radius: 4px;">
+                <h4 class="section-title" style="font-size: 12px; margin-bottom: 5px; color: #2d3748;">{{ __('Bank Transfer Details') }}</h4>
+                <table style="width: 100%; font-size: 10px; line-height: 1.4;">
+                    <tr>
+                        <td style="width: 35%; font-weight: bold;">{{ __('Bank') }}:</td>
+                        <td>{{ $bankInfo['name'] ?? '' }}</td>
+                    </tr>
+                    <tr>
+                        <td style="width: 35%; font-weight: bold;">{{ __('Account Holder') }}:</td>
+                        <td>{{ $bankInfo['account_holder'] ?? '' }}</td>
+                    </tr>
+                    <tr>
+                        <td style="width: 35%; font-weight: bold;">{{ __('Account Number') }} (IBAN):</td>
+                        <td>{{ $bankInfo['account_number'] ?? '' }}</td>
+                    </tr>
+                    <tr>
+                        <td style="width: 35%; font-weight: bold;">{{ __('SWIFT/BIC') }}:</td>
+                        <td>{{ $bankInfo['swift_bic'] ?? '' }}</td>
+                    </tr>
+                </table>
+                @if($invoice->invoice_number)
+                <p style="margin-top: 8px; font-size: 9px; color: #666;">
+                    {{ __('Please use the invoice number as reference:') }} <strong>{{ $invoice->invoice_number }}</strong>
+                </p>
+                @endif
+            </div>
         </div>
-        @endif
 
     </div>
 </body>

@@ -364,12 +364,15 @@ class ProcessScrapingTasks extends Command
      */
     protected function checkStuckTasks(): void
     {
-        $threshold = now()->subMinutes(15);
+        // Reducir el tiempo de espera a 5 minutos para detectar tareas atascadas más rápido
+        $threshold = now()->subMinutes(5);
         
-        // Buscar tareas en procesamiento que no se hayan actualizado en más de 15 minutos
+        // Buscar tareas en procesamiento que no se hayan actualizado en más de 5 minutos
         $stuckTasks = ScrapingTask::where('status', 'processing')
-                                ->whereNotNull('api_task_id')
-                                ->where('updated_at', '<=', $threshold)
+                                ->where(function($query) use ($threshold) {
+                                    $query->where('updated_at', '<=', $threshold)
+                                         ->orWhereNull('updated_at');
+                                })
                                 ->get();
         
         $processedCount = 0;
@@ -382,6 +385,16 @@ class ProcessScrapingTasks extends Command
                 $hasContacts = $task->contacts()->exists();
                 $attempts = $task->retry_attempts + 1;
                 $maxAttempts = 3;
+                
+                // Registrar información de depuración
+                $this->info("Verificando tarea atascada ID: {$task->id} - Estado actual: {$task->status} - Última actualización: {$task->updated_at} - Intentos: {$attempts}/{$maxAttempts}");
+                Log::info("Verificando tarea atascada", [
+                    'task_id' => $task->id,
+                    'status' => $task->status,
+                    'updated_at' => $task->updated_at,
+                    'attempts' => "$attempts/$maxAttempts",
+                    'has_contacts' => $hasContacts
+                ]);
                 
                 if ($hasContacts) {
                     // Si tiene contactos, marcamos como completada

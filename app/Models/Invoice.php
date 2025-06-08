@@ -17,6 +17,7 @@ class Invoice extends Model
      * @var array<int, string>
      */
     protected $fillable = [
+        'user_id',
         'client_id',
         'quote_id',
         'project_id',
@@ -26,6 +27,7 @@ class Invoice extends Model
         'status',
         'subtotal',
         'discount_amount',
+        'irpf', // Porcentaje de retención IRPF
         'tax_amount',
         'total_amount',
         'currency',
@@ -39,6 +41,7 @@ class Invoice extends Model
         'verifactu_timestamp', // Fecha de generación
         'discount_id',
         'is_locked',
+        'irpf_amount', // Monto de retención IRPF
     ];
 
     /**
@@ -51,6 +54,7 @@ class Invoice extends Model
         'due_date' => 'date',
         'subtotal' => 'decimal:2',
         'discount_amount' => 'decimal:2',
+        'irpf_amount' => 'decimal:2',
         'tax_amount' => 'decimal:2',
         'total_amount' => 'decimal:2',
         'verifactu_timestamp' => 'datetime',
@@ -191,5 +195,21 @@ class Invoice extends Model
     public function items(): HasMany
     {
         return $this->hasMany(InvoiceItem::class);
+    }
+
+    /**
+     * Get the payments for the invoice.
+     */
+    public function payments(): HasMany
+    {
+        return $this->hasMany(Payment::class);
+    }
+
+    /**
+     * Get the user that created the invoice.
+     */
+    public function user(): BelongsTo
+    {
+        return $this->belongsTo(User::class);
     }
 }

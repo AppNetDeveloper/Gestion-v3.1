@@ -249,7 +249,7 @@ class InvoiceController extends Controller
         $invoiceData = $request->only([
             'client_id', 'quote_id', 'project_id', 'invoice_number', 'invoice_date', 'due_date',
             'status', 'currency', 'payment_terms', 'notes_to_client', 'internal_notes',
-            'subtotal', 'tax_amount', 'total_amount', 'irpf_amount'
+            'subtotal', 'tax_amount', 'total_amount'
         ]);
         
         $invoiceData['quote_id'] = $request->filled('quote_id') ? $request->input('quote_id') : null;
@@ -295,6 +295,56 @@ class InvoiceController extends Controller
      * @param  \Illuminate\Http\Request  $request
      * @return array
      */
+    protected function prepareInvoiceData(Request $request)
+    {
+        $client = Client::findOrFail($request->input('client_id'));
+        $clientVatRate = $client->vat_rate ?? config('app.vat_rate', 21);
+        
+        // Get IRPF from request or config
+        $irpf = $request->filled('irpf') ? $request->input('irpf') : (float)env('INVOICE_IRPF', 0);
+
+        $invoiceData = $request->only([
+            'client_id', 'quote_id', 'project_id', 'invoice_number', 'invoice_date', 'due_date',
+            'status', 'currency', 'payment_terms', 'notes_to_client', 'internal_notes',
+            'subtotal', 'tax_amount', 'total_amount', 'irpf'
+        ]);
+        
+        $invoiceData['quote_id'] = $request->filled('quote_id') ? $request->input('quote_id') : null;
+        $invoiceData['project_id'] = $request->filled('project_id') ? $request->input('project_id') : null;
+
+        // Calculate discount_amount based on selected discount
+        $calculatedDiscountAmount = 0;
+        if ($request->filled('discount_id_invoice')) {
+            $selectedDiscount = Discount::find($request->input('discount_id_invoice'));
+            if ($selectedDiscount) {
+                $subtotalForDiscount = $request->input('subtotal', 0);
+                if ($selectedDiscount->type == 'percentage') {
+                    $calculatedDiscountAmount = $subtotalForDiscount * ($selectedDiscount->value / 100);
+                } else { // fixed_amount
+                    $calculatedDiscountAmount = $selectedDiscount->value;
+                }
+                $calculatedDiscountAmount = min($subtotalForDiscount, $calculatedDiscountAmount);
+            }
+        }
+        
+        // Calculate IRPF amount
+        $irpfAmount = 0;
+        $subtotalAfterDiscount = $request->input('subtotal', 0) - $calculatedDiscountAmount;
+        if ($irpf > 0) {
+            $irpfAmount = $subtotalAfterDiscount * ($irpf / 100);
+        }
+        
+        // Set invoice data
+        $invoiceData['discount_id'] = $request->input('discount_id_invoice');
+        $invoiceData['discount_amount'] = $calculatedDiscountAmount;
+        $invoiceData['irpf_amount'] = $irpfAmount;
+        
+        // Calculate total_amount (subtotal - discount + tax - irpf)
+        $invoiceData['total_amount'] = $subtotalAfterDiscount + $request->input('tax_amount', 0) - $irpfAmount;
+        
+        return $invoiceData;
+    }
+    
     public function store(Request $request)
     {
         if (!Auth::user()->can('invoices create')) {
@@ -375,7 +425,6 @@ class InvoiceController extends Controller
             // Asignar valores a los datos de la factura
             $invoiceData['discount_id'] = $request->input('discount_id_invoice');
             $invoiceData['discount_amount'] = $request->input('discount_amount', $calculatedDiscountAmount);
-            $invoiceData["irpf_amount"] = $irpfAmount;
             $invoiceData['irpf'] = $irpf;
             
             // Ajustar el total_amount para incluir el IRPF (el IRPF se resta del total)
@@ -461,28 +510,8 @@ class InvoiceController extends Controller
      */
     public function update(Request $request, Invoice $invoice)
     {
-        $user = Auth::user();
-        
-        // Log de depuración
-        \Log::info('Verificando permisos para actualizar factura', [
-            'user_id' => $user->id,
-            'is_authenticated' => Auth::check(),
-            'roles' => $user->getRoleNames(),
-            'permissions' => $user->getAllPermissions()->pluck('name'),
-            'invoice_status' => $invoice->status
-        ]);
-        
-        // Verificar si es super-admin o tiene permiso para editar facturas
-        $canEdit = $user->hasRole('super-admin') || 
-                 ($user->can('invoices edit') && $invoice->status === 'draft');
-        
-        // Si no tiene permisos, denegar acceso
-        if (!$canEdit) {
-            $message = __('This action is unauthorized or invoice is not in draft status.');
-            if ($request->ajax() || $request->wantsJson()) {
-                return response()->json(['error' => $message], 403);
-            }
-            abort(403, $message);
+        if (!Auth::user()->can('invoices edit')) {
+            abort(403, __('This action is unauthorized.'));
         }
 
         $validator = Validator::make($request->all(), [
@@ -559,7 +588,6 @@ class InvoiceController extends Controller
             // Asignar valores a los datos de la factura
             $invoiceData['discount_id'] = $request->input('discount_id_invoice');
             $invoiceData['discount_amount'] = $request->input('discount_amount', $calculatedDiscountAmount);
-            $invoiceData["irpf_amount"] = $irpfAmount;
             $invoiceData['irpf'] = $irpf;
             
             // Ajustar el total_amount para incluir el IRPF (el IRPF se resta del total)
@@ -846,11 +874,34 @@ class InvoiceController extends Controller
     }
 
     /**
-     * Export invoice as PDF.
-     *
-     * @param  \App\Models\Invoice  $invoice
-     * @return \Illuminate\Http\Response
-     */
+        }
+    }
+
+    // Cargar relaciones necesarias
+    $invoice->load(['client', 'items', 'payments']);
+    
+    // Obtener la información de la empresa desde la configuración
+    $companyData = [
+        'name' => config('app.name'),
+        'address' => config('app.address', ''),
+        'city_zip_country' => config('app.city_zip_country', ''),
+        'phone' => config('app.phone', ''),
+        'email' => config('mail.from.address'),
+        'vat' => config('app.vat_number', ''),
+        'logo_path' => public_path('images/logo.png') // Ajusta la ruta según tu estructura
+    ];
+    
+    // Obtener la información bancaria desde la configuración
+    $bankInfo = config('invoice.bank');
+    
+    // Generar PDF con los datos necesarios
+    $pdf = PDF::loadView('invoices.pdf_template', compact('invoice', 'companyData', 'bankInfo'));
+    
+    // Si la factura no tiene número, usar el ID
+    $filename = $invoice->invoice_number ?: 'invoice-' . $invoice->id;
+    
+    return $pdf->download("{$filename}.pdf");
+}
 
 /**
  * Send invoice email to client.
@@ -877,30 +928,16 @@ class InvoiceController extends Controller
         // Cargar relaciones necesarias
         $invoice->load(['client', 'items.service', 'payments']);
         
-        // Obtener la información de la empresa
+        // Obtener la información de la empresa desde la configuración
         $companyData = [
-            'name' => 'AppNet Developer',
-            'address' => 'Calle San Felix 18 2E',
-            'phone' => '+34619929305',
-            'email' => 'info@appnet.dev',
-            'vat' => 'ES123456789',
-            'city_zip_country' => 'Madrid, 28038, España',
+            'name' => config('app.name'),
+            'address' => config('app.address', ''),
+            'city_zip_country' => config('app.city_zip_country', ''),
+            'phone' => config('app.phone', ''),
+            'email' => config('mail.from.address'),
+            'vat' => config('app.vat_number', ''),
             'logo_path' => public_path('images/logo.png')
         ];
-        
-        // Si hay configuración en el archivo .env, sobrescribir los valores
-        if (config('app.address')) {
-            $companyData['address'] = config('app.address');
-        }
-        if (config('app.phone')) {
-            $companyData['phone'] = config('app.phone');
-        }
-        if (config('mail.from.address')) {
-            $companyData['email'] = config('mail.from.address');
-        }
-        if (config('app.vat_number')) {
-            $companyData['vat'] = config('app.vat_number');
-        }
         
         // Obtener la información bancaria desde la configuración
         $bankInfo = config('invoice.bank');

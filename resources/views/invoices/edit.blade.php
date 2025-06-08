@@ -184,6 +184,19 @@
                         @error('discount_id_invoice')<p class="mt-1 text-xs text-red-500">{{ $message }}</p>@enderror
                     </div>
 
+                    {{-- IRPF --}}
+                    @if(config('invoice.irpf', 0) > 0)
+                    <div>
+                        <label for="irpf" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                            {{ __('IRPF') }} ({{ __('Retention') }} %)
+                        </label>
+                        <input type="number" id="irpf" name="irpf" min="0" max="100" step="0.01"
+                               value="{{ $irpf }}"
+                               class="inputField w-full p-3 border {{ $errors->has('irpf') ? 'border-red-500' : 'border-slate-300 dark:border-slate-600' }} rounded-md dark:bg-slate-900">
+                        @error('irpf')<p class="mt-1 text-xs text-red-500">{{ $message }}</p>@enderror
+                    </div>
+                    @endif
+
                 </div>{{-- /grid datos generales --}}
 
                 {{-- ================= LÍNEAS ================= --}}
@@ -239,6 +252,12 @@
                             </span>
                             <span id="invoiceTaxes" class="font-medium text-slate-900 dark:text-white">0.00 €</span>
                         </div>
+                        <div id="irpfRow" class="flex justify-between @if($irpf <= 0) hidden @endif">
+                            <span class="text-slate-600 dark:text-slate-300">
+                                {{ __('IRPF') }} (<span id="irpfRateDisplay">{{ $irpf }}</span>%):
+                            </span>
+                            <span id="invoiceIrpf" class="font-medium text-red-600 dark:text-red-400">0.00 €</span>
+                        </div>
                         <hr class="my-1 border-slate-200 dark:border-slate-700">
                         <div class="flex justify-between text-lg">
                             <span class="font-bold text-slate-900 dark:text-white">{{ __('Total Amount') }}:</span>
@@ -254,6 +273,9 @@
                                value="{{ old('discount_amount', $invoice->discount_amount) }}">
                         <input type="hidden" name="tax_amount"      id="inputTaxAmount"
                                value="{{ old('tax_amount', $invoice->tax_amount) }}">
+                        <input type="hidden" name="irpf" id="inputIrpf" value="{{ old('irpf', $irpf) }}">
+                        <input type="hidden" name="irpf_amount" id="inputIrpfAmount" 
+                               value="{{ old('irpf_amount', $invoice->irpf_amount) }}">
                         <input type="hidden" name="total_amount"    id="inputTotalAmount"
                                value="{{ old('total_amount', $invoice->total_amount) }}">
                     </div>
@@ -342,19 +364,25 @@
 
                     /* ---------- Vat desde back ---------- */
                     const defaultVatRate = {{ config('app.vat_rate',21) }};
+                    const initialClientVatRate = {{ $invoice->client->vat_rate ?? 'null' }};
 
-                    function readVat($option){
+                    function readVat($option) {
                         const v = parseFloat($option.data('vat-rate'));
                         return isNaN(v) ? defaultVatRate : v;   // 👈 NO reemplaza el 0
                     }
 
-                    let currentVatRate = readVat($('#client_id option:selected'));
+                    // Usar el IVA del cliente si existe, de lo contrario usar el del select
+                    let currentVatRate = initialClientVatRate !== null ? parseFloat(initialClientVatRate) : readVat($('#client_id option:selected'));
 
-                    $('#clientVatRateDisplay').text(currentVatRate.toFixed(2));
-                    $('#inputClientVatRate').val(currentVatRate);
-                    console.log('[INIT] option:selected data-vat-rate =',
-                                $('#client_id option:selected').data('vat-rate'),
-                                '→ currentVatRate =', currentVatRate);
+                    // Actualizar la visualización del IVA
+                    function updateVatDisplay() {
+                        $('#clientVatRateDisplay').text(currentVatRate.toFixed(2));
+                        $('input[name="tax_rate"]').val(currentVatRate);
+                        console.log('Updating VAT display to:', currentVatRate);
+                    }
+
+                    // Inicializar la visualización del IVA
+                    updateVatDisplay();
                     /* ------------ Select2 helpers ------------ */
                     function initSelect2($el){
                         if ($.fn.select2){
@@ -365,24 +393,28 @@
 
                     /* ------------ Cliente cambia ------------ */
                     $('#client_id').on('change select2:select', function () {
+                        // Leer el IVA del cliente seleccionado
+                        let vat = parseFloat($(this).find(':selected').data('vat-rate'));
 
-                    // lee el atributo
-                    let vat = parseFloat($(this).find(':selected').data('vat-rate'));
-
-                        // solo usa el valor por defecto si ES NaN (undefined, null, etc.),
+                        // Solo usa el valor por defecto si ES NaN (undefined, null, etc.),
                         // pero NO si el valor real es 0
                         if (isNaN(vat)) vat = defaultVatRate;
                         currentVatRate = vat;
 
-                        console.log('currentVatRate:', currentVatRate);   // 0, 7, 15, 21…
+                        console.log('Cliente cambiado - Nuevo IVA:', currentVatRate);
 
-                        $('#clientVatRateDisplay').text(currentVatRate.toFixed(2));
-                        $('#inputClientVatRate').val(currentVatRate);
+                        // Actualizar la visualización del IVA
+                        updateVatDisplay();
 
+                        // Actualizar el IVA en los items existentes
+                        $('.item-tax-rate').val(currentVatRate).trigger('change');
+
+                        // Actualizar selects de cotizaciones y proyectos
                         const cid = $(this).val();
-                        reloadSelect('#quote_id', quotes,   cid, 'quote_number');
+                        reloadSelect('#quote_id', quotes, cid, 'quote_number');
                         reloadSelect('#project_id', projects, cid, 'project_title');
 
+                        // Recalcular totales
                         recalcTotals();
                     });
 
@@ -438,37 +470,83 @@
 
                     /* ------------ Totales ------------ */
                     $('#discount_id_invoice').on('change', recalcTotals);
+                    $('#irpf').on('input', recalcTotals);
                     $('#addInvoiceItemBtn').on('click', ()=>addRow());
 
-                    function recalcTotals(){
-                        let subtotal=0;
-                        $('.invoice-item-row').each(function(){
-                            const q=parseFloat($(this).find('.item-quantity').val())||0;
-                            const p=parseFloat($(this).find('.item-price').val())||0;
-                            subtotal += q*p;
+                    function recalcTotals() {
+                        let subtotal = 0;
+                        
+                        // Calcular subtotal sumando todas las líneas
+                        $('.invoice-item-row').each(function() {
+                            const $row = $(this);
+                            const q = parseFloat($row.find('.item-quantity').val()) || 0;
+                            const p = parseFloat($row.find('.item-price').val()) || 0;
+                            const taxRate = parseFloat($row.find('.item-tax-rate').val()) || currentVatRate;
+                            
+                            // Calcular total de la línea
+                            const lineTotal = q * p;
+                            subtotal += lineTotal;
                         });
-
-                        let discountAmt=0;
-                        const $dSel=$('#discount_id_invoice').find(':selected');
-                        if ($dSel.val()){
-                            const t=$dSel.data('type'), v=parseFloat($dSel.data('value'))||0;
-                            discountAmt = t==='percentage' ? subtotal*(v/100) : v;
-                            discountAmt = Math.min(discountAmt, subtotal);
+                        
+                        // Aplicar descuento global si existe
+                        let discountAmount = 0;
+                        const discountType = $('#discount_id_invoice option:selected').data('type');
+                        const discountValue = parseFloat($('#discount_id_invoice option:selected').data('value')) || 0;
+                        
+                        if (discountType === 'percentage' && discountValue > 0) {
+                            discountAmount = subtotal * (discountValue / 100);
+                        } else if (discountType === 'fixed' && discountValue > 0) {
+                            discountAmount = Math.min(discountValue, subtotal);
                         }
-
-                        const base=subtotal-discountAmt;
-                        const taxes=base*(currentVatRate/100);
-                        const total=base+taxes;
-
-                        $('#invoiceSubtotal').text(subtotal.toFixed(2)+' €');
-                        $('#invoiceDiscountAmount').text(discountAmt.toFixed(2)+' €');
-                        $('#invoiceTaxes').text(taxes.toFixed(2)+' €');
-                        $('#invoiceTotal').text(total.toFixed(2)+' €');
-
+                        
+                        // Calcular base imponible (subtotal - descuentos)
+                        const taxableBase = subtotal - discountAmount;
+                        
+                        // Calcular IVA
+                        const taxAmount = taxableBase * (currentVatRate / 100);
+                        
+                        // Obtener tasa de IRPF del campo de entrada
+                        const irpfInput = document.getElementById('irpf');
+                        let irpfRate = irpfInput ? parseFloat(irpfInput.value) || 0 : 0;
+                        let irpfAmount = 0;
+                        
+                        // Calcular IRPF
+                        irpfAmount = taxableBase * (irpfRate / 100);
+                        
+                        // Actualizar la fila de IRPF
+                        const irpfRow = $('#irpfRow');
+                        if (irpfRate > 0) {
+                            // Mostrar y actualizar la fila de IRPF
+                            irpfRow.removeClass('hidden');
+                            irpfRow.find('#invoiceIrpf').text('-' + irpfAmount.toFixed(2) + ' €');
+                            irpfRow.find('#irpfRateDisplay').text(irpfRate.toFixed(2));
+                        } else {
+                            // Ocultar la fila de IRPF si no hay tasa
+                            irpfRow.addClass('hidden');
+                        }
+                        
+                        // Actualizar campos ocultos
+                        $('#inputIrpf').val(irpfRate.toFixed(2));
+                        $('#inputIrpfAmount').val(irpfAmount.toFixed(2));
+                        
+                        // Calcular total (subtotal - descuento + IVA - IRPF)
+                        const total = taxableBase + taxAmount - irpfAmount;
+                        
+                        // Actualizar la interfaz
+                        $('#invoiceSubtotal').text(subtotal.toFixed(2) + ' €');
+                        $('#invoiceDiscountAmount').text('-' + discountAmount.toFixed(2) + ' €');
+                        $('#invoiceTaxes').text(taxAmount.toFixed(2) + ' €');
+                        $('#invoiceTotal').text(total.toFixed(2) + ' €');
+                        
+                        // Actualizar campos ocultos
                         $('#inputSubtotal').val(subtotal.toFixed(2));
-                        $('#inputDiscountAmount').val(discountAmt.toFixed(2));
-                        $('#inputTaxAmount').val(taxes.toFixed(2));
+                        $('#inputDiscountAmount').val(discountAmount.toFixed(2));
+                        $('#inputTaxAmount').val(taxAmount.toFixed(2));
                         $('#inputTotalAmount').val(total.toFixed(2));
+                        
+                        // Actualizar el IVA en el display
+                        $('#clientVatRateDisplay').text(currentVatRate.toFixed(2));
+                        $('input[name="tax_rate"]').val(currentVatRate.toFixed(2));
                     }
                     recalcTotals();
                     /* ------------ Cargar líneas existentes ------------ */

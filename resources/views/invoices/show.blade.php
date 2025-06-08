@@ -111,23 +111,43 @@
                         </div>
                         
                         @if($invoice->verifactu_qr_code_data)
-                        <div class="p-3 bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700">
                             <h5 class="text-xs font-medium text-slate-500 dark:text-slate-400 mb-2">{{ __('VeriFactu QR') }}</h5>
-                            <div class="flex justify-center">
-                                @if(str_starts_with($invoice->verifactu_qr_code_data, 'data:image/'))
-                                    <img src="{{ $invoice->verifactu_qr_code_data }}" alt="VeriFactu QR Code" class="w-32 h-32" />
+                            <div class="mt-1 flex justify-center">
+                                @php
+                                    $qrCode = trim($invoice->verifactu_qr_code_data);
+                                    $isSvg = str_starts_with($qrCode, '<?xml') || str_contains($qrCode, '<svg');
+                                    $isBase64 = str_starts_with($qrCode, 'data:image/');
+                                    $isUrl = filter_var($qrCode, FILTER_VALIDATE_URL) !== false;
+                                @endphp
+                                
+                                @if($isSvg)
+                                    <div class="w-32 h-32 flex items-center justify-center">
+                                        {!! $qrCode !!}
+                                    </div>
+                                @elseif($isBase64 || $isUrl)
+                                    <img src="{{ $qrCode }}" alt="VeriFactu QR Code" class="w-32 h-32 object-contain" />
                                 @else
-                                    <div class="text-xs text-red-500 p-2 bg-red-50 dark:bg-red-900/20 rounded">
-                                        {{ __('Invalid QR code format') }}
+                                    <div class="text-yellow-500 text-sm p-2 bg-yellow-50 rounded">
+                                        <p class="font-medium">{{ __('QR no disponible') }}</p>
+                                        <p class="text-xs">{{ __('El código QR no está en un formato compatible.') }}</p>
+                                        <a href="{{ route('invoices.generate-qr', $invoice->id) }}" class="text-blue-600 hover:underline text-xs">
+                                            {{ __('Regenerar código QR') }}
+                                        </a>
                                     </div>
                                 @endif
                             </div>
-                            @if($invoice->verifactu_id)
+                        @else
+                            <div class="text-blue-500 text-sm p-2 bg-blue-50 rounded">
+                                <p>{{ __('No hay código QR generado.') }}</p>
+                                <a href="{{ route('invoices.generate-qr', $invoice->id) }}" class="text-blue-600 hover:underline text-xs">
+                                    {{ __('Generar código QR ahora') }}
+                                </a>
+                            </div>
+                        @endif
+                        @if($invoice->verifactu_id)
                             <p class="text-xs text-center mt-2 text-slate-500 dark:text-slate-400">
                                 {{ $invoice->verifactu_id }}
                             </p>
-                            @endif
-                        </div>
                         @endif
                     </div>
                     </div>
@@ -208,6 +228,12 @@
                                 <span class="text-slate-500 dark:text-slate-400">{{ __('Total Tax') }} ({{ $invoice->client->vat_rate ?? config('app.vat_rate', 21) }}%):</span>
                                 <span class="text-slate-700 dark:text-slate-200">{{ number_format($invoice->tax_amount, 2, ',', '.') }} {{ $invoice->currency }}</span>
                             </div>
+                            @if($invoice->irpf_amount > 0)
+                            <div class="flex justify-between text-sm">
+                                <span class="text-slate-500 dark:text-slate-400">{{ __('IRPF') }} ({{ number_format($invoice->irpf, 2, ',', '.') }}%):</span>
+                                <span class="text-slate-700 dark:text-slate-200">-{{ number_format($invoice->irpf_amount, 2, ',', '.') }} {{ $invoice->currency }}</span>
+                            </div>
+                            @endif
                             <hr class="my-2 border-slate-200 dark:border-slate-600">
                             <div class="flex justify-between font-bold text-base">
                                 <span class="text-slate-900 dark:text-white">{{ __('Total Amount') }}:</span>

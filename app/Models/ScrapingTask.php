@@ -28,6 +28,7 @@ class ScrapingTask extends Model
         'last_attempt_at',
         'failed_at',
         'error_message',
+        'updated_at',
     ];
 
     /**

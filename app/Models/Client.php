@@ -55,6 +55,17 @@ class Client extends Model
     }
 
     /**
+     * Scope a query to only include active clients.
+     *
+     * @param  \Illuminate\Database\Eloquent\Builder  $query
+     * @return \Illuminate\Database\Eloquent\Builder
+     */
+    public function scopeActive($query)
+    {
+        return $query->where('is_active', true);
+    }
+
+    /**
      * Get the invoices for the client.
      */
     public function invoices(): HasMany

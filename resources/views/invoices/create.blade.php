@@ -126,7 +126,7 @@
                         @error('project_id') <p class="mt-1 text-xs text-red-500">{{ $message }}</p> @enderror
                     </div>
 
-                    {{-- Discount global --}}
+                    {{-- Descuento global --}}
                     <div>
                         <label for="discount_id_invoice" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
                             {{ __('Global Discount') }} ({{ __('Optional') }})
@@ -146,6 +146,19 @@
                         </select>
                         @error('discount_id_invoice') <p class="mt-1 text-xs text-red-500">{{ $message }}</p> @enderror
                     </div>
+
+                    {{-- IRPF --}}
+                    @if(config('invoice.irpf', 0) > 0)
+                    <div>
+                        <label for="irpf" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                            {{ __('IRPF') }} ({{ __('Retention') }} %)
+                        </label>
+                        <input type="number" id="irpf" name="irpf" min="0" max="100" step="0.01"
+                               value="{{ old('irpf', config('invoice.irpf', 0)) }}"
+                               class="inputField w-full p-3 {{ $errors->has('irpf') ? 'border-red-500' : 'border-slate-300 dark:border-slate-600' }} border rounded-md dark:bg-slate-900">
+                        @error('irpf') <p class="mt-1 text-xs text-red-500">{{ $message }}</p> @enderror
+                    </div>
+                    @endif
                 </div>
 
                 {{-- ================= LÍNEAS ================= --}}
@@ -183,17 +196,23 @@
                     </div>
 
                     <div class="space-y-2 text-right">
-                        <div class="flex justify-between"><span class="text-slate-600 dark:text-slate-300">{{ __('Subtotal') }}:</span><span id="invoiceSubtotal" class="font-medium text-slate-900 dark:text-white">0.00 €</span></div>
-                        <div class="flex justify-between"><span class="text-slate-600 dark:text-slate-300">{{ __('Discount Amount') }}:</span><span id="invoiceDiscountAmount" class="font-medium text-slate-900 dark:text-white">0.00 €</span></div>
-                        <div class="flex justify-between"><span class="text-slate-600 dark:text-slate-300">{{ __('Total Tax') }} (<span id="clientVatRateDisplay">{{ config('app.vat_rate',21) }}</span>%):</span><span id="invoiceTaxes" class="font-medium text-slate-900 dark:text-white">0.00 €</span></div>
+                        <div class="flex justify-between"><span class="text-slate-600 dark:text-slate-300">{{ __('Subtotal') }}:</span><span id="invoiceSubtotal" class="font-medium text-slate-900 dark:text-white">0.00 €</span></div>
+                        <div class="flex justify-between"><span class="text-slate-600 dark:text-slate-300">{{ __('Discount Amount') }}:</span><span id="invoiceDiscountAmount" class="font-medium text-slate-900 dark:text-white">0.00 €</span></div>
+                        <div class="tax-row flex justify-between"><span class="text-slate-600 dark:text-slate-300">{{ __('Total Tax') }} (<span id="clientVatRateDisplay">{{ config('app.vat_rate',21) }}</span>%):</span><span id="invoiceTaxes" class="font-medium text-slate-900 dark:text-white">0.00 €</span></div>
+                        
+                        {{-- IRPF row will be inserted here by JavaScript if IRPF is enabled --}}
+                        
                         <hr class="my-1 border-slate-200 dark:border-slate-700">
-                        <div class="flex justify-between text-lg"><span class="font-bold text-slate-900 dark:text-white">{{ __('Total Amount') }}:</span><span id="invoiceTotal" class="font-bold text-slate-900 dark:text-white">0.00 €</span></div>
+                        <div class="flex justify-between text-lg"><span class="font-bold text-slate-900 dark:text-white">{{ __('Total Amount') }}:</span><span id="invoiceTotal" class="font-bold text-slate-900 dark:text-white">0.00 €</span></div>
 
                         <input type="hidden" name="client_vat_rate" id="inputClientVatRate" value="{{ config('app.vat_rate',21) }}">
-                        <input type="hidden" name="subtotal"        id="inputSubtotal"      value="0">
+                        <input type="hidden" name="subtotal" id="inputSubtotal" value="0">
                         <input type="hidden" name="discount_amount" id="inputDiscountAmount" value="0">
-                        <input type="hidden" name="tax_amount"      id="inputTaxAmount"      value="0">
-                        <input type="hidden" name="total_amount"    id="inputTotalAmount"    value="0">
+                        <input type="hidden" name="tax_amount" id="inputTaxAmount" value="0">
+                        <input type="hidden" name="total_amount" id="inputTotalAmount" value="0">
+                        @if(config('invoice.irpf', 0) > 0)
+                            <input type="hidden" name="irpf" id="inputIrpf" value="{{ config('invoice.irpf', 0) }}">
+                        @endif
                     </div>
                 </div>
 
@@ -383,22 +402,68 @@
                     discount = Math.min(discount, subtotal);
                 }
 
-                const base      = subtotal-discount;
-                const taxAmount = base*(currentClientVatRate/100);
-                const total     = base+taxAmount;
 
+                const base = subtotal - discount;
+                const taxAmount = base * (currentClientVatRate / 100);
+                
+                // Calculate IRPF if enabled
+                let irpfAmount = 0;
+                const irpfRate = parseFloat($('#irpf').val()) || 0;
+                if (irpfRate > 0) {
+                    irpfAmount = base * (irpfRate / 100);
+                }
+                
+                const total = base + taxAmount - irpfAmount;
+
+                // Update UI
                 $('#invoiceSubtotal').text(subtotal.toFixed(2)+' €');
                 $('#invoiceDiscountAmount').text(discount.toFixed(2)+' €');
                 $('#invoiceTaxes').text(taxAmount.toFixed(2)+' €');
+                
+                // Show/hide IRPF row based on rate
+                if (irpfRate > 0) {
+                    if ($('#irpfRow').length === 0) {
+                        $('.tax-row').after(`
+                            <div id="irpfRow" class="flex justify-between">
+                                <span class="text-slate-600 dark:text-slate-300">{{ __('IRPF') }} (${irpfRate}%):</span>
+                                <span id="irpfAmount" class="font-medium text-red-600 dark:text-red-400">-${irpfAmount.toFixed(2)} €</span>
+                            </div>
+                        `);
+                    } else {
+                        $('#irpfRow').find('span:first').text(`{{ __('IRPF') }} (${irpfRate}%):`);
+                        $('#irpfAmount').text(`-${irpfAmount.toFixed(2)} €`);
+                    }
+                } else {
+                    $('#irpfRow').remove();
+                }
+                
                 $('#invoiceTotal').text(total.toFixed(2)+' €');
 
+                // Update hidden fields
                 $('#inputSubtotal').val(subtotal.toFixed(2));
                 $('#inputDiscountAmount').val(discount.toFixed(2));
                 $('#inputTaxAmount').val(taxAmount.toFixed(2));
                 $('#inputTotalAmount').val(total.toFixed(2));
+                
+                // Add IRPF to form data if it exists
+                if (irpfRate > 0) {
+                    if ($('#inputIrpf').length === 0) {
+                        $('<input>').attr({
+                            type: 'hidden',
+                            id: 'inputIrpf',
+                            name: 'irpf',
+                            value: irpfRate.toFixed(2)
+                        }).appendTo('form');
+                    } else {
+                        $('#inputIrpf').val(irpfRate.toFixed(2));
+                    }
+                } else {
+                    $('#inputIrpf').remove();
+                }
             }
 
             $('#discount_id_invoice').on('change', calculateOverallTotals);
+            $('#irpf').on('input change', calculateOverallTotals);
             $('#addInvoiceItemBtn').on('click', () => addInvoiceItemRow());
 
             /* ---------- CARGAR ITEMS DESDE QUOTE ---------- */

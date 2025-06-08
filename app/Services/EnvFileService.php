@@ -53,32 +53,70 @@ class EnvFileService
     /**
      * @param  Request  $request
      * @return Collection
-     */public function updateEnv(Request $request) : Collection
-{
-    $envFile = base_path('.env');
-
-    // Leer el contenido actual del archivo .env
-    $envContent = file_get_contents($envFile);
-
-    // Iterar sobre las claves y valores proporcionados en la solicitud
-    foreach ($request->except('_token', '_method') as $key => $value) {
-        // Crear el patrón de búsqueda para la variable de entorno
-        $pattern = '/^' . preg_quote($key) . '\s*=\s*(.*)$/m';
-
-        // Reemplazar el valor existente o agregar una nueva variable de entorno
-        $replacement = $key . '=' . $value;
-        $envContent = preg_replace($pattern, $replacement, $envContent, 1);
-    }
-
-    // Escribir el contenido actualizado de vuelta al archivo .env
-    file_put_contents($envFile, $envContent);
-
-    // Cargar las variables de entorno actualizadas
-    $dotenv = Dotenv::createMutable(base_path());
-    $dotenv->load();
-
-    // Devolver las variables de entorno actualizadas
-    return $this->getEnv(array_keys($request->except('_token', '_method')));
+     */
+    public function updateEnv(Request $request): Collection
+    {
+        $envFile = base_path('.env');
+        
+        // Leer el contenido actual del archivo .env
+        $envContent = file_get_contents($envFile);
+        $lines = explode("\n", $envContent);
+        $updatedLines = [];
+        $foundKeys = [];
+        
+        // Procesar cada línea existente
+        foreach ($lines as $line) {
+            $line = trim($line);
+            
+            // Si la línea está vacía o es un comentario, la mantenemos igual
+            if (empty($line) || str_starts_with($line, '#')) {
+                $updatedLines[] = $line;
+                continue;
+            }
+            
+            // Extraer la clave de la línea actual
+            $parts = explode('=', $line, 2);
+            $currentKey = trim($parts[0]);
+            
+            // Si la clave está en la solicitud, la actualizamos
+            if (isset($request[$currentKey])) {
+                $value = $request[$currentKey];
+                // Escapar comillas dobles y agregar comillas si el valor contiene espacios o caracteres especiales
+                $escapedValue = str_replace('"', '\\"', $value);
+                if (preg_match('/[\s\"\'\\=#]/', $escapedValue)) {
+                    $escapedValue = '"' . $escapedValue . '"';
+                }
+                $updatedLines[] = $currentKey . '=' . $escapedValue;
+                $foundKeys[] = $currentKey;
+            } else {
+                $updatedLines[] = $line;
+            }
+        }
+        
+        // Agregar claves que no existían
+        foreach ($request->except('_token', '_method') as $key => $value) {
+            if (!in_array($key, $foundKeys)) {
+                $escapedValue = str_replace('"', '\\"', $value);
+                if (preg_match('/[\s\"\'\\=#]/', $escapedValue)) {
+                    $escapedValue = '"' . $escapedValue . '"';
+                }
+                $updatedLines[] = $key . '=' . $escapedValue;
+            }
+        }
+        
+        // Escribir el contenido actualizado de vuelta al archivo .env
+        file_put_contents($envFile, implode("\n", $updatedLines));
+        
+        // Limpiar la caché de configuración
+        \Artisan::call('config:clear');
+        \Artisan::call('cache:clear');
+        
+        // Cargar las variables de entorno actualizadas
+        $dotenv = \Dotenv\Dotenv::createMutable(base_path());
+        $dotenv->load();
+        
+        // Devolver las variables de entorno actualizadas
+        return $this->getEnv(array_keys($request->except('_token', '_method')));
 }
 
 
