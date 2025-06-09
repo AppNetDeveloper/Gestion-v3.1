@@ -74,7 +74,8 @@ class VeriFactuService
                     'amount' => number_format($item->line_total, 2, '.', ''),
                 ];
             })->toArray(),
-            'timestamp' => now()->timestamp,
+            // Eliminamos el timestamp dinámico para que el hash sea consistente
+            // 'timestamp' => now()->timestamp,
         ];
         
         // Generar un hash SHA-256 de los datos

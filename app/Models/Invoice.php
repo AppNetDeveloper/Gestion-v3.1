@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Spatie\Activitylog\Facades\Activity; // Import added
 
 class Invoice extends Model
 {
@@ -186,6 +187,18 @@ class Invoice extends Model
     {
         // Asume que 'invoices' tiene 'project_id'
         return $this->belongsTo(Project::class);
+    }
+    
+    /**
+     * Registra una acción realizada en la factura para auditoría
+     *
+     * @param string $action Nombre de la acción (ej: 'locked', 'unlocked', 'signed')
+     * @return void
+     */
+    public function logAction(string $action): void
+    {
+        // Implementación simple de registro sin depender del paquete activity log
+        \Log::info("Invoice #{$this->invoice_number} {$action} by user ID: " . (auth()->user() ? auth()->user()->id : 'system'));
     }
 
     /**

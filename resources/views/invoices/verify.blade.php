@@ -26,10 +26,10 @@
                     </form>
 
                     @if(isset($verificationResult))
-                        <div class="alert alert-{{ $verificationResult['is_valid'] ? 'success' : 'danger' }} mt-4">
+                        <div class="alert alert-{{ $verificationResult['verified'] ? 'success' : 'danger' }} mt-4">
                             <h5 class="alert-heading">
-                                <i class="fas {{ $verificationResult['is_valid'] ? 'fa-check-circle' : 'fa-exclamation-triangle' }}"></i>
-                                {{ $verificationResult['is_valid'] ? 'Factura Verificada' : '¡Atención!' }}
+                                <i class="fas {{ $verificationResult['verified'] ? 'fa-check-circle' : 'fa-exclamation-triangle' }}"></i>
+                                {{ $verificationResult['verified'] ? 'Factura Verificada' : '¡Atención!' }}
                             </h5>
                             <p>{{ $verificationResult['message'] }}</p>
                             
@@ -82,8 +82,8 @@
                                 
                                 @if($invoice->verifactu_qr_code_data)
                                 <div class="text-center mt-3">
-                                    <img src="{{ $invoice->verifactu_qr_code_data }}" alt="Código QR" class="img-fluid" style="max-width: 150px;">
-                                    <p class="text-muted small mt-2">Escanee este código para verificar la autenticidad</p>
+                                    {!! $invoice->verifactu_qr_code_data !!}
+                                    <p class="text-muted small mt-2">{{ __('Scan this QR code to verify authenticity') }}</p>
                                 </div>
                                 @endif
                             </div>
