@@ -167,6 +167,8 @@ class PermissionSeeder extends Seeder
             ['name' => 'invoices send_email', 'module_name' => 'invoices'],
             ['name' => 'invoices export_pdf', 'module_name' => 'invoices'],
             ['name' => 'invoices view_own', 'module_name' => 'invoices'],
+            ['name' => 'invoices sign', 'module_name' => 'invoices'],
+            ['name' => 'invoices verify', 'module_name' => 'invoices'],
 
             // Menus (existentes + nuevos)
             ['name' => 'menu services', 'module_name' => 'menu'],

@@ -74,7 +74,7 @@ class RoleSeeder extends Seeder
             'quotes index', 'quotes create', 'quotes update', 'quotes delete', 'quotes show', 'quotes send_email', 'quotes export_pdf', 'quotes convert_to_invoice', 'quotes accept', 'quotes reject',
             'projects index', 'projects create', 'projects update', 'projects delete', 'projects show', 'projects assign_users',
             'tasks index', 'tasks create', 'tasks update', 'tasks delete', 'tasks show', 'tasks assign_users', 'tasks log_time',
-            'invoices index', 'invoices create', 'invoices update', 'invoices delete', 'invoices show', 'invoices send_email', 'invoices export_pdf',
+            'invoices index', 'invoices create', 'invoices update', 'invoices delete', 'invoices show', 'invoices send_email', 'invoices export_pdf', 'sign invoices', 'verify invoices',
             
             // Certificados Digitales
             'menu digital_certificates',
@@ -148,7 +148,7 @@ class RoleSeeder extends Seeder
             'quotes index', 'quotes show', 'quotes view_own', 'quotes export_pdf', 'quotes accept', 'quotes reject',
             'projects index', 'projects show', 'projects view_own',
             'tasks index', 'tasks show', 'tasks view_own',
-            'invoices index', 'invoices show', 'invoices view_own', 'invoices export_pdf',
+            'invoices index', 'invoices show', 'invoices view_own', 'invoices export_pdf', 'verify invoices',
             'menu quotes', 'menu projects', 'menu invoices',
         ];
         $customerWeb->syncPermissions($customerPermissions);

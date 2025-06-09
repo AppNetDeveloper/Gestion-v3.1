@@ -51,6 +51,7 @@ use App\Http\Controllers\ProjectController; // <-- Importar ProjectController
 use App\Http\Controllers\TaskController; // <-- Importar TaskController
 use App\Http\Controllers\TaskTimeHistoryController; // <-- Importar TaskTimeHistoryController
 use App\Http\Controllers\InvoiceController; // <-- Importar InvoiceController
+use App\Http\Controllers\InvoiceSignatureController;
 use App\Http\Controllers\WhatsappBusinessController;
 use App\Http\Controllers\DigitalCertificateController;
 
@@ -504,9 +505,16 @@ Route::post('/invoices/{invoice}/unlock', [InvoiceController::class, 'unlock'])
     ->middleware(['auth', 'role:super-admin']);
 });
 
+// Rutas para firma digital de facturas con VeriFact (requieren autenticación)
+Route::middleware(['auth'])->group(function () {
+    Route::get('/invoices/{invoice}/sign', [InvoiceSignatureController::class, 'showSignForm'])->name('invoices.sign');
+    Route::post('/invoices/{invoice}/sign', [InvoiceSignatureController::class, 'signInvoice'])->name('invoices.sign.process');
+});
+
 // Ruta para verificar facturas (accesible sin autenticación)
 Route::get('/factura/verificar/{id}', [\App\Http\Controllers\InvoiceVerificationController::class, 'showVerificationForm'])->name('invoices.verify');
 Route::post('/factura/verificar', [\App\Http\Controllers\InvoiceVerificationController::class, 'verify'])->name('invoices.verify.submit');
+Route::get('/factura/verificar/hash/{hash}', [InvoiceSignatureController::class, 'verifyInvoice'])->name('invoices.verify.hash');
 
 // Grupo de rutas públicas
 Route::group([], function () {

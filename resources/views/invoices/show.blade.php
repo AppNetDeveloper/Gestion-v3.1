@@ -61,6 +61,28 @@
                             </a>
                         @endif
                     @endcan
+                    
+                    {{-- Botón de firma digital VeriFact --}}
+                    @can('sign', $invoice)
+                        @if(empty($invoice->verifactu_hash))
+                            <a href="{{ route('invoices.sign', $invoice) }}" class="btn btn-sm btn-outline-success inline-flex items-center">
+                                <iconify-icon icon="heroicons:shield-check" class="mr-1"></iconify-icon> <span>{{ __('Sign with VeriFact') }}</span>
+                            </a>
+                        @else
+                            <span class="inline-flex items-center px-3 py-1 text-xs font-medium rounded-full bg-green-100 text-green-700 dark:bg-green-700 dark:text-green-100">
+                                <iconify-icon icon="heroicons:shield-check" class="mr-1"></iconify-icon> {{ __('Digitally Signed') }}
+                            </span>
+                        @endif
+                    @endcan
+                    
+                    {{-- Botón de verificación para facturas firmadas --}}
+                    @can('invoices verify')
+                        @if(!empty($invoice->verifactu_hash))
+                            <a href="{{ route('invoices.verify.hash', $invoice->verifactu_hash) }}" class="btn btn-sm btn-outline-info inline-flex items-center ml-2">
+                                <iconify-icon icon="heroicons:document-magnifying-glass" class="mr-1"></iconify-icon> <span>{{ __('Verify Signature') }}</span>
+                            </a>
+                        @endif
+                    @endcan
                     {{-- Otros botones como "Marcar como Pagada" se añadirían aquí --}}
                 </div>
             </div>

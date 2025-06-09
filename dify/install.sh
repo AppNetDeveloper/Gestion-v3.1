@@ -152,15 +152,24 @@ echo -e "${GREEN}Archivo de Docker Compose encontrado: $COMPOSE_FILE${NC}"
 
 echo -e "${GREEN}Archivos de Docker Compose encontrados correctamente.${NC}"
 
+# Parar cualquier contenedor existente primero
+echo -e "\nParando contenedores existentes de Dify (si los hay)..."
+docker compose down 2>/dev/null || true
+
 # Crear el fichero de override para configurar el puerto en NGINX
 echo -e "\nConfigurando el puerto ${WEB_PORT} para el servicio NGINX..."
-cat > docker-compose.override.yml <<EOL
+cat > docker-compose.override.yml <<'EOL'
+version: '3'
 services:
   nginx:
     ports:
-      - "${WEB_PORT}:80"
+      - "3000:80"
 EOL
 echo -e "${GREEN}Archivo 'docker-compose.override.yml' creado/actualizado.${NC}"
+
+# Verificar el contenido del archivo override
+echo -e "${YELLOW}Contenido del archivo override:${NC}"
+cat docker-compose.override.yml
 
 # Verificar que se creó correctamente
 if [ ! -f "docker-compose.override.yml" ]; then
@@ -179,7 +188,13 @@ if ! docker compose version &> /dev/null; then
     handle_error "Docker Compose no está disponible. Asegúrate de que Docker está correctamente instalado."
 fi
 
+# Parar servicios web comunes que puedan estar usando el puerto 80
+echo -e "\nVerificando y parando servicios web que puedan interferir..."
+sudo systemctl stop apache2 2>/dev/null && echo "Apache2 detenido" || true
+sudo systemctl stop nginx 2>/dev/null && echo "Nginx del sistema detenido" || true
+
 # Ejecutar docker compose
+echo -e "\nIniciando los servicios de Dify con configuración corregida..."
 docker compose -f "$COMPOSE_FILE" -f docker-compose.override.yml up -d || handle_error "Falló el comando 'docker compose up'. Revisa los logs de Docker para más detalles."
 
 # ==============================================================================

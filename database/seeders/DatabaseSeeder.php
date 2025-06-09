@@ -25,6 +25,7 @@ class DatabaseSeeder extends Seeder
             JobPositionSeeder::class,
             PermissionSeeder::class,
             RoleSeeder::class,
+            InvoiceSignaturePermissionSeeder::class,
             UserSeeder::class,
             TimeControlSeeder::class,
             ShiftDaysSeeder::class,

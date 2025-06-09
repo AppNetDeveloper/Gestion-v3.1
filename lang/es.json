@@ -786,7 +786,7 @@
   
       "Invoices Management": "Gestión de Facturas",
       "Create New Invoice": "Crear Nueva Factura",
-      "Invoice Details": "Detalles de la Factura",
+      "Invoice Details": "Detalles de Factura",
       "Invoice #": "Factura Nº",
       "Invoice Date": "Fecha Factura",
       "Partially Paid": "Parcialmente Pagada",
@@ -873,7 +873,25 @@
       "No items for this invoice.": "No hay líneas para esta factura.",
       "Total Tax": "Total IVA",
       "Oops, nothing found!": "¡Vaya, no se encontró nada!",
-      "Select a service or type description": "Selecciona un servicio o escribe una descripción"
+      "Select a service or type description": "Selecciona un servicio o escribe una descripción",
+      
+      "Sign with VeriFact": "Firmar con VeriFact",
+      "Digitally Signed": "Firmado Digitalmente",
+      "Sign Invoice with VeriFact": "Firmar Factura con VeriFact",
+      "Select Digital Certificate": "Seleccionar Certificado Digital",
+      "Select a certificate...": "Seleccionar un certificado...",
+      "Warning: This action cannot be undone. Once the invoice is signed, it will be locked and cannot be modified.": "Advertencia: Esta acción no se puede deshacer. Una vez que la factura esté firmada, quedará bloqueada y no podrá ser modificada.",
+      "Signing this invoice will generate a unique digital signature using VeriFact technology. Once signed, the invoice cannot be modified.": "Al firmar esta factura se generará una firma digital única utilizando la tecnología VeriFact. Una vez firmada, la factura no podrá ser modificada.",
+      "Invoice has been successfully signed with VeriFact.": "La factura ha sido firmada correctamente con VeriFact.",
+      "Failed to sign the invoice. Please try again or contact support.": "Error al firmar la factura. Por favor, inténtalo de nuevo o contacta con soporte.",
+      "An error occurred while signing the invoice:": "Ocurrió un error al firmar la factura:",
+      "This invoice is already digitally signed.": "Esta factura ya está firmada digitalmente.",
+      "No active digital certificates available. Please add a valid certificate first.": "No hay certificados digitales activos disponibles. Por favor, añade primero un certificado válido.",
+      "The selected certificate is not active or has expired.": "El certificado seleccionado no está activo o ha caducado.",
+      "The invoice is authentic and has not been modified.": "La factura es auténtica y no ha sido modificada.",
+      "Warning: The invoice data may have been modified after signing.": "Advertencia: Los datos de la factura pueden haber sido modificados después de la firma.",
+      "Invoice not found or hash is invalid.": "Factura no encontrada o hash no válido.",
+      "Expires": "Caduca"
   
   }
   
