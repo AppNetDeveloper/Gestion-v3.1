@@ -886,5 +886,13 @@
     "The invoice is authentic and has not been modified.": "The invoice is authentic and has not been modified.",
     "Warning: The invoice data may have been modified after signing.": "Warning: The invoice data may have been modified after signing.",
     "Invoice not found or hash is invalid.": "Invoice not found or hash is invalid.",
-    "Expires": "Expires"
+    "Expires": "Expires",
+    "Bank Transfer Details": "Bank Transfer Details",
+    "Bank": "Bank",
+    "Account Holder": "Account Holder",
+    "Account Number": "Account Number",
+    "IBAN": "IBAN",
+    "SWIFT/BIC": "SWIFT/BIC",
+    "Please use the invoice number as reference:": "Please use the invoice number as reference:",
+    "invoice": "invoice"
 }

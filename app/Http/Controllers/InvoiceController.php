@@ -877,39 +877,28 @@ class InvoiceController extends Controller
         // Cargar relaciones necesarias
         $invoice->load(['client', 'items.service', 'payments']);
         
-        // Obtener la información de la empresa
+        // Obtener la información de la empresa desde la configuración
         $companyData = [
-            'name' => 'AppNet Developer',
-            'address' => 'Calle San Felix 18 2E',
-            'phone' => '+34619929305',
-            'email' => 'info@appnet.dev',
-            'vat' => 'ES123456789',
-            'city_zip_country' => 'Madrid, 28038, España',
-            'logo_path' => public_path('images/logo.png')
+            'name' => config('app.company_name', 'AppNet Developer'),
+            'address' => config('app.company_address', 'Calle San Felix 18 2E'),
+            'phone' => config('app.company_phone', '+34619929305'),
+            'email' => config('app.company_email', 'info@appnet.dev'),
+            'vat' => config('app.company_vat', 'ES123456789'),
+            'city_zip_country' => config('app.company_city_zip_country', 'Madrid, 28038, España'),
+            'logo_path' => config('app.company_logo_path') ? public_path(config('app.company_logo_path')) : public_path('images/logo.png')
         ];
-        
-        // Si hay configuración en el archivo .env, sobrescribir los valores
-        if (config('app.address')) {
-            $companyData['address'] = config('app.address');
-        }
-        if (config('app.phone')) {
-            $companyData['phone'] = config('app.phone');
-        }
-        if (config('mail.from.address')) {
-            $companyData['email'] = config('mail.from.address');
-        }
-        if (config('app.vat_number')) {
-            $companyData['vat'] = config('app.vat_number');
-        }
         
         // Obtener la información bancaria desde la configuración
         $bankInfo = config('invoice.bank');
         
+        // Generar PDF con los datos necesarios y aplicar el idioma del usuario
+        $currentLocale = app()->getLocale();
+        
         // Generar PDF con los datos necesarios
         $pdf = PDF::loadView('invoices.pdf_template', compact('invoice', 'companyData', 'bankInfo'));
         
-        // Si la factura no tiene número, usar el ID
-        $filename = $invoice->invoice_number ?: 'invoice-' . $invoice->id;
+        // Si la factura no tiene número, usar el ID con traducción
+        $filename = $invoice->invoice_number ?: __('invoice') . '-' . $invoice->id;
         
         return $pdf->download("{$filename}.pdf");
     }

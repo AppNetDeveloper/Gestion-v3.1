@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="es">
+<html lang="{{ app()->getLocale() }}">
 <head>
     <meta charset="UTF-8">
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
@@ -357,7 +357,7 @@
                         <td>{{ $bankInfo['account_holder'] ?? '' }}</td>
                     </tr>
                     <tr>
-                        <td style="width: 35%; font-weight: bold;">{{ __('Account Number') }} (IBAN):</td>
+                        <td style="width: 35%; font-weight: bold;">{{ __('Account Number') }} ({{ __('IBAN') }}):</td>
                         <td>{{ $bankInfo['account_number'] ?? '' }}</td>
                     </tr>
                     <tr>

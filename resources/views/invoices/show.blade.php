@@ -109,10 +109,11 @@
                 </div>
                 <div class="text-right">
                     <h4 class="text-slate-600 dark:text-slate-300 font-medium text-sm mb-2">{{ __('From:') }}</h4>
-                    <p class="font-semibold text-slate-700 dark:text-slate-200">{{ config('app.company_name', 'Your Company Name') }}</p>
-                    <p class="text-sm text-slate-500 dark:text-slate-400">
-                        {{ config('app.company_address', '123 Main St, Anytown, USA') }}<br>
-                        {{ config('app.company_phone', '+1 234 567 890') }}<br>
+                    <p class="text-sm">
+                        <strong>{{ config('app.company_name', 'Your Company') }}</strong><br>
+                        {{ config('app.company_address', 'Your Address') }}<br>
+                        {{ config('app.company_city_zip_country', 'Your City, ZIP, Country') }}<br>
+                        {{ config('app.company_phone', '+1234567890') }}<br>
                         {{ config('app.company_email', 'contact@yourcompany.com') }}<br>
                         @if(config('app.company_vat')) VAT: {{ config('app.company_vat') }} @endif
                     </p>

@@ -90,7 +90,7 @@ class InvoicePolicy
             return false;
         }
         
-        return $user->hasPermissionTo('invoices sign');
+        return $user->hasPermissionTo('sign invoices');
     }
 
     /**

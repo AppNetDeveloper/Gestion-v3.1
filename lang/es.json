@@ -891,7 +891,15 @@
       "The invoice is authentic and has not been modified.": "La factura es auténtica y no ha sido modificada.",
       "Warning: The invoice data may have been modified after signing.": "Advertencia: Los datos de la factura pueden haber sido modificados después de la firma.",
       "Invoice not found or hash is invalid.": "Factura no encontrada o hash no válido.",
-      "Expires": "Caduca"
+      "Expires": "Caduca",
+      "Bank Transfer Details": "Datos de Transferencia Bancaria",
+      "Bank": "Banco",
+      "Account Holder": "Titular de la Cuenta",
+      "Account Number": "Número de Cuenta",
+      "IBAN": "IBAN",
+      "SWIFT/BIC": "SWIFT/BIC",
+      "Please use the invoice number as reference:": "Por favor, utiliza el número de factura como referencia:",
+      "invoice": "factura"
   
   }
   
