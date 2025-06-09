@@ -24,10 +24,22 @@ class RoleSeeder extends Seeder
             Role::firstOrCreate(['name' => $roleName, 'guard_name' => 'web']);
         }
 
-        // 1. Super Admin: TODOS los permisos (incluidos WhatsApp/Telegram general y menú)
-        $allWebPermissions = Permission::where('guard_name', 'web')->get();
+        // 1. Super Admin: TODOS los permisos del sistema
         $superAdminWeb = Role::where(['name' => 'super-admin', 'guard_name' => 'web'])->firstOrFail();
-        $superAdminWeb->syncPermissions($allWebPermissions);
+        
+        // Obtener TODOS los permisos existentes
+        $allPermissions = Permission::all();
+        
+        // Sincronizar todos los permisos con el rol de superadmin
+        $superAdminWeb->syncPermissions($allPermissions);
+        
+        // Asegurar que el superadmin tenga todos los permisos, incluso los futuros
+        // Esto es redundante con syncPermissions, pero asegura que no se pierdan permisos
+        foreach ($allPermissions as $permission) {
+            if (!$superAdminWeb->hasPermissionTo($permission)) {
+                $superAdminWeb->givePermissionTo($permission);
+            }
+        }
 
         // 2. Admin: Permisos de gestión completos (puedes ajustar según necesidades)
         $adminWeb = Role::where(['name' => 'admin', 'guard_name' => 'web'])->firstOrFail();
@@ -63,6 +75,15 @@ class RoleSeeder extends Seeder
             'projects index', 'projects create', 'projects update', 'projects delete', 'projects show', 'projects assign_users',
             'tasks index', 'tasks create', 'tasks update', 'tasks delete', 'tasks show', 'tasks assign_users', 'tasks log_time',
             'invoices index', 'invoices create', 'invoices update', 'invoices delete', 'invoices show', 'invoices send_email', 'invoices export_pdf',
+            
+            // Certificados Digitales
+            'menu digital_certificates',
+            'digital_certificates index',
+            'digital_certificates create',
+            'digital_certificates update',
+            'digital_certificates delete',
+            'digital_certificates show',
+            'digital_certificates download',
 
             // Time History
             'time_entries edit all', 'time_entries delete all', 'time_entries view all',

@@ -202,6 +202,33 @@
                 </div>
 
             </div>
+
+            {{-- Botón 7: Certificados Digitales --}}
+            @can('menu digital_certificates')
+            <div class="grid lg:grid-cols-3 md:grid-cols-2 grid-cols-1 gap-6">
+                <div class="card">
+                    <div class="card-body p-6">
+                        <div class="space-y-6">
+                            <div class="flex space-x-3 items-center rtl:space-x-reverse">
+                                <div class="flex-none h-8 w-8 rounded-full bg-slate-800 dark:bg-slate-700 text-slate-300 flex items-center justify-center text-lg">
+                                    <iconify-icon icon="heroicons:document-text"></iconify-icon>
+                                </div>
+                                <div class="flex-1 text-base text-slate-900 dark:text-white font-medium">
+                                    {{ __('Digital Certificates') }}
+                                </div>
+                            </div>
+                            <div class="text-slate-600 dark:text-slate-300 text-sm">
+                                {{ __('Manage digital certificates for electronic invoicing') }}
+                            </div>
+                            <a href="{{ route('digital-certificates.index') }}" class="inline-flex items-center space-x-3 rtl:space-x-reverse text-sm capitalize font-medium text-slate-600 dark:text-slate-300">
+                                <span>{{ __('Manage Certificates') }}</span>
+                                <iconify-icon icon="heroicons:arrow-right"></iconify-icon>
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            @endcan
         </div>
     </div>
 </x-app-layout>

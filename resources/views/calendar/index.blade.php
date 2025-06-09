@@ -77,8 +77,8 @@
 
                 // Inicializar FullCalendar (usando FullCalendar importado vía bundle)
                 var calendarEl = document.getElementById('calendar');
-                var calendar = new Calendar(calendarEl, {
-                    plugins: [ dayGridPlugin, timeGridPlugin, listPlugin ],
+                var calendar = new FullCalendar.Calendar(calendarEl, {
+                    plugins: [ FullCalendar.dayGridPlugin, FullCalendar.timeGridPlugin, FullCalendar.listPlugin ],
                     initialView: 'dayGridMonth',
                     headerToolbar: {
                         left: 'prev,next today',

@@ -70,6 +70,12 @@
     </div>
 
     @push('scripts')
+        <!-- SweetAlert2 for dialogs -->
+        <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+        
+        <!-- Load app.js to get FullCalendar modules -->
+        @vite(['resources/js/app.js'])
+        
         <script>
             // Variables de permiso (obtenidas desde el backend)
             var canCreate = @json(auth()->user()->can('labcalendar create'));
@@ -106,15 +112,21 @@
 
                         let initialDate = new Date(currentYear, m - 1, 1);
 
-                        let calendar = new Calendar(calEl, {
-                            plugins: [ dayGridPlugin, interactionPlugin ],
+                        let calendar = new FullCalendar.Calendar(calEl, {
+                            plugins: [ FullCalendar.dayGridPlugin, FullCalendar.interactionPlugin ],
                             initialView: 'dayGridMonth',
                             headerToolbar: false,
                             initialDate: initialDate,
                             events: {
                                 url: fetchUrl,
                                 method: 'GET',
-                                extraParams: { year: currentYear }
+                                extraParams: { year: currentYear },
+                                success: function(events) {
+                                    console.log('Eventos cargados:', events);
+                                },
+                                failure: function(error) {
+                                    console.error('Error cargando eventos:', error);
+                                }
                             },
                             eventDidMount: function(info) {
                                 if (info.event.extendedProps.is_holiday) {
@@ -221,6 +233,38 @@
                 }
 
                 renderAllCalendars();
+                
+                // Cargar estado inicial de los checkboxes
+                fetch(fetchUrl + '?year=' + currentYear + '&config=1', {
+                    method: 'GET',
+                    headers: {
+                        'Accept': 'application/json',
+                        'X-CSRF-TOKEN': "{{ csrf_token() }}"
+                    }
+                })
+                .then(response => response.json())
+                .then(data => {
+                    console.log('Datos de configuración recibidos:', data);
+                    
+                    // Establecer valores por defecto
+                    document.getElementById('saturdayOff').checked = true;
+                    document.getElementById('sundayOff').checked = true;
+                    
+                    // Si hay datos de configuración, usar esos valores
+                    if (data && data.config) {
+                        console.log('Configuración de sábado:', data.config.saturday_off);
+                        console.log('Configuración de domingo:', data.config.sunday_off);
+                        
+                        document.getElementById('saturdayOff').checked = data.config.saturday_off == 1;
+                        document.getElementById('sundayOff').checked = data.config.sunday_off == 1;
+                    }
+                })
+                .catch(error => {
+                    console.error('Error cargando configuración:', error);
+                    // En caso de error, marcar los checkboxes por defecto
+                    document.getElementById('saturdayOff').checked = true;
+                    document.getElementById('sundayOff').checked = true;
+                });
 
                 // Navegación entre años
                 document.getElementById('prevYear').addEventListener('click', function() {
@@ -268,7 +312,7 @@
             });
         </script>
 
-        @vite(['resources/js/app.js'])
+        <!-- app.js already loaded at the top of scripts -->
     @endpush
 </x-app-layout>
 @endcan

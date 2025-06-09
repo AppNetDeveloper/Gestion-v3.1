@@ -52,7 +52,7 @@ use App\Http\Controllers\TaskController; // <-- Importar TaskController
 use App\Http\Controllers\TaskTimeHistoryController; // <-- Importar TaskTimeHistoryController
 use App\Http\Controllers\InvoiceController; // <-- Importar InvoiceController
 use App\Http\Controllers\WhatsappBusinessController;
-
+use App\Http\Controllers\DigitalCertificateController;
 
 
 require __DIR__ . '/auth.php';
@@ -81,6 +81,11 @@ Route::group(['middleware' => ['auth', 'verified']], function () {
     // Env
     Route::singleton('general-settings', GeneralSettingController::class);
     Route::post('general-settings-logo', [GeneralSettingController::class, 'logoUpdate'])->name('general-settings.logo');
+    
+    // Digital Certificates
+    Route::resource('digital-certificates', DigitalCertificateController::class)->except(['index']);
+    Route::get('digital-certificates', [DigitalCertificateController::class, 'index'])->name('digital-certificates.index');
+    Route::get('digital-certificates/{digitalCertificate}/download', [DigitalCertificateController::class, 'download'])->name('digital-certificates.download');
     //control time
     Route::get('controltime', [TimeControlStatusController::class, 'index'])->name('controltime.index');
     Route::get('controltime-show', [TimeControlStatusController::class, 'show'])->name('controltime.show');

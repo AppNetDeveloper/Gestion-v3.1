@@ -99,6 +99,15 @@ class PermissionSeeder extends Seeder
             ['name' => 'services index',  'module_name' => 'services'],
             ['name' => 'services create', 'module_name' => 'services'],
             ['name' => 'services update', 'module_name' => 'services'],
+
+            // Digital Certificates
+            ['name' => 'digital_certificates index',  'module_name' => 'digital_certificates'],
+            ['name' => 'digital_certificates create', 'module_name' => 'digital_certificates'],
+            ['name' => 'digital_certificates update', 'module_name' => 'digital_certificates'],
+            ['name' => 'digital_certificates delete', 'module_name' => 'digital_certificates'],
+            ['name' => 'digital_certificates show',   'module_name' => 'digital_certificates'],
+            ['name' => 'digital_certificates download', 'module_name' => 'digital_certificates'],
+            ['name' => 'menu digital_certificates', 'module_name' => 'menu'],
             ['name' => 'services delete', 'module_name' => 'services'],
             ['name' => 'services show',   'module_name' => 'services'],
 

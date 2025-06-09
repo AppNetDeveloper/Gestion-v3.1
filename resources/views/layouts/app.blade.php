@@ -47,6 +47,8 @@
                             <main id="content_layout">
                                 @isset($slot)
                                     {{ $slot }}
+                                @else
+                                    @yield('content')
                                 @endisset
                             </main>
                         </div>
