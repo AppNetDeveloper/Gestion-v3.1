@@ -18,14 +18,32 @@ class ProcessScrapingTasks extends Command
      * @var string
      */
     // Firma del comando: php artisan scraping:process-loop
-    protected $signature = 'scraping:process-loop {--sleep=30 : Segundos de espera entre cada ciclo}'; // Añadido opción para sleep
+    protected $signature = 'scraping:process-loop {--sleep=30 : Segundos de espera entre ciclos}';
 
     /**
      * The console command description.
      *
      * @var string
      */
-    protected $description = 'Procesa tareas de scraping pendientes en un bucle infinito'; // Descripción actualizada
+    protected $description = 'Procesa tareas de scraping en un bucle continuo';
+
+    /**
+     * URL base de la API de scraping
+     * 
+     * @var string
+     */
+    protected $apiBaseUrl;
+
+    /**
+     * Create a new command instance.
+     *
+     * @return void
+     */
+    public function __construct()
+    {
+        parent::__construct();
+        $this->apiBaseUrl = config('services.scraping_api.url');
+    }
 
     /**
      * Execute the console command.
@@ -62,294 +80,183 @@ class ProcessScrapingTasks extends Command
                     $task = null;
                 } else {
                     // 3. Limpiar tareas fallidas antiguas (más de 10 días)
-                $this->cleanupOldFailedTasks();
-                
-                // 4. Buscar tareas fallidas para reintentar (máximo 3 intentos)
-                $failedTask = ScrapingTask::where('status', 'failed')
-                                        ->where('retry_attempts', '<', 3)
-                                        ->where(function($query) {
-                                            $query->whereNull('last_attempt_at')
-                                                  ->orWhere('last_attempt_at', '<=', now()->subMinutes(5));
-                                        })
-                                        ->orderBy('last_attempt_at', 'asc')
+                    $this->cleanupOldFailedTasks();
+                    
+                    // 4. Buscar una nueva tarea pendiente para procesar
+                    $task = ScrapingTask::where('status', 'pending')
+                                        ->orderBy('retry_attempts', 'asc') // Priorizar las que tienen menos intentos
+                                        ->orderBy('created_at', 'asc') // Luego por orden de creación
                                         ->first();
-
-                    if ($failedTask) {
-                        $task = $failedTask;
-                        // Reset task for retry
-                        $task->update([
-                            'status' => 'processing',
-                            'api_task_id' => null, // Clear previous task ID
-                            'error_message' => null // Clear previous error
-                        ]);
-                        $this->info("Reintentando tarea fallida ID: {$task->id} (Intento " . ($task->retry_attempts + 1) . " de 3)");
-                    } else {
-                        // 4. Si no hay tareas fallidas, buscar tareas pendientes normales
-                        $task = ScrapingTask::where('status', 'pending')
-                                          ->whereNull('api_task_id')
-                                          ->orderBy('created_at', 'asc')
-                                          ->first();
-                    }
                 }
-
-                if (!$task) {
-                    $this->info('No hay tareas pendientes. Esperando...');
-                    // No salimos del bucle, simplemente esperamos antes de volver a comprobar
-                } else {
-                    $this->info("Procesando Tarea ID: {$task->id} - Fuente: {$task->source} - Keyword: {$task->keyword}");
-
-                    // --- Lógica para procesar UNA tarea ---
+                
+                // Si hay una tarea pendiente, procesarla
+                if ($task) {
                     $this->processSingleTask($task);
-                    // --- Fin lógica para procesar UNA tarea ---
-
-
-                } // Fin if ($task)
-
+                } else {
+                    $this->info("No hay tareas pendientes para procesar. Esperando {$sleepSeconds} segundos...");
+                }
+                
             } catch (Throwable $e) {
-                // Capturar cualquier excepción inesperada en el ciclo principal
-                $this->error("Error inesperado en el bucle principal: " . $e->getMessage());
-                Log::critical("Error crítico en el bucle de ProcessScrapingTasks: " . $e->getMessage(), ['exception' => $e]);
-                // Esperar un poco más antes de reintentar en caso de error grave
-                sleep(60); // Espera 1 minuto antes de reintentar el bucle
+                $this->error("Error en el bucle principal: " . $e->getMessage());
+                Log::error("Error en el bucle principal del procesador de tareas", [
+                    'error' => $e->getMessage(),
+                    'trace' => $e->getTraceAsString()
+                ]);
             }
-
-            // Esperar antes de la siguiente iteración
+            
+            // Esperar antes del siguiente ciclo
             sleep($sleepSeconds);
-
-        } // Fin while(true)
-
-        // Nota: En teoría, nunca llegaría aquí en un bucle infinito
+        }
+        
         return Command::SUCCESS;
     }
-
+    
     /**
-     * Procesa una única tarea de scraping.
-     *
-     * @param ScrapingTask $task
-     * @return void
-     */
-    /**
-     * Procesa una única tarea de scraping.
+     * Process a single scraping task
      *
      * @param ScrapingTask $task
      * @return void
      */
     protected function processSingleTask(ScrapingTask $task): void
     {
-        // Actualizar el estado y los intentos
-        $task->update([
-            'status' => 'processing',
-            'retry_attempts' => $task->status === 'failed' ? $task->retry_attempts + 1 : 0,
-            'last_attempt_at' => now(),
-        ]);
+        $this->info("Procesando tarea ID: {$task->id} - Tipo: {$task->type} - Intentos: {$task->retry_attempts}");
         
         try {
-            // Determinar el endpoint y preparar payload
-            $endpoint = '';
-            $payload = [];
-            $callbackUrl = '';
-            $callbackRouteName = 'api.scraping.callback';
-            $fallbackCallbackPath = '/api/scraping-callback';
-
-            // Generar URL de callback
-            try {
-                $callbackUrl = route($callbackRouteName);
-            } catch (\Exception $e) {
-                Log::warning("[Task ID: {$task->id}] No se pudo generar la URL de callback. Usando URL base. Error: " . $e->getMessage());
-                $appUrl = rtrim(config('app.url', 'http://localhost'), '/');
-                $path = ltrim($fallbackCallbackPath, '/');
-                $callbackUrl = $appUrl . '/' . $path;
-            }
-
-            // Configurar el endpoint y payload según la fuente
-            switch ($task->source) {
-                case 'google_ddg':
-                    $endpoint = '/buscar-google-ddg-limpio';
-                    $payload = [
-                        'keyword' => $task->keyword,
-                        'results' => 1000,
-                        'callback_url' => $callbackUrl,
-                    ];
-                    break;
-                case 'empresite':
-                    $endpoint = '/buscar-empresite';
-                    $payload = [
-                        'actividad' => $task->keyword,
-                        'provincia' => $task->region,
-                        'paginas' => 100,
-                        'callback_url' => $callbackUrl,
-                    ];
-                    break;
-                case 'paginas_amarillas':
-                    $endpoint = '/buscar-paginas-amarillas';
-                    $payload = [
-                        'actividad' => $task->keyword,
-                        'provincia' => $task->region,
-                        'paginas' => 1,
-                        'callback_url' => $callbackUrl,
-                    ];
-                    break;
-                default:
-                    $error = "Fuente desconocida: {$task->source}";
-                    $this->error("$error para Tarea ID: {$task->id}");
-                    Log::error("$error para ScrapingTask ID {$task->id}.");
-                    $this->markTaskAsFailed($task, $error);
-                    return;
-            }
-
-            // Obtener URL del servidor Python
-            $scrapingServerUrl = config('services.scraping.url');
-            if (!$scrapingServerUrl) {
-                throw new \Exception("La URL del servidor de scraping no está configurada");
-            }
-
-            // Construir URL completa de la API
-            $baseApiUrl = rtrim($scrapingServerUrl, '/');
-            $apiEndpoint = ltrim($endpoint, '/');
-            $fullApiUrl = $baseApiUrl . '/' . $apiEndpoint;
-
-            $this->info("Llamando a la API Python para Tarea ID {$task->id}: POST {$fullApiUrl}");
-            Log::info("Llamando a API Python para Tarea ID {$task->id}", [
-                'url' => $fullApiUrl,
-                'payload' => $payload
+            // 1. Marcar la tarea como en proceso
+            $task->update([
+                'status' => 'processing',
+                'last_attempt_at' => now()
             ]);
-
-            // Realizar la petición POST a la API Python
-            $response = Http::timeout(15)->post($fullApiUrl, $payload);
-
+            
+            // 2. Preparar los datos para enviar a la API
+            $payload = $this->prepareTaskPayload($task);
+            
+            // 3. Enviar la tarea a la API de scraping
+            $response = Http::timeout(30)->post($this->apiBaseUrl . '/tasks', $payload);
+            
+            // 4. Verificar la respuesta
             if ($response->successful()) {
                 $responseData = $response->json();
                 
-                // Verificar si la respuesta incluye un task_id
                 if (isset($responseData['task_id'])) {
+                    // Actualizar la tarea con el ID de la API
                     $task->update([
                         'api_task_id' => $responseData['task_id'],
-                        'status' => 'processing',
-                        'error_message' => null // Limpiar mensajes de error previos
+                        'updated_at' => now()
                     ]);
                     
-                    $this->info(sprintf(
-                        'Tarea ID %d enviada correctamente. Task ID: %s. Posición en cola: %s',
-                        $task->id,
-                        $responseData['task_id'],
-                        $responseData['queue_position'] ?? 'N/A'
-                    ));
-                    
-                    Log::info("Tarea ID {$task->id} iniciada en API Python", [
-                        'api_task_id' => $responseData['task_id'],
-                        'queue_position' => $responseData['queue_position'] ?? null
+                    $this->info("✅ Tarea ID {$task->id} enviada correctamente a la API. API Task ID: {$responseData['task_id']}");
+                    Log::info("Tarea enviada a la API", [
+                        'task_id' => $task->id,
+                        'api_task_id' => $responseData['task_id']
                     ]);
                 } else {
-                    throw new \Exception('La API no devolvió un ID de tarea válido');
+                    $this->markTaskAsFailed($task, "La API no devolvió un task_id válido");
                 }
             } else {
-                throw new \Exception(sprintf(
-                    'Error en la respuesta del servidor. Código: %s',
-                    $response->status()
-                ));
+                $errorMessage = $response->body();
+                $this->markTaskAsFailed($task, "Error de la API: " . substr($errorMessage, 0, 255));
             }
             
         } catch (ConnectionException $e) {
-            $error = 'No se pudo conectar al servidor de scraping: ' . $e->getMessage();
-            Log::error($error);
-            throw new \Exception($error);
-        } catch (\Exception $e) {
-            $error = 'Error al procesar la tarea: ' . $e->getMessage();
-            Log::error($error, [
-                'task_id' => $task->id,
+            $this->markTaskAsFailed($task, "Error de conexión con la API: " . $e->getMessage());
+        } catch (Throwable $e) {
+            $this->markTaskAsFailed($task, "Error al procesar la tarea: " . $e->getMessage());
+            Log::error("Error al procesar tarea ID {$task->id}", [
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString()
             ]);
-            throw $e;
-        } catch (Throwable $e) {
-            // Capturar otras excepciones durante la llamada o procesamiento de respuesta
-            $this->error("Excepción al procesar Tarea ID {$task->id}: " . $e->getMessage());
-            Log::error("Excepción procesando Tarea ID {$task->id}: " . $e->getMessage(), ['exception' => $e]);
-            $task->status = 'failed'; // Marcar como fallida ante excepciones inesperadas
-            $task->save();
         }
     }
     
     /**
-     * Marca una tarea como fallida y maneja los reintentos
-     * 
+     * Prepare the payload for the scraping API
+     *
      * @param ScrapingTask $task
-     * @param string $error
+     * @return array
+     */
+    protected function prepareTaskPayload(ScrapingTask $task): array
+    {
+        // URL de callback para que la API nos notifique cuando termine
+        $callbackUrl = URL::route('api.scraping.callback', ['task_id' => $task->id]);
+        
+        // Datos básicos que siempre se envían
+        $payload = [
+            'callback_url' => $callbackUrl,
+            'task_type' => $task->type,
+        ];
+        
+        // Añadir datos específicos según el tipo de tarea
+        $taskData = json_decode($task->data, true) ?: [];
+        
+        // Combinar los datos de la tarea con el payload
+        return array_merge($payload, $taskData);
+    }
+    
+    /**
+     * Mark a task as failed with the given error message
+     *
+     * @param ScrapingTask $task
+     * @param string $errorMessage
      * @return void
      */
-    protected function markTaskAsFailed(ScrapingTask $task, string $error): void
+    protected function markTaskAsFailed(ScrapingTask $task, string $errorMessage): void
     {
         $maxAttempts = 3;
-        $isNoContactsError = stripos($error, 'sin contactos') !== false || stripos($error, 'no contacts') !== false;
+        $currentAttempts = (int) $task->retry_attempts;
+        $attempts = $currentAttempts + 1;
         
-        // Si es un error de "sin contactos", marcamos como fallida sin reintentos
-        if ($isNoContactsError) {
-            $task->update([
-                'status' => 'failed',
-                'failed_at' => now(),
-                'retry_attempts' => $maxAttempts,
-                'error_message' => $error,
-                'last_attempt_at' => now()
-            ]);
-            $this->warn("❌ Tarea ID {$task->id} falló (sin contactos). Marcada como fallida sin reintentos.");
-            Log::warning("Tarea ID {$task->id} falló (sin contactos). Marcada como fallida sin reintentos.");
-            return;
-        }
-        
-        // Para otros errores, manejamos los reintentos
-        $attempts = $task->retry_attempts + 1;
-        
-        if ($attempts >= $maxAttempts) {
-            // Máximo de intentos alcanzado, marcar como fallida permanentemente
-            $task->update([
-                'status' => 'failed',
-                'failed_at' => now(),
-                'retry_attempts' => $attempts,
-                'error_message' => $error,
-                'last_attempt_at' => now()
-            ]);
-            $this->error("❌ Tarea ID {$task->id} falló después de {$maxAttempts} intentos. Error: {$error}");
-            Log::error("Tarea ID {$task->id} falló después de {$maxAttempts} intentos", ['error' => $error]);
-        } else {
-            // Reintentar más tarde
+        if ($attempts < $maxAttempts) {
+            // Si aún no ha alcanzado el máximo de intentos, la ponemos en pending para reintento
             $task->update([
                 'status' => 'pending',
                 'retry_attempts' => $attempts,
-                'last_attempt_at' => now(),
-                'error_message' => $error,
+                'api_task_id' => null,
+                'error_message' => $errorMessage,
+                'last_attempt_at' => now()
             ]);
-            $nextAttempt = now()->addMinutes(5 * $attempts); // Aumentar el tiempo de espera con cada intento
-            $this->warn("⏳ Tarea ID {$task->id} falló (Intento {$attempts}/{$maxAttempts}). Próximo intento: {$nextAttempt->diffForHumans()}");
-            Log::warning("Tarea ID {$task->id} falló (Intento {$attempts}/{$maxAttempts}). Próximo intento: {$nextAttempt}");
+            
+            $this->warn("⚠️ Tarea ID {$task->id} falló pero será reintentada (Intento {$attempts}/{$maxAttempts}). Error: {$errorMessage}");
+            Log::warning("Tarea ID {$task->id} falló pero será reintentada", [
+                'attempts' => "{$attempts}/{$maxAttempts}",
+                'error' => $errorMessage
+            ]);
+        } else {
+            // Si ya alcanzó el máximo de intentos, la marcamos como fallida definitivamente
+            $task->update([
+                'status' => 'failed',
+                'retry_attempts' => $attempts,
+                'api_task_id' => null,
+                'error_message' => $errorMessage,
+                'failed_at' => now(),
+                'last_attempt_at' => now()
+            ]);
+            
+            $this->error("❌ Tarea ID {$task->id} falló definitivamente después de {$maxAttempts} intentos. Error: {$errorMessage}");
+            Log::error("Tarea ID {$task->id} falló definitivamente", [
+                'attempts' => "{$attempts}/{$maxAttempts}",
+                'error' => $errorMessage
+            ]);
         }
-        
-        Log::error("Error en tarea de scraping", [
-            'task_id' => $task->id,
-            'error' => $error,
-            'attempt' => $attempts ?? 1,
-            'max_attempts' => $maxAttempts,
-        ]);
     }
     
     /**
-     * Verifica tareas que llevan más de 30 minutos sin actualizarse y actualiza su estado
-     * según si tienen o no contactos asociados.
-     *
-     * @return void
-     */
-    /**
-     * Clean up old failed tasks (older than 10 days with 3 or more retry attempts)
+     * Clean up old failed tasks (more than 10 days old)
      *
      * @return void
      */
     protected function cleanupOldFailedTasks(): void
     {
-        $threshold = now()->subDays(10);
+        $cutoffDate = now()->subDays(10);
+        $oldFailedTasks = ScrapingTask::where('status', 'failed')
+                                    ->where('failed_at', '<=', $cutoffDate)
+                                    ->get();
         
-        $deletedCount = ScrapingTask::where('status', 'failed')
-                                    ->where('retry_attempts', '>=', 3)
-                                    ->where('updated_at', '<=', $threshold)
-                                    ->delete();
+        $deletedCount = 0;
+        foreach ($oldFailedTasks as $task) {
+            $task->delete();
+            $deletedCount++;
+        }
         
         if ($deletedCount > 0) {
             $this->info("✅ Se eliminaron {$deletedCount} tareas fallidas antiguas (más de 10 días).");
@@ -369,11 +276,11 @@ class ProcessScrapingTasks extends Command
         
         // Buscar tareas en procesamiento que no se hayan actualizado en más de 5 minutos
         $stuckTasks = ScrapingTask::where('status', 'processing')
-                                ->where(function($query) use ($threshold) {
-                                    $query->where('updated_at', '<=', $threshold)
-                                         ->orWhereNull('updated_at');
-                                })
-                                ->get();
+                        ->where(function($query) use ($threshold) {
+                            $query->where('updated_at', '<=', $threshold)
+                                 ->orWhereNull('updated_at');
+                        })
+                        ->get();
         
         $processedCount = 0;
         
@@ -383,8 +290,11 @@ class ProcessScrapingTasks extends Command
             try {
                 // Verificar si la tarea tiene contactos asociados
                 $hasContacts = $task->contacts()->exists();
-                $attempts = $task->retry_attempts + 1;
                 $maxAttempts = 3;
+                
+                // Obtener el número actual de intentos y asegurar que se incremente
+                $currentAttempts = (int) $task->retry_attempts;
+                $attempts = $currentAttempts + 1;
                 
                 // Registrar información de depuración
                 $this->info("Verificando tarea atascada ID: {$task->id} - Estado actual: {$task->status} - Última actualización: {$task->updated_at} - Intentos: {$attempts}/{$maxAttempts}");
@@ -407,9 +317,10 @@ class ProcessScrapingTasks extends Command
                     Log::info("Tarea ID {$task->id} marcada como completada automáticamente (tenía contactos).");
                 } elseif ($attempts < $maxAttempts) {
                     // Si no tiene contactos pero aún tiene intentos, la ponemos en pending
+                    // Incrementamos el contador de intentos para evitar bucles infinitos
                     $task->update([
                         'status' => 'pending',
-                        'retry_attempts' => $attempts,
+                        'retry_attempts' => $attempts,  // Incrementamos el contador de intentos
                         'last_attempt_at' => now(),
                         'api_task_id' => null,
                         'error_message' => 'Tiempo de espera agotado (15 minutos)'
@@ -424,7 +335,7 @@ class ProcessScrapingTasks extends Command
                         'last_attempt_at' => now(),
                         'retry_attempts' => $attempts,
                         'api_task_id' => null,
-                        'error_message' => 'Tiempo de espera agotado (15 minutos) - Sin contactos después de varios intentos'
+                        'error_message' => 'Tiempo de espera agotado (15 minutos) - Sin contactos después de ' . $maxAttempts . ' intentos'
                     ]);
                     $this->error("❌ Tarea ID {$task->id} marcada como fallida (sin contactos después de {$maxAttempts} intentos).");
                     Log::warning("Tarea ID {$task->id} marcada como fallida automáticamente (sin contactos después de {$maxAttempts} intentos).");

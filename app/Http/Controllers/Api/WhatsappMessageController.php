@@ -116,8 +116,8 @@ class WhatsappMessageController extends Controller
 
                     try {
                         $client = new Client();
-                        // Construir la URL usando la variable de entorno WATSHAPP_URL
-                        $url = env('WATSHAPP_URL') . '/send-message/' . $sessionId;
+                        // Construir la URL usando la variable de entorno WHATSAPP_URL
+                        $url = env('WHATSAPP_URL') . '/send-message/' . $sessionId;
                         $response = $client->post($url, [
                             'json' => [
                                 'jid'     => $jid,
@@ -217,8 +217,8 @@ class WhatsappMessageController extends Controller
 
         try {
             $client = new Client();
-            // Construir la URL usando la variable de entorno WATSHAPP_URL
-            $url = env('WATSHAPP_URL') . '/send-message/' . $sessionId;
+            // Construir la URL usando la variable de entorno WHATSAPP_URL
+            $url = env('WHATSAPP_URL') . '/send-message/' . $sessionId;
             $response = $client->post($url, [
                 'json' => [
                     'jid'     => $jid,

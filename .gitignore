@@ -65,4 +65,6 @@ python/venv/
 python/venv-*/
 python/*/venv/
 python/*/venv-*/
-dify/dify
+dify_app/*
+dify_app
+

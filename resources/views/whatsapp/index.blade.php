@@ -462,6 +462,9 @@
             let contactIntervalId = null;
             let statusIntervalId = null;
             let isRefreshPaused = false;
+            let connectionRetries = 0;
+            const MAX_RETRIES = 3;
+            let initialLoadComplete = false;
 
             // --- SweetAlert2 Dark Mode & Toast ---
             const Toast = Swal.mixin({
@@ -607,8 +610,23 @@
 
 
             // --- Connection Status & Actions ---
+            function showLoadingIndicator() {
+                $('#chat-container').html(`
+                    <div class="flex flex-col items-center justify-center h-full text-center">
+                        <div class="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-emerald-500 mb-4"></div>
+                        <p class="text-slate-600 dark:text-slate-400">{{ __('Connecting to WhatsApp...') }}</p>
+                        <p class="text-xs text-slate-500 dark:text-slate-500 mt-2">{{ __('This may take a few moments') }}</p>
+                    </div>
+                `);
+            }
+            
             function updateConnectionStatus() {
                 if (isRefreshPaused) return; // Skip if paused
+                
+                // Show loading indicator if this is the first connection attempt
+                if (!initialLoadComplete) {
+                    showLoadingIndicator();
+                }
 
                 fetch('{{ secure_url("/api/whatsapp/check?user_id=") }}' + userId, { method: 'GET' })
                     .then(response => response.json())
@@ -617,6 +635,9 @@
                         const connectionBtnContainer = $('#connection-btn');
                         const actionsContainer = $('#connection-actions');
                         connectionBtnContainer.empty(); actionsContainer.empty();
+                        
+                        // Reset connection retries on successful response
+                        connectionRetries = 0;
 
                         if (data.success) {
                             if (data.connected) {
@@ -639,15 +660,49 @@
                                 });
                             }
                         } else {
-                             // Error State
-                            connectionBtnContainer.html(`<span class="text-xs font-medium text-red-600 dark:text-red-400 bg-red-100 dark:bg-red-800/50 px-2 py-0.5 rounded-full">{{ __('Error') }}</span>`);
-                            actionsContainer.html(`<button id="btnReconnect" class="btn btn-icon btn-warning light rounded-full w-9 h-9 p-0" title="{{ __('Retry Connection') }}"><iconify-icon icon="mdi:refresh" class="text-lg"></iconify-icon></button>`);
-                            $('#btnReconnect').on('click', updateConnectionStatus);
+                             // Error State - Show a proper button instead of just an error message
+                            connectionBtnContainer.html(`<button id="btnConnect" class="btn btn-warning btn-sm flex items-center gap-1"><iconify-icon icon="mdi:whatsapp" class="text-base"></iconify-icon>{{ __('Reconnect') }}</button>`);
+                            $('#btnConnect').on('click', function() {
+                                Swal.fire(swalOptionsWithPause({ title: '{{ __('Reconnecting') }}', text: '{{ __('Please wait...') }}', allowOutsideClick: false, didOpen: () => { Swal.showLoading(); }, customClass: { popup: document.documentElement.classList.contains('dark') ? 'dark' : '' } }));
+                                startWhatsAppSession();
+                            });
                         }
                     })
                     .catch(error => {
                         console.error('Error checking connection status:', error);
-                         $('#connection-btn').html('<span class="text-red-500 text-xs">{{ __("Status Check Failed") }}</span>');
+                        $('#connection-btn').html('<span class="text-red-500 text-xs">{{ __('Status Check Failed') }}</span>');
+                        
+                        // Implement retry logic
+                        connectionRetries++;
+                        if (connectionRetries <= MAX_RETRIES) {
+                            console.log(`Connection attempt failed. Retrying (${connectionRetries}/${MAX_RETRIES})...`);
+                            setTimeout(() => {
+                                updateConnectionStatus();
+                            }, 2000 * connectionRetries); // Exponential backoff
+                        } else if (!initialLoadComplete) {
+                            // Show error message after all retries failed during initial load
+                            $('#chat-container').html(`
+                                <div class="flex flex-col items-center justify-center h-full text-center">
+                                    <div class="rounded-full h-12 w-12 flex items-center justify-center bg-red-100 text-red-500 mb-4">
+                                        <iconify-icon icon="mdi:alert-circle" class="text-2xl"></iconify-icon>
+                                    </div>
+                                    <p class="text-slate-700 dark:text-slate-300 font-medium">{{ __('Connection Error') }}</p>
+                                    <p class="text-slate-600 dark:text-slate-400 mt-1">{{ __('Could not connect to WhatsApp server') }}</p>
+                                    <button id="retry-connection" class="btn btn-primary btn-sm mt-4">
+                                        <iconify-icon icon="mdi:refresh" class="mr-1"></iconify-icon> {{ __('Retry') }}
+                                    </button>
+                                </div>
+                            `);
+                            
+                            // Add retry button event handler
+                            $('#retry-connection').on('click', function() {
+                                connectionRetries = 0;
+                                showLoadingIndicator();
+                                setTimeout(() => {
+                                    updateConnectionStatus();
+                                }, 1000);
+                            });
+                        }
                     });
             }
 
@@ -956,7 +1011,33 @@
                         }
                     },
                     error: function(jqXHR, textStatus, errorThrown) {
-                        if (textStatus !== 'abort') { console.error("AJAX Error fetching messages:", textStatus, errorThrown); }
+                        if (textStatus !== 'abort') { 
+                            console.error("AJAX Error fetching messages:", textStatus, errorThrown);
+                            
+                            // Only show error if this is the initial load
+                            if (!initialLoadComplete) {
+                                $('#chat-container').html(`
+                                    <div class="flex flex-col items-center justify-center h-full text-center">
+                                        <div class="rounded-full h-12 w-12 flex items-center justify-center bg-red-100 text-red-500 mb-4">
+                                            <iconify-icon icon="mdi:message-alert-outline" class="text-2xl"></iconify-icon>
+                                        </div>
+                                        <p class="text-slate-700 dark:text-slate-300 font-medium">{{ __('Could not load messages') }}</p>
+                                        <p class="text-slate-600 dark:text-slate-400 mt-1">{{ __('Please try again later') }}</p>
+                                        <button id="retry-messages" class="btn btn-primary btn-sm mt-4">
+                                            <iconify-icon icon="mdi:refresh" class="mr-1"></iconify-icon> {{ __('Retry') }}
+                                        </button>
+                                    </div>
+                                `);
+                                
+                                // Add retry button event handler
+                                $('#retry-messages').on('click', function() {
+                                    showLoadingIndicator();
+                                    setTimeout(() => {
+                                        refreshChatMessages();
+                                    }, 1000);
+                                });
+                            }
+                        }
                     },
                     complete: function() { activeMessageRequest = null; }
                 });
@@ -1030,7 +1111,34 @@
                         }
                     },
                     error: function(jqXHR, textStatus, errorThrown) {
-                        if (textStatus !== 'abort') { console.error("AJAX Error fetching contacts:", textStatus, errorThrown); }
+                        if (textStatus !== 'abort') { 
+                            console.error("AJAX Error fetching contacts:", textStatus, errorThrown);
+                            
+                            // Only show error if this is the initial load
+                            if (!initialLoadComplete) {
+                                $('#contact-list').html(`
+                                    <li class="p-4 text-center">
+                                        <div class="flex flex-col items-center justify-center">
+                                            <div class="rounded-full h-10 w-10 flex items-center justify-center bg-amber-100 text-amber-500 mb-3">
+                                                <iconify-icon icon="mdi:alert-circle" class="text-xl"></iconify-icon>
+                                            </div>
+                                            <p class="text-slate-700 dark:text-slate-300 text-sm font-medium">{{ __('Could not load contacts') }}</p>
+                                            <button id="retry-contacts" class="btn btn-secondary btn-sm mt-3">
+                                                <iconify-icon icon="mdi:refresh" class="mr-1"></iconify-icon> {{ __('Retry') }}
+                                            </button>
+                                        </div>
+                                    </li>
+                                `);
+                                
+                                // Add retry button event handler
+                                $('#retry-contacts').on('click', function() {
+                                    $('#contact-list').html(`<li class="p-4 text-center"><div class="animate-pulse">{{ __('Loading contacts...') }}</div></li>`);
+                                    setTimeout(() => {
+                                        refreshContactList();
+                                    }, 1000);
+                                });
+                            }
+                        }
                     },
                     complete: function() { activeContactRequest = null; }
                 });
@@ -1214,12 +1322,36 @@
                 }
 
 
-                // Periodic Refresh
-                if (!isRefreshPaused) { // Start only if not paused initially
-                    if (selectedPhone) messageIntervalId = setInterval(refreshChatMessages, 15000);
-                    contactIntervalId = setInterval(refreshContactList, 60000);
-                    statusIntervalId = setInterval(updateConnectionStatus, 45000);
+                // Show loading indicator immediately
+                if (selectedPhone) {
+                    showLoadingIndicator();
                 }
+                
+                // First check connection status
+                updateConnectionStatus();
+                
+                // Delay the initial loading of messages and contacts
+                setTimeout(() => {
+                    // Load messages if a chat is selected
+                    if (selectedPhone) {
+                        refreshChatMessages();
+                    }
+                    
+                    // Load contacts with a slight delay
+                    setTimeout(() => {
+                        refreshContactList();
+                        
+                        // Mark initial load as complete
+                        initialLoadComplete = true;
+                        
+                        // Start the periodic refresh intervals after initial load
+                        if (!isRefreshPaused) { // Start only if not paused
+                            if (selectedPhone) messageIntervalId = setInterval(refreshChatMessages, 15000);
+                            contactIntervalId = setInterval(refreshContactList, 60000);
+                            statusIntervalId = setInterval(updateConnectionStatus, 45000);
+                        }
+                    }, 1000);
+                }, 2000);
 
                  // Dismiss flash messages
                  setTimeout(() => { $('#flash-success, #flash-error, #flash-validation-errors').fadeOut('slow'); }, 5000);

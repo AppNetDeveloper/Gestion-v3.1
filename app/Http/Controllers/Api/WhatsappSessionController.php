@@ -25,7 +25,7 @@ class WhatsappSessionController extends Controller
         }
 
         // Construimos la URL de la API externa usando la variable del .env.
-        $url = env('WATSHAPP_URL') . '/sessions';
+        $url = env('WHATSAPP_URL') . '/sessions';
 
         try {
             $client = new Client();
@@ -55,7 +55,7 @@ class WhatsappSessionController extends Controller
 
     /**
      * Realiza el logout del usuario en el servidor de WhatsApp.
-     * Se llama al endpoint: {WATSHAPP_URL}/logout/{user_id}
+     * Se llama al endpoint: {WHATSAPP_URL}/logout/{user_id}
      */
     public function logout(Request $request)
     {
@@ -69,7 +69,7 @@ class WhatsappSessionController extends Controller
         }
     
         // Construir la URL usando la variable de entorno y el id del usuario
-        $url = env('WATSHAPP_URL') . '/logout/' . $userId;
+        $url = env('WHATSAPP_URL') . '/logout/' . $userId;
     
         try {
             $client = new \GuzzleHttp\Client();
@@ -107,9 +107,9 @@ class WhatsappSessionController extends Controller
     
         // Construir las URLs usando la variable de entorno.
         // Se asume que la sesión se inicia en este endpoint.
-        $urlStart = env('WATSHAPP_URL') . '/start-session/' . $userId;
+        $urlStart = env('WHATSAPP_URL') . '/start-session/' . $userId;
         // La URL para obtener el QR ya retorna la imagen en base64.
-        $urlQr    = env('WATSHAPP_URL') . '/get-qr/' . $userId;
+        $urlQr    = env('WHATSAPP_URL') . '/get-qr/' . $userId;
     
         try {
             $client = new \GuzzleHttp\Client();
