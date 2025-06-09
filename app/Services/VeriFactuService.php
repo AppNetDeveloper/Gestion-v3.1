@@ -159,7 +159,7 @@ class VeriFactuService
             'invoice_number' => $invoice->invoice_number,
             'hash' => $invoice->verifactu_hash,
             'timestamp' => $invoice->verifactu_timestamp->timestamp,
-            'verify_url' => route('invoices.verify', ['hash' => $invoice->verifactu_hash]),
+            'verify_url' => route('invoices.verify.hash', ['hash' => $invoice->verifactu_hash]),
         ];
         
         return json_encode($data);

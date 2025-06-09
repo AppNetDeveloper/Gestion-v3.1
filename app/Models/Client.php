@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class Client extends Model
 {
@@ -81,5 +82,13 @@ class Client extends Model
         // Assuming you might have client-specific discounts
         // This implies a 'client_id' foreign key in your 'discounts' table
         return $this->hasMany(Discount::class);
+    }
+
+    /**
+     * Get the user that owns the client.
+     */
+    public function user(): BelongsTo
+    {
+        return $this->belongsTo(User::class);
     }
 }

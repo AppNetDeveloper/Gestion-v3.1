@@ -83,11 +83,12 @@ class InvoiceSignatureController extends Controller
 
             if ($success) {
                 // Registrar la acción
-                activity()
-                    ->performedOn($invoice)
-                    ->causedBy(auth()->user())
-                    ->withProperties(['certificate_id' => $certificate->id])
-                    ->log('signed_invoice');
+                \Log::info('Invoice signed digitally', [
+                    'invoice_id' => $invoice->id,
+                    'invoice_number' => $invoice->invoice_number,
+                    'user_id' => auth()->id(),
+                    'certificate_id' => $certificate->id
+                ]);
 
                 return redirect()->route('invoices.show', $invoice)
                     ->with('success', __('Invoice has been successfully signed with VeriFact.'));

@@ -42,16 +42,14 @@
                         <iconify-icon icon="heroicons:printer" class="mr-1"></iconify-icon> <span>{{ __('Print') }}</span>
                     </button>
 
-                    {{-- Botón Enviar Email --}}
+                    {{-- Botón Enviar Email (siempre activo) --}}
                     @can('invoices send_email')
-                        @if(!in_array($invoice->status, ['paid', 'cancelled'])) {{-- No enviar si ya está pagada o cancelada --}}
-                            <form action="{{ route('invoices.sendEmail', $invoice->id) }}" method="POST" class="inline-block" onsubmit="return confirm('{{ __('Are you sure you want to send this invoice to the client?') }}');">
-                                @csrf
-                                <button type="submit" class="btn btn-sm btn-outline-secondary inline-flex items-center">
-                                    <iconify-icon icon="heroicons:envelope" class="mr-1"></iconify-icon> <span>{{ __('Send Email') }}</span>
-                                </button>
-                            </form>
-                        @endif
+                        <form action="{{ route('invoices.sendEmail', $invoice->id) }}" method="POST" class="inline-block" onsubmit="return confirm('{{ __('Are you sure you want to send this invoice to the client?') }}');">
+                            @csrf
+                            <button type="submit" class="btn btn-sm btn-outline-secondary inline-flex items-center">
+                                <iconify-icon icon="heroicons:envelope" class="mr-1"></iconify-icon> <span>{{ __('Send Email') }}</span>
+                            </button>
+                        </form>
                     @endcan
 
                     @can('invoices update')
