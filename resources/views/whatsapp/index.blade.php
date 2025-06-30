@@ -339,6 +339,18 @@
 
                 {{-- Área de Envío de Mensaje --}}
                 <div id="send-message-container" class="p-3 border-t border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 flex-none">
+                    <div class="flex items-center space-x-2 mb-4">
+                        <div id="connection-btn"></div>
+                        <div id="connection-actions"></div>
+                        <div class="ml-auto flex space-x-2">
+                            <a href="{{ route('whatsapp.media-test') }}" class="bg-blue-500 hover:bg-blue-600 text-white text-sm py-1 px-3 rounded">
+                                <i class="fas fa-image mr-1"></i> {{ __('Test Medios') }}
+                            </a>
+                            <a href="{{ route('whatsapp.api-explorer') }}" class="bg-purple-500 hover:bg-purple-600 text-white text-sm py-1 px-3 rounded">
+                                <i class="fas fa-tools mr-1"></i> {{ __('Explorador API') }}
+                            </a>
+                        </div>
+                    </div>
                     <div class="flex items-end space-x-3 relative">
                         {{-- Botón Emoji --}}
                         <button id="emoji-button" type="button" class="btn btn-icon btn-light dark:btn-dark rounded-full flex-none w-10 h-10 p-0" title="{{ __('Emoji') }}">
@@ -925,31 +937,99 @@
                                         const docMsg = messageData.message?.documentMessage;
 
                                         if (imageMsg && publicMediaUrl) {
-                                            mediaHtml = `<img src="${publicMediaUrl}" alt="Imagen adjunta" class="chat-image max-w-full h-auto rounded-lg cursor-pointer block mb-1" onclick="showZoomModal('${publicMediaUrl}')">`;
+                                            // Mostrar la URL en la consola para depuración
+                                            console.log('WhatsApp Image URL:', publicMediaUrl);
+                                            
+                                            // Añadir un indicador de carga y manejo de errores para imágenes
+                                            mediaHtml = `<div class="image-container relative">
+                                                <div class="image-loading absolute inset-0 flex items-center justify-center bg-slate-100/50 dark:bg-slate-800/50 rounded-lg">
+                                                    <iconify-icon icon="mdi:loading" class="text-2xl animate-spin"></iconify-icon>
+                                                </div>
+                                                <img src="${publicMediaUrl}" alt="Imagen" class="max-w-full h-auto rounded-lg shadow-sm" 
+                                                    onerror="handleMediaError(this, '${publicMediaUrl}', 'image')"
+                                                    onload="this.previousElementSibling.style.display='none'">
+                                                <div class="mt-1 text-xs flex justify-between">
+                                                    <span class="text-gray-500">${messageId.substring(0, 8)}...</span>
+                                                    <button type="button" class="text-blue-500 hover:underline" onclick="window.open('${publicMediaUrl}', '_blank')">{{ __('Ver imagen') }}</button>
+                                                </div>
+                                            </div>`;
                                             mediaRendered = true;
                                             textContent = imageMsg.caption || '';
                                         } else if (videoMsg && publicMediaUrl) {
-                                            mediaHtml = `<video controls class="chat-video max-w-full h-auto rounded-lg block mb-1" style="max-width: 320px;"><source src="${publicMediaUrl}" type="${videoMsg.mimetype || 'video/mp4'}">{{ __('Your browser does not support the video tag.') }} <a href="${publicMediaUrl}">{{ __('Download video') }}</a></video>`;
+                                            mediaHtml = `<div class="video-container relative">
+                                                <div class="video-loading absolute inset-0 flex items-center justify-center bg-slate-100/50 dark:bg-slate-800/50 rounded-lg">
+                                                    <iconify-icon icon="mdi:loading" class="text-2xl animate-spin"></iconify-icon>
+                                                </div>
+                                                <video controls class="chat-video max-w-full h-auto rounded-lg block mb-1" style="max-width: 320px;" 
+                                                    onloadeddata="this.previousElementSibling.style.display='none'" 
+                                                    onerror="handleMediaError(this, '${publicMediaUrl}', 'video')">
+                                                    <source src="${publicMediaUrl}" type="${videoMsg.mimetype || 'video/mp4'}">
+                                                    {{ __('Your browser does not support the video tag.') }}
+                                                </video>
+                                                <div class="mt-1 text-xs flex justify-between">
+                                                    <span class="text-gray-500">${messageId.substring(0, 8)}...</span>
+                                                    <a href="${publicMediaUrl}" target="_blank" class="text-blue-500 hover:underline">{{ __('Descargar video') }}</a>
+                                                </div>
+                                            </div>`;
                                             mediaRendered = true;
                                             textContent = videoMsg.caption || '';
                                         } else if (audioMsg && publicMediaUrl) {
-                                            mediaHtml = `<audio controls class="chat-audio block mb-1 w-full" style="max-width: 280px;"><source src="${publicMediaUrl}" type="${audioMsg.mimetype || 'audio/ogg'}">{{ __('Your browser does not support the audio tag.') }} <a href="${publicMediaUrl}">{{ __('Download audio') }}</a></audio>`;
+                                            mediaHtml = `<div class="audio-container relative">
+                                                <div class="audio-loading flex items-center justify-center py-2">
+                                                    <iconify-icon icon="mdi:loading" class="text-xl animate-spin mr-2"></iconify-icon>
+                                                    <span class="text-sm">{{ __('Cargando audio...') }}</span>
+                                                </div>
+                                                <audio controls class="chat-audio block mb-1 w-full" style="max-width: 280px;" 
+                                                    onloadeddata="this.previousElementSibling.style.display='none'" 
+                                                    onerror="handleMediaError(this, '${publicMediaUrl}', 'audio')">
+                                                    <source src="${publicMediaUrl}" type="${audioMsg.mimetype || 'audio/ogg'}">
+                                                    {{ __('Your browser does not support the audio tag.') }}
+                                                </audio>
+                                                <div class="mt-1 text-xs flex justify-between">
+                                                    <span class="text-gray-500">${messageId.substring(0, 8)}...</span>
+                                                    <a href="${publicMediaUrl}" target="_blank" class="text-blue-500 hover:underline">{{ __('Descargar audio') }}</a>
+                                                </div>
+                                            </div>`;
                                             mediaRendered = true;
                                             // Audio caption not typical
                                         } else if (stickerMsg && publicMediaUrl && stickerMsg.mimetype === 'image/webp') {
-                                            mediaHtml = `<img src="${publicMediaUrl}" alt="Sticker" class="chat-sticker max-w-[150px] h-auto block mb-1">`;
+                                            mediaHtml = `<div class="sticker-container relative">
+                                                <div class="sticker-loading absolute inset-0 flex items-center justify-center bg-slate-100/50 dark:bg-slate-800/50 rounded-lg">
+                                                    <iconify-icon icon="mdi:loading" class="text-2xl animate-spin"></iconify-icon>
+                                                </div>
+                                                <img src="${publicMediaUrl}" alt="Sticker" class="chat-sticker max-w-[150px] h-auto block mb-1" 
+                                                    onload="this.previousElementSibling.style.display='none'" 
+                                                    onerror="handleMediaError(this, '${publicMediaUrl}', 'sticker')">
+                                            </div>`;
                                             mediaRendered = true;
                                         } else if (docMsg && publicMediaUrl) {
                                             const fileName = docMsg.fileName || 'documento';
                                             const fileSize = docMsg.fileLength ?? 0;
                                             const formattedSize = fileSize > 0 ? Math.round(fileSize / 1024) + ' KB' : '';
-                                            mediaHtml = `<div class="p-2 border border-slate-200 dark:border-slate-700 rounded-lg bg-slate-50 dark:bg-slate-700/50 mb-1">
-                                                            <a href="${publicMediaUrl}" target="_blank" download="${fileName}" class="flex items-center text-sm text-slate-700 dark:text-slate-200 hover:underline">
-                                                                <iconify-icon icon="mdi:file-document-outline" class="text-lg mr-2 flex-none"></iconify-icon>
-                                                                <span class="truncate">${fileName}</span>
-                                                            </a>
-                                                            ${formattedSize ? `<span class="text-xs text-slate-500 dark:text-slate-400 block mt-1">${formattedSize}</span>` : ''}
-                                                         </div>`;
+                                            mediaHtml = `<div class="document-container">
+                                                <div class="p-2 border border-slate-200 dark:border-slate-700 rounded-lg bg-slate-50 dark:bg-slate-700/50 mb-1">
+                                                    <a href="${publicMediaUrl}" target="_blank" download="${fileName}" class="flex items-center text-sm text-slate-700 dark:text-slate-200 hover:underline">
+                                                        <iconify-icon icon="mdi:file-document-outline" class="text-lg mr-2 flex-none"></iconify-icon>
+                                                        <span class="truncate">${fileName}</span>
+                                                    </a>
+                                                    <div class="flex justify-between items-center mt-1">
+                                                        ${formattedSize ? `<span class="text-xs text-slate-500 dark:text-slate-400">${formattedSize}</span>` : ''}
+                                                        <span class="text-xs text-gray-500">${messageId.substring(0, 8)}...</span>
+                                                    </div>
+                                                </div>
+                                                <div class="mt-1 text-xs flex justify-end">
+                                                    <button type="button" class="text-blue-500 hover:underline" 
+                                                        onclick="fetch('${publicMediaUrl}')
+                                                            .then(response => {
+                                                                if (!response.ok) throw new Error('Error al verificar documento');
+                                                                return response.blob();
+                                                            })
+                                                            .then(() => alert('{{ __('Documento disponible') }}'))
+                                                            .catch(err => handleMediaError(document.createElement('div'), '${publicMediaUrl}', 'document'))">
+                                                        {{ __('Verificar disponibilidad') }}
+                                                    </button>
+                                                </div>
+                                            </div>`;
                                             mediaRendered = true;
                                             textContent = docMsg.caption || '';
                                         }
@@ -1279,7 +1359,122 @@
                 });
 
 
-                // --- Emoji Picker Logic (Using Swal Popup) ---
+                // --- Media Error Handling ---
+            function handleMediaError(mediaElement, url, mediaType = 'image') {
+                // Mostrar información detallada en la consola para depuración
+                console.error('=== ERROR CARGANDO MEDIA ===');
+                console.error('URL:', url);
+                console.error('Elemento:', mediaElement);
+                console.error('Tipo:', mediaType);
+                console.error('Timestamp:', new Date().toISOString());
+                
+                // Extraer partes de la URL para depuración
+                let urlParts = {};
+                try {
+                    const urlObj = new URL(url);
+                    urlParts = {
+                        protocol: urlObj.protocol,
+                        host: urlObj.host,
+                        pathname: urlObj.pathname,
+                        search: urlObj.search
+                    };
+                    console.log('URL desglosada:', urlParts);
+                    
+                    // Intentar extraer el messageId de la URL para depuración
+                    const pathParts = urlObj.pathname.split('/');
+                    const messageId = pathParts[pathParts.length - 1];
+                    console.log('MessageID extraído:', messageId);
+                } catch (e) {
+                    console.error('Error al analizar URL:', e);
+                }
+                
+                // Reemplazar el elemento de media con un icono de error y más información
+                const container = mediaElement.parentNode;
+                container.innerHTML = `
+                    <div class="flex flex-col items-center justify-center p-4 bg-red-50 dark:bg-red-900/20 rounded-lg text-red-600 dark:text-red-400">
+                        <iconify-icon icon="mdi:image-broken-variant" class="text-3xl mb-2"></iconify-icon>
+                        <span class="text-xs">{{ __('Error al cargar imagen') }}</span>
+                        <div class="flex space-x-2 mt-2">
+                            <a href="${url}" target="_blank" class="text-xs underline">{{ __('Ver en nueva pestaña') }}</a>
+                            <button onclick="copyToClipboard('${url}')" class="text-xs underline">{{ __('Copiar URL') }}</button>
+                        </div>
+                        <div class="text-xs mt-2 text-gray-500 max-w-xs overflow-hidden text-ellipsis">${url}</div>
+                    </div>
+                `;
+                
+                // Intentar recargar la imagen después de un tiempo (puede ser un error temporal)
+                setTimeout(() => {
+                    // Registrar el intento de recarga
+                    console.log('Intentando recargar media desde URL:', url);
+                    
+                    // Crear un nuevo elemento de imagen para intentar cargar de nuevo
+                    const newImg = new Image();
+                    newImg.onload = function() {
+                        // Si la carga es exitosa, reemplazar el mensaje de error con la imagen
+                        container.innerHTML = `
+                            <img src="${url}" alt="Imagen adjunta" class="chat-image max-w-full h-auto rounded-lg cursor-pointer block mb-1" 
+                                onclick="showZoomModal('${url}')">
+                        `;
+                    };
+                    // Iniciar la carga de la imagen
+                    newImg.src = url + '?retry=' + new Date().getTime(); // Añadir parámetro para evitar caché
+                }, 5000); // Intentar después de 5 segundos
+            }
+            
+            // --- Zoom Modal Functions ---
+            function showZoomModal(imageUrl) {
+                const modal = document.getElementById('zoom-modal');
+                const modalImg = document.getElementById('zoom-modal-img');
+                modalImg.src = imageUrl;
+                modal.classList.remove('hidden');
+            }
+            
+            function closeZoomModal() {
+                const modal = document.getElementById('zoom-modal');
+                modal.classList.add('hidden');
+            }
+            
+            // Función para copiar texto al portapapeles
+            function copyToClipboard(text) {
+                navigator.clipboard.writeText(text)
+                    .then(() => {
+                        // Mostrar notificación de éxito
+                        Swal.fire({
+                            toast: true,
+                            position: 'top-end',
+                            icon: 'success',
+                            title: '{{ __('URL copiada al portapapeles') }}',
+                            showConfirmButton: false,
+                            timer: 2000
+                        });
+                    })
+                    .catch(err => {
+                        console.error('Error al copiar al portapapeles:', err);
+                        // Alternativa para navegadores que no soportan clipboard API
+                        const textarea = document.createElement('textarea');
+                        textarea.value = text;
+                        textarea.style.position = 'fixed';
+                        document.body.appendChild(textarea);
+                        textarea.focus();
+                        textarea.select();
+                        try {
+                            document.execCommand('copy');
+                            Swal.fire({
+                                toast: true,
+                                position: 'top-end',
+                                icon: 'success',
+                                title: '{{ __('URL copiada al portapapeles') }}',
+                                showConfirmButton: false,
+                                timer: 2000
+                            });
+                        } catch (e) {
+                            console.error('Error al copiar con execCommand:', e);
+                        }
+                        document.body.removeChild(textarea);
+                    });
+            }
+
+                // Emoji Picker Logic (Using Swal Popup)
                 const emojiButton = document.getElementById('emoji-button');
                 const messageInput = document.getElementById('message-input');
 

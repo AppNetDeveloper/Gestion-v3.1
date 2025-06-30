@@ -384,8 +384,58 @@ class WhatsappController extends Controller
             $responseMsgs = Http::timeout(20)->get("$nodeUrl/get-messages/$sessionId/$jid");
 
             if ($responseMsgs->successful()) {
-                // La API Node ya devuelve la estructura correcta con messageData y publicMediaUrl
-                $messages = $responseMsgs->json()['messages'] ?? [];
+                // Obtener los mensajes de la respuesta
+                $rawMessages = $responseMsgs->json()['messages'] ?? [];
+                $messages = [];
+                
+                // Procesar cada mensaje para asegurar que las URLs de los medios estén correctamente configuradas
+                foreach ($rawMessages as $message) {
+                    $messageData = $message['messageData'] ?? null;
+                    $publicMediaUrl = $message['publicMediaUrl'] ?? null;
+                    
+                    // Si hay datos del mensaje pero no hay URL pública para los medios, intentamos generarla
+                    if ($messageData && !$publicMediaUrl) {
+                        // Verificar si es un mensaje con imagen, video o audio
+                        $hasImage = isset($messageData['message']['imageMessage']);
+                        $hasVideo = isset($messageData['message']['videoMessage']);
+                        $hasAudio = isset($messageData['message']['audioMessage']);
+                        $hasSticker = isset($messageData['message']['stickerMessage']);
+                        $hasDocument = isset($messageData['message']['documentMessage']);
+                        
+                        // Si es un mensaje multimedia, construir la URL para obtener el medio
+                        if ($hasImage || $hasVideo || $hasAudio || $hasSticker || $hasDocument) {
+                            $mediaType = $hasImage ? 'image' : ($hasVideo ? 'video' : ($hasAudio ? 'audio' : ($hasSticker ? 'sticker' : 'document')));
+                            $messageId = $messageData['key']['id'] ?? null;
+                            
+                            if ($messageId) {
+                                // Construir la URL para obtener el medio a través del proxy de Laravel
+                                // Esto asegura que el cliente pueda acceder a los medios sin problemas de CORS o localhost
+                                // Asegurarnos de que el JID esté en el formato correcto antes de codificarlo
+                                // Si no tiene el sufijo @s.whatsapp.net, añadirlo
+                                if (!str_contains($jid, '@')) {
+                                    $jid = $jid . '@s.whatsapp.net';
+                                }
+                                
+                                // Codificar el JID para evitar problemas con caracteres especiales en la URL
+                                $encodedJid = urlencode($jid);
+                                
+                                // Registrar la información del mensaje multimedia para depuración
+                                Log::channel('daily')->info("Mensaje multimedia detectado - Tipo: $mediaType, MessageID: $messageId, JID: $jid");
+                                
+                                // Generar la URL absoluta para el proxy de medios
+                                // Esta URL será procesada por nuestro método getMedia que probará diferentes rutas
+                                $publicMediaUrl = route('whatsapp.media', [
+                                    'sessionId' => $sessionId,
+                                    'jid' => $encodedJid,
+                                    'messageId' => $messageId
+                                ]);
+                                $message['publicMediaUrl'] = $publicMediaUrl;
+                            }
+                        }
+                    }
+                    
+                    $messages[] = $message;
+                }
             } else {
                  Log::error("Failed to get JSON messages for $jid, user $userId. Status: " . $responseMsgs->status());
                  return response()->json(['success' => false, 'messages' => [], 'message' => 'Could not retrieve messages.'], $responseMsgs->status());
@@ -407,6 +457,138 @@ class WhatsappController extends Controller
     }
 
      /**
+     * Sirve como proxy para obtener archivos multimedia del servidor de WhatsApp.
+     * Este método permite que el cliente acceda a los archivos multimedia a través de Laravel.
+     */
+    public function getMedia(Request $request, $sessionId, $jid, $messageId)
+    {
+        $nodeUrl = env('WHATSAPP_URL');
+        $userId = auth()->id();
+        
+        // Log detallado al inicio para depuración
+        Log::channel('daily')->info("=== WHATSAPP MEDIA REQUEST ===\nURL: {$request->fullUrl()}\nNode URL: {$nodeUrl}\nSession ID: {$sessionId}\nJID: {$jid}\nMessage ID: {$messageId}\nUser ID: {$userId}");
+        
+        try {
+            // Decodificar el JID si está codificado en la URL
+            $decodedJid = urldecode($jid);
+            
+            // Registrar los parámetros recibidos para depuración
+            Log::info("Media request params - SessionId: $sessionId, JID: $decodedJid, MessageId: $messageId, UserId: $userId");
+            
+            // Verificar si el sessionId coincide con el usuario autenticado
+            if ((string)$userId !== (string)$sessionId) {
+                Log::warning("User ID ($userId) does not match session ID ($sessionId) in media request");
+                // Usar el ID del usuario autenticado como sessionId para mayor seguridad
+                $sessionId = $userId;
+            }
+            
+            // Asegurarnos de que el JID tenga el formato correcto (con @s.whatsapp.net si no lo tiene)
+            if (!str_contains($decodedJid, '@')) {
+                $decodedJid = $decodedJid . '@s.whatsapp.net';
+            }
+            
+            // Basado en los logs, la ruta correcta es: /media/{sessionId}/{filename}
+            // El archivo se guarda con un formato: {sessionId}-{messageId}-{números}.jpg
+            
+            // Construir la URL directa basada en el formato observado en los logs
+            $mediaUrl = "$nodeUrl/media/$sessionId/$sessionId-$messageId-*.jpg";
+            
+            // Intentar primero con la URL directa que vimos en los logs
+            $directUrl = "$nodeUrl/media/$sessionId";
+            
+            Log::channel('daily')->info("Intentando obtener lista de archivos desde: $directUrl");
+            
+            try {
+                $response = Http::timeout(5)->get($directUrl);
+                
+                // Si la respuesta es exitosa y es un directorio HTML, buscar el archivo que contiene el messageId
+                if ($response->successful() && strpos($response->body(), 'Directory listing') !== false) {
+                    $body = $response->body();
+                    
+                    // Buscar archivos que contengan el messageId en el HTML de la respuesta
+                    if (preg_match_all('/<a href="([^"]*' . $messageId . '[^"]*)">/i', $body, $matches)) {
+                        $matchingFile = $matches[1][0]; // Tomar el primer archivo que coincida
+                        $mediaUrl = "$nodeUrl/media/$sessionId/$matchingFile";
+                        
+                        Log::channel('daily')->info("Archivo encontrado: $matchingFile - URL: $mediaUrl");
+                        
+                        $mediaResponse = Http::timeout(10)->get($mediaUrl);
+                        
+                        if ($mediaResponse->successful()) {
+                            $contentType = $mediaResponse->header('Content-Type') ?? 'application/octet-stream';
+                            $body = $mediaResponse->body();
+                            
+                            if (!empty($body)) {
+                                return response($body, 200)
+                                    ->header('Content-Type', $contentType)
+                                    ->header('Cache-Control', 'public, max-age=86400'); // Cachear por 24 horas
+                            }
+                        }
+                    }
+                }
+            } catch (\Exception $e) {
+                Log::channel('daily')->error("Error al buscar archivos de medios: " . $e->getMessage());
+            }
+            
+            // Si no encontramos el archivo por el método anterior, probamos diferentes rutas
+            $routesToTry = [
+                "/media/$sessionId/$sessionId-$messageId", // Formato observado en los logs sin extensión
+                "/media/$sessionId/$messageId", // Solo con messageId
+                "/media/$sessionId/$decodedJid/$messageId", // Ruta con JID
+                "/download/$sessionId/$messageId",
+                "/download-media/$sessionId/$messageId",
+                "/media-download/$sessionId/$messageId"
+            ];
+            
+            // Extensiones comunes para probar
+            $extensions = ["", ".jpg", ".jpeg", ".png", ".mp4", ".webp", ".pdf", ".ogg"];
+            
+            foreach ($routesToTry as $route) {
+                foreach ($extensions as $ext) {
+                    $url = $nodeUrl . $route . $ext;
+                    
+                    Log::channel('daily')->info("Intentando obtener medio desde: $url");
+                    
+                    try {
+                        $response = Http::timeout(10)->get($url);
+                        
+                        if ($response->successful()) {
+                            $contentType = $response->header('Content-Type') ?? 'application/octet-stream';
+                            $body = $response->body();
+                            
+                            Log::channel('daily')->info("Éxito al obtener medio desde: $url - Content-Type: $contentType");
+                            
+                            // Verificar que el cuerpo de la respuesta no esté vacío
+                            if (empty($body)) {
+                                Log::error("Empty response body from WhatsApp media server for URL: $url");
+                                continue;
+                            }
+                            
+                            // Devolver el contenido con el tipo de contenido correcto
+                            return response($body, 200)
+                                ->header('Content-Type', $contentType)
+                                ->header('Cache-Control', 'public, max-age=86400'); // Cachear por 24 horas
+                        } else {
+                            $statusCode = $response->status();
+                            Log::channel('daily')->warning("Error al obtener medio desde: $url - Status: $statusCode");
+                        }
+                    } catch (\Exception $e) {
+                        Log::channel('daily')->error("Excepción al obtener medio desde: $url - " . $e->getMessage());
+                    }
+                }
+            }
+            
+            // Si llegamos aquí, no se encontró el archivo
+            Log::error("No se pudo encontrar el archivo multimedia para messageId: $messageId");
+            return response()->json(['error' => 'Could not retrieve media', 'messageId' => $messageId], 404);
+            
+        } catch (\Exception $e) {
+            Log::error("Error getting media from WhatsApp server: " . $e->getMessage());
+            return response()->json(['error' => 'Error retrieving media: ' . $e->getMessage()], 500);
+        }
+    }
+
+    /**
      * Devuelve la lista de contactos en formato JSON.
      */
     public function getContactsJson(Request $request)

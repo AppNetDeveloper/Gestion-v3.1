@@ -27,6 +27,7 @@ use App\Http\Controllers\LinkedinController;
 use App\Http\Controllers\OllamaController;
 use App\Http\Controllers\TaskerLinkedinController;
 use App\Http\Controllers\WhatsappController;
+use App\Http\Controllers\WhatsappApiExplorerController;
 use App\Http\Controllers\ContactController;
 use App\Http\Controllers\AutoProcessController;
 use App\Exports\ContactsExport;
@@ -282,6 +283,9 @@ Route::middleware(['auth'])->group(function () {
     Route::delete('/whatsapp/chat/{phone}', [WhatsappController::class, 'destroyChat'])->name('whatsapp.chat.destroy');
     Route::get('/whatsapp/messages/json/{phone}', [WhatsappController::class, 'getMessagesJson'])->name('whatsapp.messages.json')->middleware('auth');
     Route::get('/whatsapp/contacts/json', [WhatsappController::class, 'getContactsJson'])->name('whatsapp.contacts.json')->middleware('auth');
+    Route::get('/whatsapp/media/{sessionId}/{jid}/{messageId}', [WhatsappController::class, 'getMedia'])->name('whatsapp.media')->middleware('auth');
+    Route::get('/whatsapp/api-explorer', [WhatsappApiExplorerController::class, 'exploreApi'])->name('whatsapp.api-explorer')->middleware('auth');
+    Route::get('/whatsapp/media-test', function() { return view('whatsapp.media-test'); })->name('whatsapp.media-test')->middleware('auth');
 });
 Route::middleware(['auth'])->group(function () {
     // Ruta para ver la lista de contactos (teléfonos)
