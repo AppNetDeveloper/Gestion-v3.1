@@ -67,9 +67,7 @@
     @vite(['resources/js/app.js', 'resources/js/main.js'])
 
     <!--
-      Ya existe @stack('scripts'),
-      que inyectará los scripts que empujes desde tus vistas
-    -->
+      {{-- Inyecta los scripts que empujes desde tus vistas --}}
     @stack('scripts')
 </body>
 </html>
