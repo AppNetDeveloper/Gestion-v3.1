@@ -16,6 +16,7 @@
         {{-- El contenido interno (#buttons-container o #time-control-error-message) se actualizará con AJAX --}}
         <section class="control-horario card p-6 relative min-h-[100px]"> {{-- Added relative positioning and min-height --}}
             <h2 class="text-xl font-medium text-slate-900 dark:text-white mb-4">Panel de Control de Horario</h2>
+            
 
             {{-- Container for buttons - This div's content will be replaced --}}
             <div class="grid sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4" id="buttons-container">
@@ -734,7 +735,7 @@
                                 <div class="text-2xl font-bold text-primary-500">
                                     {{ $taskCounts['pending'] ?? 0 }}
                                 </div>
-                                <div class="text-xs text-slate-500 dark:text-slate-300 mt-1">
+                                <div class="text-xs text-slate-500 dark:text-slate-400 mt-1">
                                     Pendientes
                                 </div>
                                 <div class="h-1 bg-slate-200 dark:bg-slate-700 mt-2 rounded-full overflow-hidden">
@@ -948,17 +949,31 @@
         @vite(['resources/js/plugins/jquery-jvectormap-world-mill-en.js'])
 
         {{-- ** START: Javascript Block with Persistent Error Display ** --}}
-        <script type="module">
+        <script>
+            // Control Horario Functionality
+            // Asegurarse de que jQuery esté disponible antes de ejecutar el código
+            function inicializarControlHorario() {
+                console.log('Intentando inicializar control horario...');
+                try {
+                    // Check if jQuery is available
+                    if (typeof jQuery !== 'undefined') {
+                        console.log('jQuery detectado correctamente, versión:', jQuery.fn.jquery);
+                        // Rest of your code here
+                    } else {
+                        console.error('jQuery no detectado. No se puede inicializar control horario.');
+                    }
+                } catch (error) {
+                    console.error('Error inicializando control horario:', error);
+                }
+            }
+
             // Wait for the DOM to be fully loaded
             document.addEventListener('DOMContentLoaded', function() {
+                inicializarControlHorario();
+            });
+        </script>
 
-                // Helper function to query DOM elements (using vanilla JS)
-                const $q = (selector) => document.querySelector(selector);
-                const $$q = (selector) => document.querySelectorAll(selector);
-
-                // Get data passed from the controller using Js::from for safety
-                const dashboardData = {{ Illuminate\Support\Js::from($data ?? []) }};
-                const productGrowthOverviewData = {{ Illuminate\Support\Js::from($data['productGrowthOverview'] ?? null) }};
+        {{-- ** END: Javascript Block with Persistent Error Display ** --}}
                 const loadAverageDataRaw = {{ Illuminate\Support\Js::from($data['loadAverage'] ?? null) }};
 
                 // Flag to prevent multiple simultaneous updates
@@ -1208,44 +1223,175 @@
 
 
                 // --- Control Horario Section ---
-                 try {
+                try {
                     // Ensure jQuery is loaded
                     if (typeof window.jQuery !== 'undefined') {
                         const $ = window.jQuery; // Use jQuery alias
+                        
+                        // Referencias a los elementos DOM
+                        const buttonsContainer = $('#buttons-container');
+                        const errorMessageDiv = $('#time-control-error-message');
+                        const loadingOverlay = $('#loading-overlay');
+                        
+                        // Verificar que los elementos existen en el DOM
+                        console.log('Inicializando Control Horario - Estado de los elementos DOM:', {
+                            buttonsContainer: buttonsContainer.length > 0 ? 'Encontrado' : 'No encontrado',
+                            errorMessageDiv: errorMessageDiv.length > 0 ? 'Encontrado' : 'No encontrado',
+                            loadingOverlay: loadingOverlay.length > 0 ? 'Encontrado' : 'No encontrado'
+                        });
+                        
+                        // Variables de estado
+                        let isUpdatingTimeControl = false;
+                        let geolocationSupported = 'geolocation' in navigator;
+                        let latestLat = null;
+                        let latestLong = null;
+                        let initialLocationObtained = false;
+                        let watchId = null;
+                        
+                        // Función para mostrar errores (sin ocultar botones)
+                        function showPersistentError(message) {
+                            console.error('Error en control horario:', message);
+                            errorMessageDiv.text(message).show();
+                            // NO ocultar los botones - solo mostrar el mensaje de error
+                            console.log('Mostrando error pero manteniendo botones visibles');
+                        }
+                        
+                        // Función para mostrar errores críticos (oculta botones)
+                        function showCriticalError(message) {
+                            console.error('Error crítico en control horario:', message);
+                            errorMessageDiv.text(message).show();
+                            buttonsContainer.hide();
+                        }
+                        
+                        // Función para ocultar errores
+                        function hidePersistentError() {
+                            errorMessageDiv.hide().text('');
+                            buttonsContainer.show();
+                            console.log('Error ocultado, botones mostrados');
+                        }
+                        
+                        // Inicializar la geolocalización inmediatamente
+                        if (geolocationSupported) {
+                            console.log('Inicializando servicio de geolocalización...');
+                            // Intentar obtener la ubicación inicial
+                            navigator.geolocation.getCurrentPosition(
+                                (position) => {
+                                    latestLat = position.coords.latitude;
+                                    latestLong = position.coords.longitude;
+                                    initialLocationObtained = true;
+                                    console.log('Ubicación inicial obtenida correctamente:', latestLat, latestLong);
+                                    
+                                    // Si hay un error visible, ocultarlo ahora que tenemos ubicación
+                                    if (errorMessageDiv.is(':visible')) {
+                                        hidePersistentError();
+                                    }
+                                    
+                                    // Asegurarse de que los botones estén visibles
+                                    buttonsContainer.show();
+                                },
+                                (error) => {
+                                    console.error('Error obteniendo ubicación inicial:', error.message, `(Code: ${error.code})`);
+                                    
+                                    // Mostrar mensaje de error apropiado
+                                    if (error.code === 1) { // PERMISSION_DENIED
+                                        showPersistentError('Permiso de ubicación denegado. Por favor, activa la ubicación para usar el control horario.');
+                                    } else if (error.code === 2) { // POSITION_UNAVAILABLE
+                                        showPersistentError('Ubicación no disponible. Verifica que tu dispositivo tenga GPS o conexión de red.');
+                                    } else if (error.code === 3) { // TIMEOUT
+                                        showPersistentError('Tiempo de espera agotado al obtener la ubicación. Inténtalo de nuevo.');
+                                    } else {
+                                        showPersistentError(`Error de geolocalización: ${error.message}`);
+                                    }
+                                },
+                                {
+                                    enableHighAccuracy: true,
+                                    timeout: 10000,
+                                    maximumAge: 0
+                                }
+                            );
+                            
+                            // Configurar watchPosition para actualizar la ubicación continuamente
+                            watchId = navigator.geolocation.watchPosition(
+                                (position) => {
+                                    latestLat = position.coords.latitude;
+                                    latestLong = position.coords.longitude;
+                                    
+                                    if (!initialLocationObtained) {
+                                        initialLocationObtained = true;
+                                        console.log('Ubicación inicial obtenida (vía watchPosition):', latestLat, latestLong);
+                                        
+                                        // Si hay un error visible, ocultarlo ahora que tenemos ubicación
+                                        if (errorMessageDiv.is(':visible')) {
+                                            hidePersistentError();
+                                        }
+                                    } else {
+                                        console.log('Ubicación actualizada:', latestLat, latestLong);
+                                    }
+                                },
+                                (error) => {
+                                    console.error('Error en watchPosition:', error.message, `(Code: ${error.code})`);
+                                    
+                                    // Solo mostrar error si no tenemos ubicación inicial
+                                    if (!initialLocationObtained) {
+                                        if (error.code === 1) { // PERMISSION_DENIED
+                                            showPersistentError('Permiso de ubicación denegado. Por favor, activa la ubicación para usar el control horario.');
+                                        } else if (error.code === 2) { // POSITION_UNAVAILABLE
+                                            showPersistentError('Ubicación no disponible. Verifica que tu dispositivo tenga GPS o conexión de red.');
+                                        } else {
+                                            showPersistentError(`Error de geolocalización: ${error.message}`);
+                                        }
+                                    }
+                                },
+                                {
+                                    enableHighAccuracy: true,
+                                    timeout: 30000,
+                                    maximumAge: 60000
+                                }
+                            );
+                        } else {
+                            console.error('Geolocalización no soportada en este navegador');
+                            showCriticalError('Tu navegador no soporta geolocalización. No podrás usar el control horario.');
+                        }
 
                         // Function to refresh the time control section via AJAX GET
                         function refreshTimeControlSection(options = {}) {
                             const { isInterval = false } = options;
 
-                             // Prevent overlapping interval calls ONLY
-                             if (isInterval && isUpdatingTimeControl) {
-                                 console.log('Previous time control update still in progress, skipping interval refresh.');
-                                 return;
-                             }
+                            // Prevent overlapping interval calls ONLY
+                            if (isInterval && isUpdatingTimeControl) {
+                                console.log('Previous time control update still in progress, skipping interval refresh.');
+                                return;
+                            }
 
-                            if (!buttonsContainer.length) return;
+                            if (!buttonsContainer.length) {
+                                console.error('El contenedor de botones no existe en el DOM');
+                                return;
+                            }
 
                             // Set flag *before* the request
                             isUpdatingTimeControl = true;
                             console.log('Refrescando sección Control Horario...', { isInterval }); // Log refresh start
 
                             // Don't show overlay for automatic interval refresh
-                            if (!isInterval) { /* Overlay shown by click handler */ }
+                            if (!isInterval) {
+                                loadingOverlay.show();
+                                buttonsContainer.hide();
+                            }
 
                             $.ajax({
                                 url: '/get-time-control-section', // GET Route
                                 method: 'GET',
                                 dataType: 'json',
                                 success: function(response) {
-                                    console.log('Respuesta GET recibida para refrescar.'); // Log GET success
-                                    if (response.html !== undefined) {
+                                    console.log('Respuesta GET recibida:', response); // Log the full response
+                                    if (response && response.html !== undefined) {
                                         hidePersistentError(); // Hide any previous error message
                                         buttonsContainer.html(response.html); // Update content
+                                        buttonsContainer.show(); // Ensure buttons are visible
                                         console.log('Sección Control Horario refrescada con éxito.');
                                     } else {
-                                         console.warn('No se recibió HTML para refrescar Control Horario.');
-                                         // Show error if HTML is missing? Depends on expected behavior.
-                                         showPersistentError("Error: No se pudo obtener el estado actual de los botones.");
+                                        console.warn('No se recibió HTML para refrescar Control Horario.');
+                                        showPersistentError("Error: No se pudo obtener el estado actual de los botones.");
                                     }
                                 },
                                 error: function(xhr, status, error) {
@@ -1256,16 +1402,16 @@
                                         showPersistentError("Sin conexión a internet. No se pudo actualizar el estado.");
                                     } else {
                                         // Show generic error for other GET failures
-                                         showPersistentError(`Error ${xhr.status} al refrescar estado.`);
+                                        showPersistentError(`Error ${xhr.status} al refrescar estado.`);
                                     }
                                 },
                                 complete: function() {
-                                    // UI state (buttons shown, overlay hidden) is handled here now
-                                    // Ensure buttons are displayed (might be hidden by error)
-                                    if (!errorMessageDiv.is(':visible')) { // Only show buttons if no error is displayed
+                                    // Always hide loading overlay
+                                    loadingOverlay.hide();
+                                    // Only show buttons if no error is displayed
+                                    if (!errorMessageDiv.is(':visible')) {
                                         buttonsContainer.css('display', 'grid');
                                     }
-                                    loadingOverlay.hide(); // Hide loading
                                     isUpdatingTimeControl = false; // Reset flag
                                     console.log('Refresco completado, UI restaurada, flag reseteado.'); // Log completion
                                 }
@@ -1274,15 +1420,46 @@
 
 
                         // --- Event Handler for Button Clicks (POST Request) ---
-                        // Use event delegation
-                        $('.control-horario').on('click', '.attendance-button', function(event) {
+                        // Verificar que los elementos existen antes de configurar eventos
+                        console.log('Configurando event handlers para botones de control horario...');
+                        console.log('Contenedor .control-horario encontrado:', $('.control-horario').length);
+                        console.log('Botones .attendance-button encontrados:', $('.attendance-button').length);
+                        
+                        // Eliminar cualquier manejador previo para evitar duplicados
+                        $(document).off('click', '.attendance-button');
+                        
+                        // Registrar manejador de eventos con delegación
+                        $(document).on('click', '.attendance-button', function(event) {
+                            console.log('¡Click detectado en botón de control horario!');
+                            console.log('Botón clickeado:', this);
+                            console.log('Status ID:', $(this).data('status-id'));
                             event.preventDefault();
+                            event.stopPropagation();
+                            
+                            console.log('Procesando click en botón de control horario...');
+                            console.log('Geolocalización soportada:', geolocationSupported);
+                            console.log('Ubicación inicial obtenida:', initialLocationObtained);
+                            console.log('Coordenadas actuales:', { lat: latestLat, long: latestLong });
+                            
+                            // Intentar obtener ubicación actual en el momento del click
+                            if (geolocationSupported) {
+                                console.log('Solicitando ubicación actual para el fichaje...');
+                                navigator.geolocation.getCurrentPosition(
+                                    function(position) {
+                                        console.log('Ubicación obtenida para el fichaje:', position.coords.latitude, position.coords.longitude);
+                                    },
+                                    function(error) {
+                                        console.error('Error obteniendo ubicación para el fichaje:', error);
+                                    }
+                                );
+                            }
 
-                             // Check if geolocation is supported first
-                             if (!geolocationSupported) {
-                                 showPersistentError('Geolocalización no soportada por este navegador. No se puede fichar.');
-                                 return;
-                             }
+                            // Check if geolocation is supported first
+                            if (!geolocationSupported) {
+                                console.error('Geolocalización no soportada');
+                                showCriticalError('Geolocalización no soportada por este navegador. No se puede fichar.');
+                                return;
+                            }
 
                             // Check if location is available from watchPosition
                             if (!initialLocationObtained || latestLat === null || latestLong === null) {
@@ -1416,18 +1593,51 @@
 
                         // --- Auto-Refresh Setup ---
                         if (buttonsContainer.length) {
-                             console.log('Iniciando intervalo de auto-refresco para Control Horario (5s).');
-                             if (window.timeControlIntervalId) { clearInterval(window.timeControlIntervalId); }
-                             // Pass flag indicating it IS from interval
+                            console.log('Iniciando intervalo de auto-refresco para Control Horario (5s).');
+                            if (window.timeControlIntervalId) { clearInterval(window.timeControlIntervalId); }
+                            // Pass flag indicating it IS from interval
                             // Function to run in interval
-                             const intervalTask = () => {
-                                 // Attempt to get current location
-                                 attemptLocationUpdate();
-                                 // Refresh buttons (will run even if location fails, uses last known good location for clicks)
-                                 refreshTimeControlSection({ isInterval: true });
-                             };
-                             window.timeControlIntervalId = setInterval(() => refreshTimeControlSection({ isInterval: true }), 5000);
+                            const intervalTask = () => {
+                                // Attempt to get current location
+                                attemptLocationUpdate();
+                                // Refresh buttons (will run even if location fails, uses last known good location for clicks)
+                                refreshTimeControlSection({ isInterval: true });
+                            };
+                            window.timeControlIntervalId = setInterval(() => refreshTimeControlSection({ isInterval: true }), 5000);
                         }
+                        
+                        // Log de confirmación de inicialización completa
+                        console.log('=== CONTROL HORARIO INICIALIZADO COMPLETAMENTE ===');
+                        console.log('Estado final:', {
+                            geolocationSupported: geolocationSupported,
+                            initialLocationObtained: initialLocationObtained,
+                            buttonsContainer: buttonsContainer.length,
+                            errorMessageDiv: errorMessageDiv.length,
+                            loadingOverlay: loadingOverlay.length,
+                            watchId: watchId
+                        });
+                        
+                        // Forzar un refresh inicial de los botones
+                        console.log('Ejecutando refresh inicial de botones...');
+                        refreshTimeControlSection({ isInterval: false });
+                        
+                        // Asegurar que los botones estén visibles después de la inicialización
+                        setTimeout(() => {
+                            console.log('Verificación final de visibilidad de botones...');
+                            console.log('Estado de elementos:', {
+                                buttonsContainer_visible: buttonsContainer.is(':visible'),
+                                buttonsContainer_display: buttonsContainer.css('display'),
+                                errorMessageDiv_visible: errorMessageDiv.is(':visible'),
+                                botones_encontrados: $('.attendance-button').length
+                            });
+                            
+                            // Si hay botones pero no están visibles, mostrarlos
+                            if ($('.attendance-button').length > 0 && !buttonsContainer.is(':visible')) {
+                                console.log('Forzando visibilidad de botones...');
+                                buttonsContainer.show();
+                                buttonsContainer.css('display', 'grid');
+                            }
+                        }, 1000);
 
                     } else { // End document ready check
                         console.warn("jQuery (window.jQuery) no cargado. Funcionalidad Control Horario desactivada.");
@@ -1597,4 +1807,6 @@
         {{-- ** END: Javascript Block ** --}}
     @endpush
 
+    {{-- Script para arreglar el problema de los botones de control horario --}}
+    <script src="{{ asset('js/time-control-fix.js') }}?v={{ time() }}"></script>
 </x-app-layout>

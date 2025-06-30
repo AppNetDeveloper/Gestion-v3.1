@@ -879,19 +879,39 @@ class HomeController extends Controller
     public function getTimeControlSection() {
         $user = Auth::user();
         if (!$user) {
-             // Devuelve HTML indicando no autenticado o un error JSON
-            return response()->json(['html' => '<p class=\"text-danger-500\">Usuario no autenticado.</p>'], 401);
+            // Devuelve HTML indicando no autenticado o un error JSON
+            return response()->json(['html' => '<p class="text-danger-500">Usuario no autenticado.</p>'], 401);
         }
 
-        // Lógica para obtener botones permitidos (igual que en unifiedDashboard)
-        $allowedButtons = $user->getAllowedButtons();
-        $allowedAddButtons = $user->time_control_enable ?? false;
+        try {
+            // Lógica para obtener botones permitidos (igual que en unifiedDashboard)
+            $allowedButtons = $user->getAllowedButtons();
+            $allowedAddButtons = $user->time_control_enable ?? false;
 
-        // Renderiza la vista parcial con los datos actuales
-        $html = view('partials._control_horario_buttons', compact('allowedButtons', 'allowedAddButtons'))->render();
+            // Log para depuración
+            \Log::info('getTimeControlSection - Datos obtenidos', [
+                'userId' => $user->id,
+                'allowedButtons' => $allowedButtons,
+                'allowedAddButtons' => $allowedAddButtons
+            ]);
 
-        // Devuelve el HTML renderizado como JSON
-        return response()->json(['html' => $html]);
+            // Renderiza la vista parcial con los datos actuales
+            $html = view('partials._control_horario_buttons', compact('allowedButtons', 'allowedAddButtons'))->render();
+
+            // Devuelve el HTML renderizado como JSON
+            return response()->json(['html' => $html, 'success' => true]);
+        } catch (\Exception $e) {
+            \Log::error('Error en getTimeControlSection: ' . $e->getMessage(), [
+                'userId' => $user->id,
+                'trace' => $e->getTraceAsString()
+            ]);
+            
+            return response()->json([
+                'html' => '<p class="text-danger-500">Error al cargar los botones: ' . $e->getMessage() . '</p>',
+                'success' => false,
+                'error' => $e->getMessage()
+            ], 500);
+        }
     }
     
     /**
