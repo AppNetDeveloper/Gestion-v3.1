@@ -16,22 +16,13 @@
     <div class="sidebar-menus bg-white dark:bg-slate-800 py-2 px-4 h-[calc(100%-80px)] z-50" id="sidebar_menus">
         <ul class="sidebar-menu">
             <li class="sidebar-menu-title">{{ __('MENU') }}</li>
-            <li class="{{ request()->routeIs('dashboards*') ? 'active' : '' }}">
-                <a href="#" class="navItem">
+            <li class="{{ request()->routeIs('dashboard.unified') ? 'active' : '' }}">
+                <a href="{{ route('dashboard.unified') }}" class="navItem">
                     <span class="flex items-center">
-                        <iconify-icon class=" nav-icon" icon="heroicons-outline:home"></iconify-icon>
+                        <iconify-icon class="nav-icon" icon="heroicons-outline:home"></iconify-icon>
                         <span>{{ __('Dashboard') }}</span>
                     </span>
-                    <iconify-icon class="icon-arrow" icon="heroicons-outline:chevron-right"></iconify-icon>
                 </a>
-                <ul class="sidebar-submenu">
-                    <li>
-                        <a href="{{ route('dashboards.analytic') }}" class="navItem {{ request()->routeIs('dashboards.analytic') ? 'active' : '' }}">{{ __('Analytical Dashboard') }}</a>
-                    </li>
-                    <li>
-                        <a href="{{ route('dashboards.ecommerce') }}" class="navItem {{ request()->routeIs('dashboards.ecommerce') ? 'active' : '' }}">{{ __('Ecommerce Dashboard') }}</a>
-                    </li>
-                </ul>
             </li>
 
             <li class="sidebar-menu-title">{{ __('APPS') }}</li>

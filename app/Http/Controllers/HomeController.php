@@ -295,6 +295,22 @@ class HomeController extends Controller
         }
 
         // Add additional data required by the view
+        // Set growth data with proper structure for EChart3
+        $viewData['growth'] = [
+            'year' => $salesStats['months']->toArray(),
+            'perYearRate' => $salesStats['sales']->map(function($amount, $index) use ($salesStats) {
+                // Calculate growth rate compared to previous month or use overall growth
+                if ($index > 0 && isset($salesStats['sales'][$index-1]) && $salesStats['sales'][$index-1] > 0) {
+                    return round((($amount - $salesStats['sales'][$index-1]) / $salesStats['sales'][$index-1]) * 100, 1);
+                }
+                return round($salesStats['growth'], 1);
+            })->toArray(),
+            'total' => round($salesStats['growth'], 1),
+            'preSymbol' => '+',
+            'postSymbol' => '%'
+        ];
+
+        // Prepare revenue report data for barChartOne
         $viewData['revenueReport'] = [
             'month' => ["Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct"],
             'revenue' => [
@@ -304,16 +320,11 @@ class HomeController extends Controller
             'netProfit' => [
                 'title' => 'Net Profit',
                 'data' => [35, 41, 36, 26, 45, 48, 52, 53, 41],
+            ],
+            'cashFlow' => [
+                'title' => 'Cash Flow',
+                'data' => [44, 55, 57, 56, 61, 58, 63, 60, 66]
             ]
-        ];
-
-        // Set growth data
-        $viewData['growth'] = $growthData;
-
-        // Add cash flow data
-        $viewData['cashFlow'] = [
-            'title' => 'Cash Flow',
-            'data' => [44, 55, 57, 56, 61, 58, 63, 60, 66]
         ];
 
         // Add product growth overview
@@ -385,7 +396,8 @@ class HomeController extends Controller
 
         // Add the same data to analyticChartData for backward compatibility
         $viewData['analyticChartData'] = array_merge($viewData['analyticChartData'], [
-            'cashFlow' => $viewData['cashFlow'],
+            // Usar la propiedad cashFlow desde revenueReport
+            'cashFlow' => $viewData['revenueReport']['cashFlow'] ?? [],
             'productGrowthOverview' => $viewData['productGrowthOverview'],
             'thisYearGrowth' => $viewData['thisYearGrowth'],
             'investmentAmount' => $viewData['investmentAmount'],
@@ -591,290 +603,7 @@ class HomeController extends Controller
         
         return view('dashboards.unified', $viewData);
     }
-     public function analyticDashboard()
-    {
-        $chartData = [
-            'yearlyRevenue' => [
-                'year' => [1991, 1992, 1993, 1994, 1995],
-                'revenue' => [350, 500, 950, 700, 900],
-                'total' => 3500,
-                'currencySymbol' => '$',
-            ],
-            'productSold' => [
-                'year' => [1991, 1992, 1993, 1994, 1995],
-                'quantity' => [800, 600, 1000, 800, 900],
-                'total' => 4000,
-            ],
-            'growth' => [
-                'year' => [1991, 1992, 1993, 1994, 1995],
-                'perYearRate' => [10, 20, 30, 40, 100],
-                'total' => 10,
-                'preSymbol' => '+',
-                'postSymbol' => '%',
-            ],
-            'revenueReport' => [
-                'month' => ["Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct"],
-                'revenue' => [
-                    'title' => 'Revenue',
-                    'data' => [76, 85, 101, 98, 87, 105, 91, 114, 94],
-                ],
-                'netProfit' => [
-                    'title' => 'Net Profit',
-                    'data' => [35, 41, 36, 26, 45, 48, 52, 53, 41],
-                ],
-                'cashFlow' => [
-                    'title' => 'Cash Flow',
-                    'data' => [44, 55, 57, 56, 61, 58, 63, 60, 66],
-                ],
-            ],
-            'productGrowthOverview' => [
-                'productNames' => ["Books", "Pens", "Pencils", "Box"],
-                'data' => [88, 77, 66, 55],
-            ],
-            'thisYearGrowth' => [
-                'label' => ['Yearly Growth'],
-                'data' => [66],
-            ],
-            'investmentAmount' => [
-                [
-                    'title' => 'Investment',
-                    'amount' => 1000,
-                    'currencySymbol' => '$',
-                    'profit' => 10,
-                    'profitPercentage' => 50,
-                    'loss' => 0,
-                    'lossPercentage' => 0,
-                ],
-                [
-                    'title' => 'Investment',
-                    'amount' => 1000,
-                    'currencySymbol' => '$',
-                    'profit' => 10,
-                    'profitPercentage' => 50,
-                    'loss' => 0,
-                    'lossPercentage' => 0,
-                ],
-                [
-                    'title' => 'Investment',
-                    'amount' => 1000,
-                    'currencySymbol' => '$',
-                    'profit' => 0,
-                    'profitPercentage' => 0,
-                    'loss' => 20,
-                    'lossPercentage' => 30,
-                ]
-            ],
-            'users' => User::latest()->paginate(5),
-        ];
-            // Obtener tiempo de carga del sistema
-            $uptime = exec('uptime');
-            preg_match('/load average: (.*)/', $uptime, $matches);
-            $loadAverage = explode(',', $matches[1]);
-
-            // Agregar tiempo de carga a $chartData
-            $chartData['loadAverage'] = $loadAverage;
-
-        return view('dashboards.analytic', [
-            'pageTitle' => 'Analytic Dashboard',
-            'data' => collect($chartData),
-        ]);
-    }
-
-    /**
-     * Ecommerce Dashboard
-     */
-    public function ecommerceDashboard()
-    {
-        $chartData = [
-            'revenueReport' => [
-                'month' => ["Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct"],
-                'revenue' => [
-                    'title' => 'Revenue',
-                    'data' => [76, 85, 101, 98, 87, 105, 91, 114, 94],
-                ],
-                'netProfit' => [
-                    'title' => 'Net Profit',
-                    'data' => [35, 41, 36, 26, 45, 48, 52, 53, 41],
-                ],
-                'cashFlow' => [
-                    'title' => 'Cash Flow',
-                    'data' => [44, 55, 57, 56, 61, 58, 63, 60, 66],
-                ],
-            ],
-            'revenue' => [
-                'year' => [1991, 1992, 1993, 1994, 1995],
-                'data' => [350, 500, 950, 700, 100],
-                'total' => 4000,
-                'currencySymbol' => '$',
-            ],
-            'productSold' => [
-                'year' => [1991, 1992, 1993, 1994, 1995],
-                'quantity' => [800, 600, 1000, 50, 100],
-                'total' => 100,
-            ],
-            'growth' => [
-                'year' => [1991, 1992, 1993, 1994, 1995],
-                'perYearRate' => [10, 20, 30, 40, 10],
-                'total' => 10,
-                'preSymbol' => '+',
-                'postSymbol' => '%',
-            ],
-            'lastWeekOrder' => [
-                'name' => 'Last Week Order',
-                'data' => [44, 55, 57, 56, 61, 10],
-                'total' => '10k+',
-                'percentage' => 100,
-                'preSymbol' => '-',
-            ],
-            'lastWeekProfit' => [
-                'name' => 'Last Week Profit',
-                'data' => [44, 55, 57, 56, 61, 10],
-                'total' => '10k+',
-                'percentage' => 100,
-                'preSymbol' => '+',
-            ],
-            'lastWeekOverview' => [
-                'labels' => ["Success", "Return"],
-                'data' => [60, 40],
-                'title' => 'Profit',
-                'amount' => '650k+',
-                'percentage' => 0.02,
-            ],
-        ];
-        $topCustomers = [
-            [
-                'serialNo' => 1,
-                'name' => 'Danniel Smith',
-                'totalPoint' => 50.5,
-                'progressBarPoint' => 50,
-                'progressBarColor' => 'green',
-                'backgroundColor' => 'sky',
-                'isMvpUser' => true,
-                'photo' => '/images/customer.png',
-            ],
-            [
-                'serialNo' => 2,
-                'name' => 'Danniel Smith',
-                'totalPoint' => 50.5,
-                'progressBarPoint' => 50,
-                'progressBarColor' => 'sky',
-                'backgroundColor' => 'orange',
-                'isMvpUser' => false,
-                'photo' => '/images/customer.png',
-            ],
-            [
-                'serialNo' => 3,
-                'name' => 'Danniel Smith',
-                'totalPoint' => 50.5,
-                'progressBarPoint' => 50,
-                'progressBarColor' => 'orange',
-                'backgroundColor' => 'green',
-                'isMvpUser' => false,
-                'photo' => '/images/customer.png',
-            ],
-            [
-                'serialNo' => 4,
-                'name' => 'Danniel Smith',
-                'totalPoint' => 50.5,
-                'progressBarPoint' => 50,
-                'progressBarColor' => 'green',
-                'backgroundColor' => 'sky',
-                'isMvpUser' => true,
-                'photo' => '/images/customer.png',
-            ],
-            [
-                'serialNo' => 5,
-                'name' => 'Danniel Smith',
-                'totalPoint' => 50.5,
-                'progressBarPoint' => 50,
-                'progressBarColor' => 'sky',
-                'backgroundColor' => 'orange',
-                'isMvpUser' => false,
-                'photo' => '/images/customer.png',
-            ],
-            [
-                'serialNo' => 6,
-                'name' => 'Danniel Smith',
-                'totalPoint' => 50.5,
-                'progressBarPoint' => 50,
-                'progressBarColor' => 'orange',
-                'backgroundColor' => 'green',
-                'isMvpUser' => false,
-                'photo' => '/images/customer.png',
-            ],
-        ];
-        $recentOrders = [
-            [
-                'companyName' => 'Biffco Enterprises Ltd.',
-                'email' => 'Biffco@biffco.com',
-                'productType' => 'Technology',
-                'invoiceNo' => 'INV-0001',
-                'amount' => 1000,
-                'currencySymbol' => '$',
-                'paymentStatus' => 'paid',
-            ],
-            [
-                'companyName' => 'Biffco Enterprises Ltd.',
-                'email' => 'Biffco@biffco.com',
-                'productType' => 'Technology',
-                'invoiceNo' => 'INV-0001',
-                'amount' => 1000,
-                'currencySymbol' => '$',
-                'paymentStatus' => 'paid',
-            ],
-            [
-                'companyName' => 'Biffco Enterprises Ltd.',
-                'email' => 'Biffco@biffco.com',
-                'productType' => 'Technology',
-                'invoiceNo' => 'INV-0001',
-                'amount' => 1000,
-                'currencySymbol' => '$',
-                'paymentStatus' => 'paid',
-            ],
-            [
-                'companyName' => 'Biffco Enterprises Ltd.',
-                'email' => 'Biffco@biffco.com',
-                'productType' => 'Technology',
-                'invoiceNo' => 'INV-0001',
-                'amount' => 1000,
-                'currencySymbol' => '$',
-                'paymentStatus' => 'due',
-            ],
-            [
-                'companyName' => 'Biffco Enterprises Ltd.',
-                'email' => 'Biffco@biffco.com',
-                'productType' => 'Technology',
-                'invoiceNo' => 'INV-0001',
-                'amount' => 1000,
-                'currencySymbol' => '$',
-                'paymentStatus' => 'paid',
-            ],
-            [
-                'companyName' => 'Biffco Enterprises Ltd.',
-                'email' => 'Biffco@biffco.com',
-                'productType' => 'Technology',
-                'invoiceNo' => 'INV-0001',
-                'amount' => 1000,
-                'currencySymbol' => '$',
-                'paymentStatus' => 'due',
-            ],
-        ];
-
-        $user = Auth::user();
-        $allowedButtons = $user->getAllowedButtons();
-
-
-
-        return view('dashboards.ecommerce', [
-            'pageTitle' => 'Ecommerce Dashboard',
-            'data' => $chartData,
-            'topCustomers' => $topCustomers,
-            'recentOrders' => $recentOrders,
-            'allowedButtons' => $allowedButtons,
-            'allowedAddButtons' => $user->time_control_enable
-
-        ]);
-    }
+    // Los métodos analyticDashboard y ecommerceDashboard han sido eliminados porque solo se usa el dashboard unificado
 
     public function getTimeControlSection() {
         $user = Auth::user();

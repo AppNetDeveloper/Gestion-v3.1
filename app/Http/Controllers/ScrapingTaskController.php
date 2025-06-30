@@ -29,12 +29,29 @@ class ScrapingTaskController extends Controller
      */
     public function data(Request $request)
     {
-        $query = ScrapingTask::where('user_id', Auth::id())->select([
+        // Añadir logs para depuración
+        $userId = Auth::id();
+        Log::info('ScrapingTaskController@data - Usuario autenticado', ['user_id' => $userId]);
+        
+        // Contar todas las tareas sin filtrar para comparar
+        $totalTasks = ScrapingTask::count();
+        $userTasks = ScrapingTask::where('user_id', $userId)->count();
+        
+        Log::info('ScrapingTaskController@data - Conteo de tareas', [
+            'total_tareas' => $totalTasks,
+            'tareas_usuario' => $userTasks
+        ]);
+        
+        $query = ScrapingTask::where('user_id', $userId)->select([
             'id', 'source', 'keyword', 'region', 'status', 'api_task_id', 'created_at'
         ]);
 
         try {
-            return DataTables::of($query)
+        // Obtener los IDs de las tareas para depuración
+        $taskIds = $query->pluck('id')->toArray();
+        Log::info('ScrapingTaskController@data - IDs de tareas encontradas', ['task_ids' => $taskIds]);
+        
+        return DataTables::of($query)
                 ->editColumn('created_at', fn($task) => $task->created_at ? $task->created_at->format('Y-m-d H:i:s') : '-')
                 ->editColumn('region', fn($task) => $task->region ?: '-')
                 ->editColumn('api_task_id', fn($task) => $task->api_task_id ?: '-')
@@ -108,11 +125,8 @@ class ScrapingTaskController extends Controller
         } catch (Throwable $e) { // Capturar Throwable para errores más generales
             Log::error('Error al generar datos para DataTables en ScrapingTaskController@data: ' . $e->getMessage(), ['exception' => $e]);
             return response()->json([
-                'draw' => intval($request->input('draw')),
-                'recordsTotal' => 0,
-                'recordsFiltered' => 0,
-                'data' => [],
-                'error' => __('Could not load tasks data.')
+                'error' => __('Could not load tasks data.'),
+                'details' => config('app.debug') ? $e->getMessage() : null
             ], 500);
         }
     }
