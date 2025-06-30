@@ -42,7 +42,7 @@ class ProcessScrapingTasks extends Command
     public function __construct()
     {
         parent::__construct();
-        $this->apiBaseUrl = config('services.scraping_api.url');
+        $this->apiBaseUrl = config('services.scraping.url', 'http://localhost:9001');
     }
 
     /**
@@ -68,13 +68,13 @@ class ProcessScrapingTasks extends Command
                 
                 if ($processingTask) {
                     // Check if the processing task has been running for more than 15 minutes
-                    $stuckThreshold = now()->subMinutes(15);
+                    $stuckThreshold = now()->subMinutes(30);
                     if ($processingTask->updated_at <= $stuckThreshold) {
-                        $this->info("Tarea ID {$processingTask->id} lleva más de 15 minutos en proceso. Verificando estado...");
+                        $this->info("Tarea ID {$processingTask->id} lleva más de 30 minutos en proceso. Verificando estado...");
                         $this->checkStuckTasks();
                     } else {
                         $timeElapsed = now()->diffInMinutes($processingTask->updated_at);
-                        $timeLeft = max(0, 15 - $timeElapsed);
+                        $timeLeft = max(0, 30 - $timeElapsed);
                         $this->info("Tarea ID {$processingTask->id} ya está en proceso. Tiempo restante: {$timeLeft} minutos...");
                     }
                     $task = null;
@@ -119,7 +119,7 @@ class ProcessScrapingTasks extends Command
      */
     protected function processSingleTask(ScrapingTask $task): void
     {
-        $this->info("Procesando tarea ID: {$task->id} - Tipo: {$task->type} - Intentos: {$task->retry_attempts}");
+        $this->info("Procesando tarea ID: {$task->id} - Fuente: {$task->source} - Intentos: {$task->retry_attempts}");
         
         try {
             // 1. Marcar la tarea como en proceso
@@ -132,7 +132,18 @@ class ProcessScrapingTasks extends Command
             $payload = $this->prepareTaskPayload($task);
             
             // 3. Enviar la tarea a la API de scraping
-            $response = Http::timeout(30)->post($this->apiBaseUrl . '/tasks', $payload);
+            $apiUrl = rtrim($this->apiBaseUrl, '/') . '/buscar-google-ddg-limpio';
+            $this->info("Enviando solicitud a: " . $apiUrl);
+            Log::info("Enviando solicitud a la API", [
+                'url' => $apiUrl,
+                'payload' => $payload
+            ]);
+            
+            $response = Http::timeout(30)->post($apiUrl, [
+                'keyword' => $payload['task_type'],
+                'results' => 10, // Número de resultados por defecto
+                'callback_url' => $payload['callback_url']
+            ]);
             
             // 4. Verificar la respuesta
             if ($response->successful()) {
@@ -183,7 +194,7 @@ class ProcessScrapingTasks extends Command
         // Datos básicos que siempre se envían
         $payload = [
             'callback_url' => $callbackUrl,
-            'task_type' => $task->type,
+            'task_type' => $task->source,
         ];
         
         // Añadir datos específicos según el tipo de tarea

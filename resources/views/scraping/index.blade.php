@@ -172,7 +172,14 @@
         <script src="https://cdn.datatables.net/responsive/2.2.9/js/dataTables.responsive.min.js"></script>
 
         <script>
+            // Log inmediato para confirmar que el script se carga
+            console.log('SCRIPT DE SCRAPING CARGADO - ' + new Date().toISOString());
+            
+            // Alert para confirmar visualmente
+            alert('Script de scraping cargado correctamente');
+            
             $(document).ready(function() {
+                console.log('DOCUMENT READY EJECUTADO - ' + new Date().toISOString());
 
                 // --- Toast ---
                  function buildToast () {
@@ -187,11 +194,42 @@
                  function getSwalWidth () { return window.innerWidth < 768 ? '95%' : '600px'; }
 
                 // --- Initialize DataTable ---
+                console.log("PUNTO DE CONTROL 1: Antes de inicializar DataTable");
+                alert('Punto de control 1: Antes de inicializar DataTable');
+                console.log("Inicializando DataTable para tareas de scraping...");
+                
                 if ($('#tasksTable').length) {
+                    console.log('DataTable: #tasksTable encontrado, inicializando...');
+                    const urlData = $('#tasksTable').data('url');
+                    console.log('DataTable: URL de datos:', urlData);
                     const tasksTable = $('#tasksTable').DataTable({
-                        processing: true,
-                        serverSide: true,
-                        ajax: {
+        processing: true,
+        serverSide: true,
+        ajax: {
+            url: urlData,
+            type: 'GET',
+            beforeSend: function() {
+                console.log('DataTable: Enviando petición AJAX a', urlData);
+            },
+            error: function (xhr, error, thrown) {
+                console.error("DataTables Error:", error, thrown, xhr.responseText);
+                alert('Error cargando datos DataTable: ' + error + ' ' + thrown + ' ' + xhr.responseText);
+                $('#tasksTable_processing').hide();
+                $('#tasksTable tbody').html(
+                    '<tr><td colspan="8" class="text-center text-red-500 py-4">{{ __("Could not load tasks data.") }}</td></tr>'
+                );
+            },
+            dataSrc: function(json) {
+                console.log("DataTables - Datos recibidos:", json);
+                if (json.data && json.data.length === 0) {
+                    console.log("DataTables - No se encontraron tareas");
+                } else if (json.data) {
+                    console.log("DataTables - Tareas encontradas:", json.data.length);
+                }
+                return json.data;
+            }
+        },
+                },
                             url: $('#tasksTable').data('url'),
                             type: 'GET',
                             error: function (xhr, error, thrown) {
@@ -378,6 +416,7 @@
                 // Nota: El botón "View Contacts" es un enlace <a> generado por el controlador,
                 // por lo que no necesita un manejador de eventos JS aquí.
 
+                console.log('FIN DEL DOCUMENT READY - ' + new Date().toISOString());
             }); // End $(document).ready
         </script>
     @endpush

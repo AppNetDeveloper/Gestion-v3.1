@@ -6,9 +6,9 @@ use App\Models\ScrapingTask;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
-use Yajra\DataTables\Facades\DataTables; // Asegúrate de importar esto
+use Yajra\DataTables\Facades\DataTables;
 use Illuminate\Validation\Rule;
-use Throwable; // Usar Throwable para capturar más tipos de errores
+use Throwable; // Usar Throwable para capturar errores y excepciones
 
 class ScrapingTaskController extends Controller
 {
@@ -21,55 +21,60 @@ class ScrapingTaskController extends Controller
             ['name' => __('Dashboard'), 'url' => '/dashboard'],
             ['name' => __('Scraping Tasks Manager')],
         ];
+        //ponemos un log con todos los datos que mandamos a index
+        
+
         return view('scraping.index', compact('breadcrumbItems'));
     }
 
     /**
      * Proporciona los datos para la DataTable usando Yajra DataTables.
+     * Esta es la función clave que alimenta la tabla en el frontend.
      */
     public function data(Request $request)
     {
-        // Añadir logs para depuración
+        Log::info('ScrapingTaskController@data - INICIO de la función');
+        // **CORRECCIÓN 1: Verificar siempre la autenticación del usuario**
+        // Si por alguna razón esta ruta es llamada sin un usuario logueado,
+        // evitamos un error y devolvemos un conjunto de datos vacío.
+        if (!Auth::check()) {
+            Log::warning('ScrapingTaskController@data - Intento de acceso sin autenticación.');
+            return response()->json(['data' => []]);
+        }
+
         $userId = Auth::id();
         Log::info('ScrapingTaskController@data - Usuario autenticado', ['user_id' => $userId]);
+        Log::info('ScrapingTaskController@data - Buscando tareas para el usuario', ['user_id' => $userId]);
         
-        // Contar todas las tareas sin filtrar para comparar
-        $totalTasks = ScrapingTask::count();
-        $userTasks = ScrapingTask::where('user_id', $userId)->count();
-        
-        Log::info('ScrapingTaskController@data - Conteo de tareas', [
-            'total_tareas' => $totalTasks,
-            'tareas_usuario' => $userTasks
-        ]);
-        
-        $query = ScrapingTask::where('user_id', $userId)->select([
-            'id', 'source', 'keyword', 'region', 'status', 'api_task_id', 'created_at'
-        ]);
+        // **CORRECCIÓN 2: Restaurar el filtro por user_id**
+        // Esta es la corrección más importante. Asegura que la consulta SOLO
+        // obtenga las tareas que pertenecen al usuario que ha iniciado sesión.
+        // Sin esta línea, todos los usuarios verían todas las tareas.
+        $query = ScrapingTask::where('user_id', $userId)
+            ->select([
+                'id', 'source', 'keyword', 'region', 'status', 'api_task_id', 'created_at'
+            ]);
 
         try {
-        // Obtener los IDs de las tareas para depuración
-        $taskIds = $query->pluck('id')->toArray();
-        Log::info('ScrapingTaskController@data - IDs de tareas encontradas', ['task_ids' => $taskIds]);
-        
-        return DataTables::of($query)
+            return DataTables::of($query)
                 ->editColumn('created_at', fn($task) => $task->created_at ? $task->created_at->format('Y-m-d H:i:s') : '-')
                 ->editColumn('region', fn($task) => $task->region ?: '-')
                 ->editColumn('api_task_id', fn($task) => $task->api_task_id ?: '-')
                 ->editColumn('status', function ($task) {
-                    $status = $task->status ?? 'unknown';
-                    $badgeClass = 'bg-slate-100 text-slate-700 dark:bg-slate-700 dark:text-slate-300';
-                    switch (strtolower($status)) {
+                    $status = strtolower($task->status ?? 'unknown');
+                    $badgeClass = 'bg-slate-100 text-slate-700 dark:bg-slate-700 dark:text-slate-300'; // Default
+                    switch ($status) {
                         case 'completed': $badgeClass = 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300'; break;
                         case 'failed': $badgeClass = 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300'; break;
                         case 'pending': $badgeClass = 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900 dark:text-yellow-300'; break;
                         case 'processing': $badgeClass = 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300'; break;
                     }
-                    return '<span class="inline-block px-2 py-0.5 rounded-full text-xs font-medium ' . $badgeClass . '">' . __($status) . '</span>';
+                    return '<span class="inline-block px-2 py-0.5 rounded-full text-xs font-medium ' . $badgeClass . '">' . __(ucfirst($status)) . '</span>';
                 })
                 ->addColumn('actions', function($task) {
                     // --- Lógica de botones ---
                     $isEditable = $task->status === 'pending' && $task->api_task_id === null;
-                    $isCompleted = strtolower($task->status ?? '') === 'completed'; // Comparación insensible a mayúsculas
+                    $isCompleted = strtolower($task->status ?? '') === 'completed';
 
                     $editClass = $isEditable ? 'editTask' : 'disabled';
                     $deleteClass = $isEditable ? 'deleteTask' : 'disabled';
@@ -77,32 +82,34 @@ class ScrapingTaskController extends Controller
                     $deleteTitle = $isEditable ? __('Delete Task') : __('Cannot delete processed task');
                     $viewContactsTitle = $isCompleted ? __('View Found Contacts') : __('Task not completed yet');
 
+                    // **MEJORA: Usar htmlspecialchars para los atributos de datos**
+                    // Previene problemas si el keyword o la región contienen comillas u otros caracteres especiales.
+                    $keywordAttr = htmlspecialchars($task->keyword, ENT_QUOTES, 'UTF-8');
+                    $regionAttr = htmlspecialchars($task->region, ENT_QUOTES, 'UTF-8');
+
                     // Botón Editar
                     $editButton = <<<HTML
                         <span class="action-icon {$editClass}"
                             data-id="{$task->id}"
-                            data-keyword="{$task->keyword}"
-                            data-region="{$task->region}"
+                            data-keyword="{$keywordAttr}"
+                            data-region="{$regionAttr}"
                             data-source="{$task->source}"
                             title="{$editTitle}">
                             <iconify-icon icon="heroicons:pencil-square"></iconify-icon>
                         </span>
                     HTML;
 
-                    // Botón Ver Contactos (con manejo de error de ruta)
+                    // Botón Ver Contactos
                     $viewContactsButton = '';
                     if ($isCompleted) {
                         try {
-                            // Intenta generar la URL. Si falla, $viewUrl será null.
                             $viewUrl = route('scraping.tasks.contacts', $task->id);
                             $viewContactsButton = '<a href="' . $viewUrl . '" class="action-icon viewContacts" title="' . $viewContactsTitle . '"><iconify-icon icon="heroicons:eye"></iconify-icon></a>';
-                        } catch (Throwable $e) { // Usar Throwable para capturar más errores
+                        } catch (Throwable $e) {
                             Log::error("Error al generar ruta 'scraping.tasks.contacts' para Tarea ID {$task->id}: " . $e->getMessage());
-                            // Mostrar icono desactivado si la ruta falla
                             $viewContactsButton = '<span class="action-icon disabled" title="' . __('Route error') . '"><iconify-icon icon="heroicons:exclamation-circle"></iconify-icon></span>';
                         }
                     } else {
-                        // Mostrar icono desactivado si no está completada
                         $viewContactsButton = '<span class="action-icon disabled" title="' . $viewContactsTitle . '"><iconify-icon icon="heroicons:eye-slash"></iconify-icon></span>';
                     }
 
@@ -114,15 +121,12 @@ class ScrapingTaskController extends Controller
                         </span>
                     HTML;
 
-                    // Combinar botones
                     return '<div class="actions-wrapper">' . $editButton . $viewContactsButton . $deleteButton . '</div>';
                 })
                 ->rawColumns(['actions', 'status'])
-                ->orderColumn('created_at', fn($query, $order) => $query->orderBy('created_at', $order))
-                ->orderColumn('id', fn($query, $order) => $query->orderBy('id', $order))
                 ->make(true);
 
-        } catch (Throwable $e) { // Capturar Throwable para errores más generales
+        } catch (Throwable $e) {
             Log::error('Error al generar datos para DataTables en ScrapingTaskController@data: ' . $e->getMessage(), ['exception' => $e]);
             return response()->json([
                 'error' => __('Could not load tasks data.'),
@@ -137,6 +141,12 @@ class ScrapingTaskController extends Controller
      */
     public function store(Request $request)
     {
+        $userId = Auth::id();
+        Log::info('ScrapingTaskController@store - Creando nueva tarea', [
+            'user_id' => $userId,
+            'request_data' => $request->only(['keyword', 'region', 'source'])
+        ]);
+        
         $validated = $request->validate([
             'keyword' => 'required|string|max:255',
             'region' => 'nullable|string|max:255',
@@ -144,15 +154,15 @@ class ScrapingTaskController extends Controller
         ]);
 
         try {
-            ScrapingTask::create([
-                'user_id' => Auth::id(),
+            $task = ScrapingTask::create([
+                'user_id' => $userId,
                 'keyword' => $validated['keyword'],
                 'region' => $validated['region'] ?: null,
                 'source' => $validated['source'],
                 'status' => 'pending',
-                'api_task_id' => null,
-                'ollama_task_id' => null,
             ]);
+            
+            Log::info('ScrapingTaskController@store - Tarea creada correctamente', ['task_id' => $task->id]);
 
             return redirect()->route('scraping.tasks.index')->with('success', __('Scraping task created successfully. It will be processed soon.'));
 
@@ -167,9 +177,11 @@ class ScrapingTaskController extends Controller
      */
     public function update(Request $request, ScrapingTask $task)
     {
+        // Verificación de autorización
         if ($task->user_id !== Auth::id()) {
             return response()->json(['error' => __('Unauthorized')], 403);
         }
+        // Verificación de estado
         if ($task->status !== 'pending' || $task->api_task_id !== null) {
              return response()->json(['error' => __('This task cannot be edited anymore.')], 422);
         }
@@ -181,11 +193,7 @@ class ScrapingTaskController extends Controller
         ]);
 
          try {
-            $task->update([
-                'keyword' => $validated['keyword'],
-                'region' => $validated['region'] ?: null,
-                'source' => $validated['source'],
-            ]);
+            $task->update($validated);
             return response()->json(['success' => __('Task updated successfully!')]);
         } catch (Throwable $e) {
             Log::error("Error al actualizar ScrapingTask ID {$task->id}: " . $e->getMessage(), ['exception' => $e]);
@@ -198,9 +206,11 @@ class ScrapingTaskController extends Controller
      */
     public function destroy(ScrapingTask $task)
     {
-         if ($task->user_id !== Auth::id()) {
+        // Verificación de autorización
+        if ($task->user_id !== Auth::id()) {
             return response()->json(['error' => __('Unauthorized')], 403);
         }
+        // Verificación de estado
         if ($task->status !== 'pending' || $task->api_task_id !== null) {
              return response()->json(['error' => __('This task cannot be deleted.')], 422);
         }
@@ -219,16 +229,20 @@ class ScrapingTaskController extends Controller
      */
     public function showContacts(ScrapingTask $task)
     {
+        // Verificación de autorización
         if ($task->user_id !== Auth::id()) {
             abort(403, 'Unauthorized action.');
         }
+
+        // Cargar los contactos con paginación
         $contacts = $task->contacts()->paginate(25);
-         $breadcrumbItems = [
+
+        $breadcrumbItems = [
             ['name' => __('Dashboard'), 'url' => '/dashboard'],
             ['name' => __('Scraping Tasks Manager'), 'url' => route('scraping.tasks.index')],
-            ['name' => __('Task Contacts') . ' (ID: ' . $task->id . ')', 'active' => true],
+            ['name' => __('Task Contacts') . ' (ID: ' . $task->id . ')'],
         ];
-        // Asegúrate que la vista 'scraping.contacts' existe
+
         return view('scraping.contacts', compact('task', 'contacts', 'breadcrumbItems'));
     }
 }
