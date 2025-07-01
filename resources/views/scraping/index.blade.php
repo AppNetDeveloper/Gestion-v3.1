@@ -108,13 +108,11 @@
         </div>
     </div>
 
-    {{-- Additional Styles --}}
+    {{-- Los estilos no necesitan cambios --}}
     @push('styles')
         <link rel="stylesheet" href="https://cdn.datatables.net/1.13.4/css/dataTables.tailwindcss.min.css">
-        <link rel="stylesheet" href="https://cdn.datatables.net/responsive/2.2.9/css/responsive.dataTables.min.css">
         <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css">
         <style>
-            /* --- DataTables Styling Adjustments --- */
             #tasksTable { border-collapse: separate; border-spacing: 0; border: 1px solid #e2e8f0; border-radius: 0.5rem; overflow: hidden; }
             .dark #tasksTable { border-color: #334155; }
             #tasksTable thead th { border-bottom: 1px solid #e2e8f0; padding: 0.75rem 1rem; }
@@ -124,17 +122,15 @@
             .dark #tasksTable tbody tr { border-bottom-color: #334155; }
             #tasksTable tbody tr:last-child { border-bottom: none; }
             #tasksTable td:last-child { text-align: center; }
-            #tasksTable .actions-wrapper { display: inline-flex; gap: 0.75rem; align-items: center; } /* Aumentado gap */
+            #tasksTable .actions-wrapper { display: inline-flex; gap: 0.75rem; align-items: center; }
             #tasksTable .action-icon { display: inline-block; color: #64748b; transition: color 0.15s ease-in-out; font-size: 1.25rem; cursor: pointer; }
             .dark #tasksTable .action-icon { color: #94a3b8; }
             #tasksTable .action-icon:hover { color: #1e293b; }
             .dark #tasksTable .action-icon:hover { color: #f1f5f9; }
             #tasksTable .action-icon.deleteTask:hover { color: #ef4444; }
             #tasksTable .action-icon.editTask:hover { color: #3b82f6; }
-            #tasksTable .action-icon.viewContacts:hover { color: #10b981; } /* Color para ver contactos */
+            #tasksTable .action-icon.viewContacts:hover { color: #10b981; }
             #tasksTable .action-icon.disabled { opacity: 0.4; cursor: not-allowed; pointer-events: none; }
-
-            /* DataTables Controls */
             .dataTables_wrapper .dataTables_length, .dataTables_wrapper .dataTables_filter { margin-bottom: 1.5rem; }
             .dataTables_wrapper .dataTables_filter input { border: 1px solid #cbd5e1; border-radius: 0.375rem; padding: 0.5rem 0.75rem; background-color: white; }
             .dark .dataTables_wrapper .dataTables_filter input { background-color: #1e293b; border-color: #334155; color: #e2e8f0; }
@@ -149,8 +145,6 @@
             .dataTables_wrapper .dataTables_paginate .paginate_button.disabled, .dataTables_wrapper .dataTables_paginate .paginate_button.disabled:hover { opacity: 0.5; cursor: not-allowed; }
             .dataTables_wrapper .dataTables_info { padding-top: 0.5rem; font-size: 0.875rem; color: #64748b; }
             .dark .dataTables_wrapper .dataTables_info { color: #94a3b8; }
-
-            /* SweetAlert2 Customization */
             .swal2-popup { border-radius: 0.5rem; background-color: #ffffff; }
             .dark .swal2-popup { background-color: #1e293b; color: #e2e8f0; }
             .dark .swal2-title { color: #f1f5f9; }
@@ -164,127 +158,81 @@
     @endpush
 
     @push('scripts')
-        {{-- Asegúrate de que jQuery y DataTables están cargados antes de este script --}}
+        {{-- CAMBIO: Simplificamos los scripts para que coincidan con el fichero que SÍ funciona --}}
         <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
         <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
         <script src="https://cdn.datatables.net/1.13.4/js/jquery.dataTables.min.js"></script>
-        <script src="https://cdn.datatables.net/1.13.4/js/dataTables.tailwindcss.min.js"></script>
-        <script src="https://cdn.datatables.net/responsive/2.2.9/js/dataTables.responsive.min.js"></script>
-
+        {{-- Los scripts de Tailwind y Responsive para DataTables se han eliminado temporalmente --}}
+        
         <script>
-            // Log inmediato para confirmar que el script se carga
-            console.log('SCRIPT DE SCRAPING CARGADO - ' + new Date().toISOString());
-            
-            // Alert para confirmar visualmente
-            alert('Script de scraping cargado correctamente');
+            // Volvemos a añadir los console.log para verificar
+            console.log('SCRIPT DE SCRAPING CARGADO (VERSIÓN SIMPLIFICADA) - ' + new Date().toISOString());
             
             $(document).ready(function() {
-                console.log('DOCUMENT READY EJECUTADO - ' + new Date().toISOString());
+                console.log('DOCUMENT READY EJECUTADO (VERSIÓN SIMPLIFICADA) - ' + new Date().toISOString());
 
+                // El resto del script no necesita cambios, ya que la lógica es la misma.
                 // --- Toast ---
-                 function buildToast () {
-                    const isDark = document.documentElement.classList.contains('dark');
-                    return Swal.mixin({ toast: true, position: 'top-end', showConfirmButton: false, timer: 3000, timerProgressBar: true, backdrop: false, heightAuto: false, allowOutsideClick: false, allowEnterKey: false, returnFocus: false, focusConfirm: false, focusCancel: false, focusDeny: false, draggable: false, keydownListenerCapture: false, customClass: { popup: isDark ? 'dark' : '' }, didOpen: (toast) => { toast.addEventListener('mouseenter', Swal.stopTimer); toast.addEventListener('mouseleave', Swal.resumeTimer); } });
-                }
+                function buildToast () { const isDark = document.documentElement.classList.contains('dark'); return Swal.mixin({ toast: true, position: 'top-end', showConfirmButton: false, timer: 3000, timerProgressBar: true, backdrop: false, customClass: { popup: isDark ? 'dark' : '' }, didOpen: (toast) => { toast.addEventListener('mouseenter', Swal.stopTimer); toast.addEventListener('mouseleave', Swal.resumeTimer); } }); }
                 let Toast = buildToast();
                 const observer = new MutationObserver(() => { Toast = buildToast(); });
                 observer.observe(document.documentElement, { attributes: true });
-                // --- End Toast ---
-
-                 function getSwalWidth () { return window.innerWidth < 768 ? '95%' : '600px'; }
-
-                // --- Initialize DataTable ---
-                console.log("PUNTO DE CONTROL 1: Antes de inicializar DataTable");
-                alert('Punto de control 1: Antes de inicializar DataTable');
-                console.log("Inicializando DataTable para tareas de scraping...");
+                function getSwalWidth () { return window.innerWidth < 768 ? '95%' : '600px'; }
                 
+                // --- Initialize DataTable ---
                 if ($('#tasksTable').length) {
-                    console.log('DataTable: #tasksTable encontrado, inicializando...');
                     const urlData = $('#tasksTable').data('url');
                     console.log('DataTable: URL de datos:', urlData);
+                    
                     const tasksTable = $('#tasksTable').DataTable({
-        processing: true,
-        serverSide: true,
-        ajax: {
-            url: urlData,
-            type: 'GET',
-            beforeSend: function() {
-                console.log('DataTable: Enviando petición AJAX a', urlData);
-            },
-            error: function (xhr, error, thrown) {
-                console.error("DataTables Error:", error, thrown, xhr.responseText);
-                alert('Error cargando datos DataTable: ' + error + ' ' + thrown + ' ' + xhr.responseText);
-                $('#tasksTable_processing').hide();
-                $('#tasksTable tbody').html(
-                    '<tr><td colspan="8" class="text-center text-red-500 py-4">{{ __("Could not load tasks data.") }}</td></tr>'
-                );
-            },
-            dataSrc: function(json) {
-                console.log("DataTables - Datos recibidos:", json);
-                if (json.data && json.data.length === 0) {
-                    console.log("DataTables - No se encontraron tareas");
-                } else if (json.data) {
-                    console.log("DataTables - Tareas encontradas:", json.data.length);
-                }
-                return json.data;
-            }
-        },
-                },
-                            url: $('#tasksTable').data('url'),
+                        processing: true,
+                        serverSide: true,
+                        ajax: {
+                            url: urlData,
                             type: 'GET',
                             error: function (xhr, error, thrown) {
-                                 console.error("DataTables Error:", error, thrown, xhr.responseText);
-                                 $('#tasksTable_processing').hide();
-                                 $('#tasksTable tbody').html(
-                                     '<tr><td colspan="8" class="text-center text-red-500 py-4">{{ __("Could not load tasks data.") }}</td></tr>'
-                                 );
+                                console.error("DataTables AJAX Error:", { error, thrown, status: xhr.status, responseText: xhr.responseText });
+                                alert('ERROR FATAL AL CARGAR DATOS: Revisa la consola (F12). Status: ' + xhr.status);
+                            },
+                            dataSrc: function(json) {
+                                console.log("DataTable: Datos recibidos:", json);
+                                return json.data;
                             }
                         },
                         columns: [
-                            { data: 'id', name: 'id', className: 'text-center w-12' },
+                            { data: 'id', name: 'id' },
                             { data: 'source', name: 'source' },
                             { data: 'keyword', name: 'keyword' },
-                            { data: 'region', name: 'region', render: data => data || '-' },
-                            { data: 'status', name: 'status', className: 'text-center' },
-                            { data: 'api_task_id', name: 'api_task_id', render: data => data || '-' },
+                            { data: 'region', name: 'region', defaultContent: '-' },
+                            { data: 'status', name: 'status' },
+                            { data: 'api_task_id', name: 'api_task_id', defaultContent: '-' },
                             { data: 'created_at', name: 'created_at' },
-                            { data: 'actions', name: 'actions', orderable: false, searchable: false, className: 'text-center w-32' } // Aumentar ancho para 3 botones
+                            { data: 'actions', name: 'actions', orderable: false, searchable: false }
                         ],
-                        // *** La función render para la columna 'actions' ahora se define en el controlador ***
-                        // Esto es necesario porque necesitamos la URL de la ruta 'scraping.tasks.contacts'
-                        // que solo se puede generar en el backend con route().
                         order: [[0, "desc"]],
-                        responsive: true,
-                        autoWidth: false,
                         language: {
                             url: "{{ app()->getLocale() == 'es' ? '//cdn.datatables.net/plug-ins/1.13.4/i18n/es-ES.json' : '//cdn.datatables.net/plug-ins/1.13.4/i18n/en-GB.json' }}"
                         },
-                        pagingType: 'simple_numbers',
                     });
 
-                    // --- Botón Refrescar Tabla ---
+                    // --- Event Handlers ---
                     $('#refreshTasks').on('click', function() {
-                        tasksTable.ajax.reload(null, false);
                         Toast.fire({ icon: 'info', title: '{{ __("Task list refreshed") }}' });
+                        tasksTable.ajax.reload(null, false);
                     });
-
-                    // --- Auto Refresh (Cada 1 minuto) ---
                     setInterval(function () {
                         if ($.fn.DataTable.isDataTable('#tasksTable')) {
-                            console.log('Recargando datos de DataTable (cada 1 min)...');
                             tasksTable.ajax.reload(null, false);
                         }
                     }, 60000);
+                } else {
+                    console.error("DataTable: ERROR CRÍTICO - No se encontró el elemento #tasksTable.");
+                }
 
-                } // End if ($('#tasksTable').length)
-
-                // --- DataTable Action Handlers (Delegados al tbody) ---
-
-                // Handler for "Delete Task"
+                // --- Handlers para acciones (sin cambios) ---
                 $('#tasksTable tbody').on('click', '.deleteTask:not(.disabled)', function () {
                     const taskId = $(this).data('id');
                     const taskRow = $(this).closest('tr');
-
                     Swal.fire({
                         title: '{{ __("Are you sure?") }}',
                         text: '{{ __("This will delete the pending task.") }}',
@@ -299,7 +247,6 @@
                     }).then((result) => {
                         if (result.isConfirmed) {
                             const deleteUrl = `{{ url('scraping-tasks') }}/${taskId}`;
-
                             fetch(deleteUrl, {
                                 method: 'DELETE',
                                 headers: {
@@ -326,14 +273,11 @@
                         }
                     });
                 });
-
-                 // Handler for "Edit Task"
                 $('#tasksTable tbody').on('click', '.editTask:not(.disabled)', function () {
                     const taskId = $(this).data('id');
                     const keyword = $(this).data('keyword');
                     const region = $(this).data('region') || '';
                     const source = $(this).data('source');
-
                     Swal.fire({
                         title: '{{ __("Edit Pending Task") }} (ID: ' + taskId + ')',
                         width: getSwalWidth(),
@@ -365,7 +309,6 @@
                             const newKeyword = document.getElementById('edit_keyword').value.trim();
                             const newRegion = document.getElementById('edit_region').value.trim();
                             const newSource = document.getElementById('edit_source').value;
-
                             if (!newKeyword) {
                                 Swal.showValidationMessage('{{ __("Keyword/Activity cannot be empty") }}');
                                 return false;
@@ -380,7 +323,6 @@
                         if (result.isConfirmed) {
                             const data = result.value;
                             const updateUrl = `{{ url('scraping-tasks') }}/${taskId}`;
-
                             fetch(updateUrl, {
                                 method: 'PUT',
                                 headers: {
@@ -412,12 +354,7 @@
                         }
                     });
                 });
-
-                // Nota: El botón "View Contacts" es un enlace <a> generado por el controlador,
-                // por lo que no necesita un manejador de eventos JS aquí.
-
-                console.log('FIN DEL DOCUMENT READY - ' + new Date().toISOString());
-            }); // End $(document).ready
+            });
         </script>
     @endpush
 </x-app-layout>
