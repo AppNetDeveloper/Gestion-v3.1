@@ -91,9 +91,6 @@ class SearchConfig:
     bing_enabled: bool = True
     brave_enabled: bool = True
     
-    # Configuración de la API de Brave
-    brave_api_key: str = "BSAcXMk3AVqFu0jmv0iQ35tsxdwjuhO"  # API key de Brave Search
-    
     # Número de resultados por motor
     results_per_engine: int = 10
     
@@ -115,11 +112,6 @@ class SearchConfig:
         self.bing_enabled = os.getenv('BING_ENABLED', str(self.bing_enabled)).lower() == 'true'
         self.brave_enabled = os.getenv('BRAVE_ENABLED', str(self.brave_enabled)).lower() == 'true'
         
-        # Configuración de la API de Brave
-        brave_key = os.getenv('BRAVE_API_KEY')
-        if brave_key:
-            self.brave_api_key = brave_key
-            
         # Configuración de timeouts
         self.google_timeout = int(os.getenv('GOOGLE_TIMEOUT', self.google_timeout))
         self.duckduckgo_timeout = int(os.getenv('DUCKDUCKGO_TIMEOUT', self.duckduckgo_timeout))
@@ -411,10 +403,10 @@ async def extract_data_from_url_async(url: str, client: httpx.AsyncClient) -> Di
         "url": url  # Añadimos la URL para facilitar el seguimiento
     }
     
-    # Saltar LinkedIn ya que bloquea las peticiones
-    if is_linkedin_url(url):
-        logger.info(f"[Async Extract] Saltando LinkedIn: {url}")
-        return data
+    # # Saltar LinkedIn ya que bloquea las peticiones
+    # if is_linkedin_url(url):
+    #     logger.info(f"[Async Extract] Saltando LinkedIn: {url}")
+    #     return data
         
     try:
         logger.info(f"[Async Extract] Procesando URL: {url}")
@@ -796,7 +788,7 @@ async def run_google_ddg_limpio_task(keyword: str, results_num: int, callback_ur
             engines.append("gigablast")
         if search_config.bing_enabled:
             engines.append("bing")
-        if search_config.brave_enabled and search_config.brave_api_key:
+        if search_config.brave_enabled:
             engines.append("brave")
             
         if not engines:
@@ -820,7 +812,6 @@ async def run_google_ddg_limpio_task(keyword: str, results_num: int, callback_ur
             search_results = await search_multiple_engines(
                 query=keyword,
                 engines=engines,
-                brave_api_key=search_config.brave_api_key if 'brave' in engines else None,
                 num_results=search_config.results_per_engine,
                 timeouts=timeouts
             )

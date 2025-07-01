@@ -9,6 +9,7 @@ import logging
 import aiohttp
 from urllib.parse import urlparse, parse_qs, urlencode
 import re
+from collections import defaultdict
 
 # Configuración de logging
 logging.basicConfig(
@@ -52,55 +53,52 @@ def get_headers() -> Dict[str, str]:
 
 # ==================== GIGABLAST ====================
 
-async def search_google(query: str, num_results: int = 10, lang: str = 'es', timeout: int = 60, start: int = 0) -> List[str]:
+# Reemplazado por una implementación más robusta usando la librería googlesearch
+from googlesearch import search as google_search_lib
+
+async def search_google(
+    query: str, 
+    num_results: int = 10, 
+    lang: str = "es"
+) -> List[str]:
     """
-    Realiza una búsqueda en Google y devuelve las URLs de los resultados.
+    Realiza una búsqueda en Google usando la librería googlesearch-python.
     
     Args:
         query: Término de búsqueda
-        num_results: Número máximo de resultados a devolver
+        num_results: Número de resultados a devolver
         lang: Idioma de la búsqueda
-        timeout: Tiempo máximo de espera en segundos
-        start: Índice del primer resultado a devolver (para paginación)
         
     Returns:
-        Lista de URLs de resultados
+        Lista de URLs encontradas
     """
+    logger.info(f"Iniciando búsqueda en Google para '{query}' con {num_results} resultados.")
+    # Añadir un retardo aleatorio para evitar el bloqueo
+    sleep_time = random.uniform(5, 15)
+    logger.info(f"Esperando {sleep_time:.2f} segundos antes de la búsqueda en Google...")
+    await asyncio.sleep(sleep_time)
     try:
-        base_url = "https://www.google.com/search"
-        params = {
-            'q': query,
-            'num': min(num_results, 10),  # Google muestra máximo 10 resultados por página
-            'hl': lang,
-            'start': start,
-            'safe': 'active',
-            'filter': '0',  # Desactivar agrupación de resultados similares
-            'pws': '0'  # Desactivar búsqueda personalizada
-        }
+        # La librería googlesearch es síncrona, por lo que la ejecutamos en un thread
+        # para no bloquear el bucle de eventos de asyncio.
+        results = await asyncio.to_thread(
+            google_search_lib,
+            query,  # Pasado como argumento posicional
+            num_results=num_results,
+            lang=lang
+        )
         
-        headers = get_headers()
+        # La librería devuelve un generador, lo convertimos a lista
+        urls = list(results)
         
-        async with aiohttp.ClientSession() as session:
-            async with session.get(base_url, params=params, headers=headers, timeout=timeout) as response:
-                response.raise_for_status()
-                html = await response.text()
-        
-        soup = BeautifulSoup(html, 'html.parser')
-        urls = []
-        
-        # Buscar enlaces en los resultados de búsqueda
-        urls = []
-        for link in soup.select('div.yuRUbf > a'):
-            url = link.get('href', '')
-            if url and url.startswith(('http://', 'https://')):
-                urls.append(url)
-                if len(urls) >= num_results:
-                    break
-        
+        logger.info(f"Búsqueda en Google completada con {len(urls)} resultados.")
         return urls
-        
+
     except Exception as e:
-        logger.error(f"Error en búsqueda Google (start={start}): {str(e)}")
+        # Capturamos errores específicos si es necesario, como bloqueos de IP
+        if "HTTP Error 429" in str(e) or "Too Many Requests" in str(e):
+            logger.error(f"Error de Rate Limit en Google: {e}")
+        else:
+            logger.error(f"Error inesperado en búsqueda Google: {e}", exc_info=True)
         return []
 
 async def search_duckduckgo(query: str, num_results: int = 100, timeout: int = 30) -> List[str]:
@@ -115,72 +113,53 @@ async def search_duckduckgo(query: str, num_results: int = 100, timeout: int = 3
     Returns:
         Lista de URLs de resultados
     """
+    logger.info(f"Iniciando búsqueda en DuckDuckGo para '{query}' con {num_results} resultados.")
+    
+    def sync_search_with_retry():
+        from duckduckgo_search import DDGS
+        import time
+
+        thread_results = []
+        retries = 3
+        for i in range(retries):
+            try:
+                logger.info(f"Intento de búsqueda en DuckDuckGo {i+1}/{retries}...")
+                with DDGS(headers=get_headers(), timeout=timeout) as ddgs:
+                    for r in ddgs.text(query, max_results=num_results):
+                        if 'href' in r:
+                            thread_results.append(r['href'])
+                
+                logger.info(f"Búsqueda síncrona en DuckDuckGo completada con {len(thread_results)} resultados.")
+                return thread_results # Éxito, salir del bucle
+            
+            except Exception as e:
+                # Detectar errores de rate limit por el mensaje de error
+                if "Ratelimit" in str(e) or "429" in str(e) or "Too Many Requests" in str(e) or "202" in str(e):
+                    logger.warning(f"Error de Rate Limit en DuckDuckGo (intento {i+1}/{retries}): {e}")
+                    if i < retries - 1:
+                        wait_time = (i + 1) * 10 # Incrementar el tiempo de espera
+                        logger.info(f"Reintentando en {wait_time} segundos...")
+                        time.sleep(wait_time)
+                    else:
+                        logger.error("Se superó el número máximo de reintentos para DuckDuckGo.")
+                else:
+                    logger.error(f"Error inesperado en la búsqueda síncrona de DuckDuckGo: {e}", exc_info=True)
+                    if i < retries - 1:
+                        wait_time = 5
+                        logger.info(f"Reintentando en {wait_time} segundos...")
+                        time.sleep(wait_time)
+                    else:
+                        break # No reintentar en errores inesperados
+
+        return thread_results
+
     try:
-        # Primero intentamos con la biblioteca duckduckgo-search
-        try:
-            from duckduckgo_search import DDGS
-            with DDGS() as ddgs:
-                results = [r['href'] for r in ddgs.text(query, max_results=num_results)]
-                if results:
-                    return results[:num_results]
-        except Exception as e:
-            logger.warning(f"Error con duckduckgo-search: {str(e)}")
-        
-        # Si falla, intentamos con requests directamente
-        base_url = "https://html.duckduckgo.com/html/"
-        headers = get_headers()
-        headers.update({
-            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-            'Content-Type': 'application/x-www-form-urlencoded',
-            'Origin': 'https://html.duckduckgo.com',
-            'Referer': 'https://html.duckduckgo.com/'
-        })
-        
-        data = {
-            'q': query,
-            'b': '',
-            'kl': 'es-es',
-            'df': ''
-        }
-        
-        response = requests.post(
-            base_url, 
-            headers=headers, 
-            data=data, 
-            timeout=timeout,
-            allow_redirects=True
-        )
-        response.raise_for_status()
-        
-        soup = BeautifulSoup(response.text, 'html.parser')
-        urls = []
-        
-        # Buscar enlaces en los resultados de búsqueda
-        for result in soup.select('div.result__body'):
-            link = result.find('a', {'class': 'result__a'}, href=True)
-            if link:
-                url = link['href']
-                
-                # Limpiar la URL de DuckDuckGo
-                if url.startswith('//'):
-                    url = 'https:' + url
-                
-                # Extraer la URL real de los parámetros
-                if 'uddg=' in url:
-                    parsed = parse_qs(urlparse(url).query)
-                    if 'uddg' in parsed:
-                        url = parsed['uddg'][0]
-                
-                # Asegurarse de que la URL sea válida
-                if url.startswith(('http://', 'https://')) and 'duckduckgo.com' not in url:
-                    urls.append(url)
-                    if len(urls) >= num_results:
-                        break
-        
+        # Ejecutar la búsqueda síncrona con reintentos en un hilo separado
+        urls = await asyncio.to_thread(sync_search_with_retry)
+        logger.info(f"Búsqueda en DuckDuckGo completada con {len(urls)} resultados.")
         return urls
-        
     except Exception as e:
-        logger.error(f"Error en búsqueda DuckDuckGo: {str(e)}")
+        logger.error(f"Error al ejecutar la búsqueda de DuckDuckGo en un hilo: {e}", exc_info=True)
         return []
 
 async def search_gigablast(query: str, num_results: int = 100, timeout: int = 30, page: int = 1) -> List[str]:
@@ -250,14 +229,17 @@ async def search_gigablast(query: str, num_results: int = 100, timeout: int = 30
             link = result.select_one('a[href^="http"]')
             if link and 'href' in link.attrs:
                 url = link['href']
+                
+                # Limpiar la URL
+                clean_url = url.split('&')[0].split('?')[0].split('#')[0].rstrip('/')
+                
                 # Filtrar URLs no deseadas
-                if not any(domain in url.lower() for domain in [
+                if not any(domain in clean_url.lower() for domain in [
                     'google.', 'doubleclick.', 'webcache.', '100searchengines.',
                     'translate.google.', 'webcache.googleusercontent.com'
                 ]):
-                    # Limpiar la URL
-                    clean_url = url.split('&')[0].split('?')[0].split('#')[0].rstrip('/')
-                    if clean_url not in urls:  # Evitar duplicados
+                    # Evitar duplicados
+                    if clean_url not in urls:  
                         urls.append(clean_url)
                         if len(urls) >= num_results:
                             break
@@ -279,13 +261,12 @@ async def search_gigablast(query: str, num_results: int = 100, timeout: int = 30
 # Semaforo para limitar peticiones concurrentes a la API de Brave
 brave_semaphore = None
 
-async def search_brave(query: str, api_key: str, num_results: int = 10, timeout: int = 60, offset: int = 0, retry_count: int = 0) -> List[str]:
+async def search_brave(query: str, num_results: int = 10, timeout: int = 60, offset: int = 0, retry_count: int = 0) -> List[str]:
     """
     Realiza una búsqueda usando la API de Brave Search con manejo de concurrencia y rate limiting.
     
     Args:
         query: Término de búsqueda
-        api_key: Clave API de Brave Search
         num_results: Número máximo de resultados a devolver (máx 100 por petición)
         timeout: Tiempo máximo de espera en segundos
         offset: Desplazamiento para la paginación de resultados
@@ -294,8 +275,11 @@ async def search_brave(query: str, api_key: str, num_results: int = 10, timeout:
     Returns:
         Lista de URLs de resultados
     """
-    global brave_semaphore
     import os
+    api_key = os.getenv('BRAVE_API_KEY')
+    if not api_key:
+        raise ValueError("La variable de entorno BRAVE_API_KEY no está configurada")
+    global brave_semaphore
     
     # Obtener configuración de delays y reintentos
     max_concurrent = int(os.getenv('BRAVE_MAX_CONCURRENT', '1'))
@@ -340,7 +324,7 @@ async def search_brave(query: str, api_key: str, num_results: int = 10, timeout:
                 "safesearch": "moderate",
                 "result_filter": "web",
                 "country": "es",  # Priorizar resultados de España
-                "ui_lang": "es"    # Idioma de la interfaz
+                "ui_lang": "es-ES"    # Idioma de la interfaz
             }
             
             # Usar aiohttp para mejor manejo de timeouts asíncronos
@@ -349,9 +333,9 @@ async def search_brave(query: str, api_key: str, num_results: int = 10, timeout:
                 
                 try:
                     async with session.get(
-                        url, 
-                        headers=headers, 
-                        params=params, 
+                        url,
+                        headers=headers,
+                        params=params,
                         timeout=timeout,
                         ssl=False  # Desactivar verificación SSL si hay problemas
                     ) as response:
@@ -365,7 +349,7 @@ async def search_brave(query: str, api_key: str, num_results: int = 10, timeout:
                             retry_after = int(response.headers.get('Retry-After', error_delay))
                             logger.warning(f"Demasiadas peticiones. Rate limit alcanzado. Reintentando en {retry_after} segundos...")
                             await asyncio.sleep(retry_after)
-                            return await search_brave(query, api_key, num_results, timeout, offset, min(retry_count + 1, max_retries))
+                            return await search_brave(query, num_results, timeout, offset, min(retry_count + 1, max_retries))
                             
                         elif response.status >= 500:
                             logger.error(f"Error del servidor (HTTP {response.status}). Reintentando...")
@@ -400,25 +384,35 @@ async def search_brave(query: str, api_key: str, num_results: int = 10, timeout:
                                     break
                         
                         logger.info(f"Búsqueda Brave completada. Resultados: {len(results)}/{num_results}")
+
+                        # Si hemos obtenido menos resultados de los solicitados, no hay más páginas.
+                        if len(results) < count:
+                            logger.info("No hay más páginas de resultados en Brave.")
+                            return results
+                            
                         return results
                         
                 except aiohttp.ClientError as e:
+                    if "422" in str(e):
+                        logger.warning(f"Error 422 en Brave, probablemente no hay más páginas: {e}")
+                        return [] # Devolver lista vacía para que no se propague el error
                     if retry_count < max_retries:
                         logger.warning(f"Error de conexión (intento {retry_count + 1}/{max_retries}): {str(e)}")
-                        return await search_brave(query, api_key, num_results, timeout, offset, retry_count + 1)
-                    raise
+                        return await search_brave(query, num_results, timeout, offset, retry_count + 1)
+                    logger.error(f"Error de cliente en Brave después de {max_retries} intentos: {e}")
+                    return []
                 
     except asyncio.TimeoutError as e:
         if retry_count < max_retries:
             logger.warning(f"Timeout en la petición (intento {retry_count + 1}/{max_retries}). Reintentando...")
-            return await search_brave(query, api_key, num_results, timeout, offset, retry_count + 1)
+            return await search_brave(query, num_results, timeout, offset, retry_count + 1)
         logger.error(f"Tiempo de espera agotado en búsqueda Brave después de {max_retries} intentos")
         return []
         
     except Exception as e:
         if retry_count < max_retries and not isinstance(e, aiohttp.ClientResponseError):
             logger.warning(f"Error en la petición (intento {retry_count + 1}/{max_retries}): {str(e)}")
-            return await search_brave(query, api_key, num_results, timeout, offset, retry_count + 1)
+            return await search_brave(query, num_results, timeout, offset, retry_count + 1)
             
         logger.error(f"Error en búsqueda Brave después de {retry_count + 1} intentos: {str(e)}", exc_info=True)
         return []
@@ -465,7 +459,7 @@ async def search_bing(query: str, num_results: int = 10, timeout: int = 30, firs
             async with session.get(base_url, params=params, headers=headers, timeout=timeout) as response:
                 response.raise_for_status()
                 html = await response.text()
-        
+
         soup = BeautifulSoup(html, 'html.parser')
         results = []
         
@@ -516,7 +510,6 @@ async def safe_search(coroutine, engine_name, timeout):
 async def search_multiple_engines(
     query: str,
     engines: list = ["google", "duckduckgo"],
-    brave_api_key: str = None,
     num_results: int = 500,  # Aumentado de 10 a 20 resultados por defecto
     timeouts: Dict[str, int] = None,
     pages: int = 10  # Número de páginas a buscar por motor
@@ -540,7 +533,6 @@ async def search_multiple_engines(
     Args:
         query: Término de búsqueda
         engines: Lista de motores a usar ("google", "duckduckgo", "gigablast", "bing", "brave")
-        brave_api_key: Clave API para Brave Search (requerido si se usa "brave")
         num_results: Número máximo de resultados por motor
         timeouts: Diccionario con timeouts personalizados por motor
         
@@ -580,26 +572,23 @@ async def search_multiple_engines(
     search_tasks = []
     
     if "google" in engines:
-        # Para Google, manejamos la paginación manualmente
-        # Limitar a máximo 2 intentos para Google
-        google_pages = min(2, pages)
-        for page in range(google_pages):
-            start = page * 10  # Google muestra 10 resultados por página
-            search_tasks.append((
+        # Para Google, la librería maneja la paginación internamente.
+        # Hacemos una sola petición con el número total de resultados deseados (e.g., 20).
+        search_tasks.append((
+            "google",
+            safe_search(
+                search_google(query, num_results=20),
                 "google",
-                safe_search(
-                    search_google(query, num_results=10, start=start, timeout=engine_timeouts['google']),
-                    "google",
-                    engine_timeouts['google'] + 5  # Dar 5 segundos adicionales al timeout
-                )
-            ))
+                engine_timeouts['google'] + 5
+            )
+        ))
     
     if "duckduckgo" in engines:
         # DuckDuckGo maneja la paginación internamente
         search_tasks.append((
             "duckduckgo",
             safe_search(
-                search_duckduckgo(query, num_results * pages, timeout=engine_timeouts['duckduckgo']),
+                search_duckduckgo(query, num_results * pages),
                 "duckduckgo",
                 engine_timeouts['duckduckgo'] + 5 * pages  # Aumentar timeout para más resultados
             )
@@ -609,7 +598,7 @@ async def search_multiple_engines(
         search_tasks.append((
             "gigablast",
             safe_search(
-                search_gigablast(query, num_results, timeout=engine_timeouts['gigablast']),
+                search_gigablast(query, num_results),
                 "gigablast",
                 engine_timeouts['gigablast'] + 5
             )
@@ -622,60 +611,62 @@ async def search_multiple_engines(
             search_tasks.append((
                 "bing",
                 safe_search(
-                    search_bing(query, num_results=10, first=first, timeout=engine_timeouts['bing']),
+                    search_bing(query, num_results=10, first=first),
                     "bing",
                     engine_timeouts['bing'] + 5
                 )
             ))
     
-    if "brave" in engines and brave_api_key:
+    if "brave" in engines:
         # Brave Search con paginación
         for page in range(pages):
             offset = page * 10  # Brave usa offset para paginación
             search_tasks.append((
                 "brave",
                 safe_search(
-                    search_brave(query, brave_api_key, num_results=10, offset=offset, timeout=engine_timeouts['brave']),
+                    search_brave(query, num_results=10, offset=offset),
                     "brave",
                     engine_timeouts['brave'] + 5
                 )
             ))
     
-    # Ejecutar búsquedas con manejo de rate limits
+    # Ejecutar búsquedas de forma concurrente usando asyncio.gather
     results = {}
     if search_tasks:
-        task_groups = {}
+        # Agrupar tareas por motor
+        task_groups = defaultdict(list)
         for name, task in search_tasks:
-            if name not in task_groups:
-                task_groups[name] = []
             task_groups[name].append(task)
         
         logger.info(f"Ejecutando búsquedas en motores: {list(task_groups.keys())}")
-        
-        search_results = {}
-        for engine, tasks in task_groups.items():
-            config = engine_config[engine]
-            last_error = None
+
+        async def run_engine_tasks(engine_name, task_list):
+            """Ejecuta todas las tareas para un motor y procesa los resultados."""
+            # Usar asyncio.gather para ejecutar todas las páginas de un motor en paralelo
+            page_results = await asyncio.gather(*task_list, return_exceptions=True)
             
-            for attempt in range(config['max_retries'] + 1):
-                try:
-                    result = await tasks[0]
-                    if result:  # Solo guardar si hay resultados
-                        search_results[engine] = result
-                    break
-                except Exception as e:
-                    last_error = e
-                    if attempt < config['max_retries']:
-                        delay = config['retry_delay'] * (attempt + 1)  # Backoff exponencial
-                        logger.warning(f"Intento {attempt + 1}/{config['max_retries']} fallido para {engine}. Reintentando en {delay}s...")
-                        await asyncio.sleep(delay)
+            # Aplanar la lista de resultados y filtrar errores o resultados vacíos
+            final_urls = []
+            for res in page_results:
+                if isinstance(res, list) and res:
+                    final_urls.extend(res)
+                elif isinstance(res, Exception):
+                    logger.error(f"Error en una tarea de '{engine_name}': {res}")
             
-            if last_error and engine not in search_results:
-                logger.error(f"Error final en {engine}: {str(last_error)}")
-                search_results[engine] = []
+            # Eliminar duplicados manteniendo el orden
+            unique_urls = list(dict.fromkeys(final_urls))
+            return engine_name, unique_urls
+
+        # Crear una corrutina para cada motor
+        engine_coroutines = [
+            run_engine_tasks(engine, tasks) for engine, tasks in task_groups.items()
+        ]
         
-        # Procesar resultados
-        results = search_results
+        # Ejecutar las corrutinas de todos los motores en paralelo
+        final_results = await asyncio.gather(*engine_coroutines)
+        
+        # Convertir la lista de tuplas (engine, urls) en un diccionario final
+        results = {engine: urls for engine, urls in final_results if urls}
     
     # Resumen de resultados
     result_summary = {k: len(v) for k, v in results.items()}
@@ -687,13 +678,10 @@ async def search_multiple_engines(
 if __name__ == "__main__":
     # Configuración de ejemplo
     test_query = "Python programming"
-    brave_api = "BSAcXMk3AVqFu0jmv0iQ35tsxdwjuhO"  # Usar la clave real en producción
-    
     # Realizar búsqueda en todos los motores
     results = search_multiple_engines(
         query=test_query,
         engines=["gigablast", "bing"],  # Sin Brave para la prueba
-        brave_api_key=brave_api,
         num_results=5
     )
     
