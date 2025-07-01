@@ -129,11 +129,7 @@ class ProcessScrapingTasks extends Command
             $this->info("Enviando solicitud a: " . $apiUrl);
             Log::info("Enviando solicitud a la API", ['url' => $apiUrl, 'payload' => $payload]);
             
-            $response = Http::timeout(15)->post($apiUrl, [
-                'keyword' => $payload['task_type'],
-                'results' => 10,
-                'callback_url' => $payload['callback_url']
-            ]);
+            $response = Http::timeout(15)->post($apiUrl, $payload);
             
             if ($response->successful()) {
                 $responseData = $response->json();
@@ -264,6 +260,7 @@ class ProcessScrapingTasks extends Command
         $payload = [
             'callback_url' => $callbackUrl,
             'task_type' => $task->source,
+            'keyword' => $task->keyword,
         ];
         
         $taskData = json_decode($task->data, true) ?: [];
