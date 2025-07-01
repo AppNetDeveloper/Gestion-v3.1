@@ -650,8 +650,9 @@ async def search_multiple_engines(
         ))
     
     if "bing" in engines:
-        # Bing con paginación
-        for page in range(pages):
+        # Bing con paginación - Ampliamos a más páginas (hasta 20)
+        bing_pages = min(20, pages * 2)  # Duplicamos las páginas para Bing, con un máximo de 20
+        for page in range(bing_pages):
             first = page * 10 + 1  # Bing usa first=1, 11, 21, etc.
             search_tasks.append((
                 "bing",
