@@ -101,7 +101,8 @@ setup_venv() {
             playwright \
             httpx \
             aiohttp \
-            googlesearch-python
+            googlesearch-python \
+            phonenumbers 
     fi
     
     # Instalar Playwright
@@ -128,6 +129,7 @@ info "Actualizando lista de paquetes..."
 as_root apt-get update -qq
 
 info "Instalando dependencias del sistema..."
+sudo apt-get install -y python3-phonenumbers
 as_root apt-get install -y --no-install-recommends \
     python3-venv \
     python3-pip \

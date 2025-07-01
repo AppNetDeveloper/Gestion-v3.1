@@ -90,20 +90,12 @@ async def search_google(query: str, num_results: int = 10, lang: str = 'es', tim
         
         # Buscar enlaces en los resultados de búsqueda
         urls = []
-        for result in soup.select('div.g'):
-            # Buscar el enlace principal del resultado
-            link = result.select_one('a[href^="/url?q="]')
-            if link:
-                # Extraer la URL real del parámetro q=
-                url = link['href']
-                if url.startswith('/url?q='):
-                    url = url.split('&')[0][7:]  # Eliminar '/url?q=' y cualquier parámetro adicional
-                if url.startswith('http'):
-                    # Decodificar caracteres especiales en la URL
-                    url = requests.utils.unquote(url)
-                    urls.append(url)
-                    if len(urls) >= num_results:
-                        break
+        for link in soup.select('div.yuRUbf > a'):
+            url = link.get('href', '')
+            if url and url.startswith(('http://', 'https://')):
+                urls.append(url)
+                if len(urls) >= num_results:
+                    break
         
         return urls
         

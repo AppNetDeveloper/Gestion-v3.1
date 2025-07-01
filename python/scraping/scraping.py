@@ -74,14 +74,14 @@ from collections import deque
 
 @dataclass
 class SearchConfig:
-    # Configuración general
-    min_delay: float = 30.0  # Tiempo mínimo entre búsquedas
-    max_delay: float = 120.0  # Tiempo máximo entre búsquedas
-    max_retries: int = 5      # Número máximo de reintentos
-    backoff_factor: float = 2.5  # Factor de incremento del delay entre reintentos
-    request_timeout: int = 120    # Timeout por petición
-    max_concurrent_searches: int = 2  # Número máximo de búsquedas concurrentes
-    search_queue_delay: float = 10.0  # Tiempo de espera entre búsquedas en cola
+    # Configuración general (optimizada para mayor velocidad)
+    min_delay: float = 5.0  # Reducido de 30.0 a 5.0 segundos
+    max_delay: float = 30.0  # Reducido de 120.0 a 30.0 segundos
+    max_retries: int = 3      # Reducido de 5 a 3 reintentos
+    backoff_factor: float = 1.5  # Reducido de 2.5 a 1.5 para incrementos más pequeños
+    request_timeout: int = 60    # Reducido de 120 a 60 segundos
+    max_concurrent_searches: int = 5  # Aumentado de 2 a 5 búsquedas concurrentes
+    search_queue_delay: float = 2.0  # Reducido de 10.0 a 2.0 segundos
     
     # Habilitación de motores de búsqueda
     google_enabled: bool = True
@@ -220,13 +220,11 @@ def extract_emails_from_html(html_content: str, soup: BeautifulSoup) -> List[str
     # 1. Patrones de búsqueda mejorados
     email_patterns = [
         # Formato estándar
-        r'[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}(?:\.[a-z]{2,})*',
+        r'[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}(?:\.[A-Za-z]{2,})*',
         # Con espacios alrededor de @ y .
-        r'[a-z0-9._%+-]+\s*@\s*[a-z0-9.-]+\s*\.\s*[a-z]{2,}',
+        r'[A-Za-z0-9._%+-]+\s*@\s*[A-Za-z0-9.-]+\s*\.\s*[A-Za-z]{2,}',
         # Con [at] y [dot]
-        r'[a-z0-9._%+-]+\s*(?:\[\s*at\s*\]|\[\s*en\s*\]|\[\s*arroba\s*\]|\(at\)|\(en\)|\(arroba\)|\bat\b|\ben\b|\barroba\b)\s*[a-z0-9.-]+\s*(?:\[\s*dot\s*\]|\[\s*punto\s*\]|\(dot\)|\(punto\)|\bpunto\b|\bpoint\b|\bdt\b|\bdo\b|\.)\s*[a-z]{2,}',
-        # Solo con [at] o (at)
-        r'[a-z0-9._%+-]+\s*(?:\[\s*at\s*\]|\(at\)|\bat\b)\s*[a-z0-9.-]+\s*\.\s*[a-z]{2,}'
+        r'[A-Za-z0-9._%+-]+\s*(?:\[\s*at\s*\]|\(\s*at\s*\))\s*[A-Za-z0-9.-]+\s*(?:\[\s*dot\s*\]|\(\s*dot\s*\))\s*[A-Za-z]{2,}'
     ]
     
     # 2. Buscar en el contenido HTML con todos los patrones
@@ -266,17 +264,27 @@ def extract_emails_from_html(html_content: str, soup: BeautifulSoup) -> List[str
                             # Intentar decodificar correo ofuscado por Cloudflare
                             import base64, binascii
                             email_bytes = binascii.unhexlify(attr_value)
-                            email = email_bytes[0] ^ email_bytes[1]
-                            for byte in email_bytes[2:]:
-                                email = email ^ byte
-                            all_emails.append(email.decode('utf-8').lower())
-                        except:
+                            decoded_email_bytes = bytearray()
+                            key = email_bytes[0]
+                            for i in range(1, len(email_bytes)):
+                                decoded_email_bytes.append(email_bytes[i] ^ key)
+                            decoded_email = decoded_email_bytes.decode('utf-8', errors='ignore').lower()
+                            
+                            # Validar que el correo decodificado cumple un patrón estricto
+                            strict_email_pattern = r'^[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}$'
+                            if re.match(strict_email_pattern, decoded_email):
+                                all_emails.append(decoded_email)
+                            else:
+                                # Omitir silenciosamente si no es válido
+                                pass
+                        except Exception as cf_e:
+                            # Omitir silenciosamente cualquier error de decodificación o validación
                             pass
                 except Exception as e:
                     print(f"[Attr Extract] Error en atributo {attr_name}: {e}")
     
     # 5. Buscar en scripts (especialmente en JSON-LD y datos estructurados)
-    for script in soup.find_all('script', {'type': ['text/javascript', 'application/ld+json']}):
+    for script in soup.find_all('script', {'type': 'application/ld+json'}):
         try:
             script_text = script.get_text()
             if script_text:
@@ -372,38 +380,23 @@ def extract_contact_info(html_content: str, soup: BeautifulSoup) -> Dict[str, An
     
     # Extraer números de teléfono en todos los formatos españoles
     try:
-        phone_patterns = [
-            r'(?:\+34|0034|34)?[ -]?[6-9][0-9][ -]?[0-9]{3}[ -]?[0-9]{2}[ -]?[0-9]{2}[ -]?[0-9]?',  # +34 6XX XXX XX XX
-            r'[6-9][0-9][ -]?[0-9]{3}[ -]?[0-9]{2}[ -]?[0-9]{2}',  # 6XX XXX XX XX
-            r'[6-9][0-9]{2}[ -]?[0-9]{2}[ -]?[0-9]{2}[ -]?[0-9]{2}',  # 6XXXXXXXX o 6XX XX XX XX
-            r'[6-9][0-9] [0-9]{3} [0-9]{2} [0-9]{2}',  # 6XX XXX XX XX con espacios
-            r'[6-9][0-9]-[0-9]{3}-[0-9]{2}-[0-9]{2}'  # 6XX-XXX-XX-XX con guiones
-        ]
+        # Patrón regex estricto para números de teléfono españoles de 9 dígitos
+        # Captura números que empiezan por 6, 7, 8 o 9, opcionalmente precedidos por +34, 0034 o 34,
+        # y permite espacios, guiones o puntos como separadores, pero normaliza a 9 dígitos puros.
+        phone_pattern = r'(?:(?:\+34|0034|34)[ -.]*)?([6-9]\d{2}[ -.]?\d{3}[ -.]?\d{3})'
         
         seen_phones = set()  # Para evitar duplicados
         
-        for pattern in phone_patterns:
-            matches = re.finditer(pattern, html_content, re.IGNORECASE)
-            for match in matches:
-                original_phone = match.group(0)
-                # Obtener solo los dígitos
-                phone_digits = re.sub(r'[^0-9]', '', original_phone)
-                
-                if len(phone_digits) >= 9:  # Asegurar que tenga al menos 9 dígitos
-                    # Normalizar el número (eliminar prefijo 34 si existe)
-                    if phone_digits.startswith('34'):  # Si empieza por 34 (código de país)
-                        phone_without_prefix = phone_digits[2:]
-                    else:
-                        phone_without_prefix = phone_digits
-                    
-                    # Validar formato español (empezar por 6,7,8 o 9 y tener 9 dígitos)
-                    if len(phone_without_prefix) == 9 and phone_without_prefix[0] in '6789':
-                        # Añadir el número con formato +34 al resultado final
-                        formatted_phone = f"+34{phone_without_prefix}"
-                        # Usar el número completo como clave para evitar duplicados
-                        if phone_without_prefix not in seen_phones:
-                            result["phones"].append(phone_without_prefix)  # Guardamos sin prefijo para el procesamiento interno
-                            seen_phones.add(phone_without_prefix)
+        matches = re.finditer(phone_pattern, html_content, re.IGNORECASE)
+        for match in matches:
+            # El grupo 1 captura directamente los 9 dígitos del número
+            pure_phone_digits = re.sub(r'[^0-9]', '', match.group(1))
+            
+            # Validar que el número tenga exactamente 9 dígitos y comience con 6, 7, 8 o 9
+            if len(pure_phone_digits) == 9 and pure_phone_digits[0] in '6789':
+                if pure_phone_digits not in seen_phones:
+                    result["phones"].append(pure_phone_digits)
+                    seen_phones.add(pure_phone_digits)
                 
     except Exception as e:
         print(f"[Extract Contact] Error extrayendo teléfonos: {e}")
@@ -446,7 +439,19 @@ def _filter_emails(emails: List[str]) -> List[str]:
                 continue
                 
             # Filtrar extensiones de imagen y archivos en el dominio
-            if any(found_email.endswith(ext) for ext in ('.png', '.jpg', '.jpeg', '.gif', '.bmp', '.svg', '.webp', '.ico', '.pdf', '.js', '.css')):
+            # Extraer el TLD real (la parte después del último punto)
+            tld = found_email.split('.')[-1]
+            
+            # Lista de extensiones descartadas
+            discarded_extensions = {
+                'png', 'jpg', 'jpeg', 'gif', 'bmp', 'svg', 'webp', 'ico', 'pdf',
+                'js', 'css', 'html', 'php', 'asp', 'xml', 'json', 'txt',
+                'zip', 'rar', 'exe', 'dll', 'bin', 'dat', 'tmp', 'log', 'bak', 'old',
+                'conf', 'ini', 'yml', 'yaml', 'md', 'git', 'env', 'sql', 'db', 'sqlite',
+                'csv', 'tsv', 'xls', 'xlsx', 'doc', 'docx', 'ppt', 'pptx'
+            }
+            
+            if tld in discarded_extensions:
                 continue
                 
             # Extraer dominio
@@ -454,14 +459,15 @@ def _filter_emails(emails: List[str]) -> List[str]:
             
             # Filtrar dominios no deseados (lista ampliada)
             spam_domains = {
-                'example.com', 'domain.com', 'email.com', 'sentry.io', 
+                'example.com', 'domain.com', 'email.com', 'sentry.io',
                 'wixpress.com', 'localhost', 'domain.net', 'test.com',
                 'example.org', 'example.net', 'yoursite.com', 'yourdomain.com',
                 'company.com', 'site.com', 'web.com', 'domain.org', 'test.org',
                 'example.co.uk', 'example.es', 'example.eu', 'example.info',
                 'example.biz', 'example.mx', 'example.ar', 'example.br',
                 'example.cl', 'example.co', 'example.me', 'example.io',
-                'example.ai', 'example.app', 'example.dev', 'example.tech'
+                'example.ai', 'example.app', 'example.dev', 'example.tech',
+                'placeholder.com', 'yourcompany.com'
             }
             
             if domain in spam_domains:
@@ -559,17 +565,17 @@ async def extract_data_from_url_async(url: str, client: httpx.AsyncClient) -> Di
         print(f"[Async Extract] Procesando URL: {url}")
         headers = random_headers()
         
-        # Configurar timeout y redirecciones
-        timeout = httpx.Timeout(30.0, connect=60.0)
+        # Configurar timeout y redirecciones (optimizado)
+        timeout = httpx.Timeout(20.0, connect=30.0)  # Reducido de 30.0 a 20.0 y de 60.0 a 30.0
         
-        # Realizar la petición con manejo de reintentos
+        # Realizar la petición con manejo de reintentos (optimizado)
         max_retries = 2
         for attempt in range(max_retries):
             try:
                 response = await client.get(
-                    url, 
-                    headers=headers, 
-                    follow_redirects=True, 
+                    url,
+                    headers=headers,
+                    follow_redirects=True,
                     timeout=timeout
                 )
                 response.raise_for_status()
@@ -578,7 +584,7 @@ async def extract_data_from_url_async(url: str, client: httpx.AsyncClient) -> Di
                 if attempt == max_retries - 1:  # Último intento
                     print(f"[Async Extract] Error en petición HTTP a {url} (intento {attempt + 1}/{max_retries}): {e}")
                     return data
-                await asyncio.sleep(1)  # Pequeña pausa antes de reintentar
+                await asyncio.sleep(0.5)  # Reducido de 1 a 0.5 segundos
         
         # Verificar si es una respuesta HTML
         content_type = response.headers.get('content-type', '').lower()
@@ -636,10 +642,10 @@ async def extract_data_from_url_async(url: str, client: httpx.AsyncClient) -> Di
                 print(f"[Async Extract] Encontrados {len(phones)} teléfonos en {url}")
                 # Tomar el primer teléfono y formatearlo
                 phone = phones[0]
-                if len(phone) == 9:  # Asumimos que es un número español sin prefijo
-                    data["telefono"] = f"+34 {phone[:3]} {phone[3:6]} {phone[6:]}"
+                if len(phone) == 9:  # Aseguramos que sea un número de 9 dígitos
+                    data["telefono"] = phone  # Guardamos solo el número puro de 9 dígitos
                 else:
-                    data["telefono"] = phone  # Dejar el formato original
+                    data["telefono"] = "No encontrado" # Si no cumple el formato, se considera no encontrado
             
         except Exception as e:
             print(f"[Async Extract] Error al extraer información de contacto de {url}: {e}")
@@ -978,27 +984,27 @@ async def run_google_ddg_limpio_task(keyword: str, results_num: int, callback_ur
             logger.info(f"[Task {task_id}] Limitando a {max_urls} URLs para procesar")
             all_urls = all_urls[:max_urls]
         
-        # Procesar URLs para extraer información de contacto
+        # Procesar URLs para extraer información de contacto (optimizado)
         if all_urls:
             logger.info(f"[Task {task_id}] Procesando {len(all_urls)} URLs para extraer información de contacto...")
-            
-            # Configuración de timeouts para las peticiones HTTP
-            timeout = httpx.Timeout(30.0, connect=60.0)
-            
-            # Procesar en lotes para no sobrecargar la memoria
-            batch_size = 5  # Reducir el tamaño del lote para evitar timeouts
-            semaphore = asyncio.Semaphore(5)  # Limitar el número de peticiones concurrentes
-            
+        
+            # Configuración de timeouts para las peticiones HTTP (optimizado)
+            timeout = httpx.Timeout(20.0, connect=30.0)  # Reducido de 30.0 a 20.0 y de 60.0 a 30.0
+        
+            # Procesar en lotes para no sobrecargar la memoria (optimizado)
+            batch_size = 10  # Aumentado de 5 a 10 para procesar más URLs por lote
+            semaphore = asyncio.Semaphore(10)  # Aumentado de 5 a 10 peticiones concurrentes
+        
             async def process_url(url: str) -> Optional[Dict[str, Any]]:
                 async with semaphore:
                     try:
                         async with httpx.AsyncClient(timeout=timeout) as client:
                             result = await extract_data_from_url_async(url, client)
-                            
+        
                             # Verificar si se encontraron datos válidos
                             has_emails = bool(result.get("correos"))
                             has_phone = result.get("telefono") and result.get("telefono") != "No encontrado"
-                            
+        
                             if has_emails or has_phone:
                                 return {
                                     "url": url,
@@ -1007,29 +1013,29 @@ async def run_google_ddg_limpio_task(keyword: str, results_num: int, callback_ur
                                     "telefono": result.get("telefono", "No encontrado")
                                 }
                             return None
-                            
+        
                     except Exception as e:
                         logger.error(f"[Task {task_id}] Error al procesar URL {url}: {str(e)}")
                         return None
-            
+        
             # Procesar todas las URLs en lotes
             for i in range(0, len(all_urls), batch_size):
                 batch = all_urls[i:i + batch_size]
                 logger.info(f"[Task {task_id}] Procesando lote {i//batch_size + 1}/{(len(all_urls)-1)//batch_size + 1}")
-                
+        
                 # Procesar el lote actual
                 tasks = [process_url(url) for url in batch]
                 batch_results = await asyncio.gather(*tasks, return_exceptions=True)
-                
+        
                 # Filtrar resultados exitosos
                 for result in batch_results:
                     if isinstance(result, dict):
                         flat_results.append(result)
                         logger.info(f"[Task {task_id}] Datos encontrados en {result.get('url')}")
-                
-                # Pequeña pausa entre lotes
+        
+                # Pequeña pausa entre lotes (optimizado)
                 if i + batch_size < len(all_urls):
-                    await asyncio.sleep(2)  # Aumentar el tiempo de espera entre lotes
+                    await asyncio.sleep(0.5)  # Reducido de 2 a 0.5 segundos
             
             logger.info(f"[Task {task_id}] Procesamiento completado. URLs con datos: {len(flat_results)}/{len(all_urls)}")
         else:
