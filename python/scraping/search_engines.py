@@ -7,6 +7,7 @@ import asyncio
 from typing import List, Dict, Tuple, Optional, Any, Union
 import logging
 import aiohttp
+import httpx
 from urllib.parse import urlparse, parse_qs, urlencode
 import re
 from collections import defaultdict
@@ -56,50 +57,62 @@ def get_headers() -> Dict[str, str]:
 # Reemplazado por una implementación más robusta usando la librería googlesearch
 from googlesearch import search as google_search_lib
 
-async def search_google(
-    query: str, 
-    num_results: int = 10, 
-    lang: str = "es"
-) -> List[str]:
+async def search_google(query: str, num_results: int = 100, timeout: int = 30) -> List[str]:
     """
-    Realiza una búsqueda en Google usando la librería googlesearch-python.
+    Realiza una búsqueda en Google y devuelve las URLs de los resultados.
     
     Args:
         query: Término de búsqueda
-        num_results: Número de resultados a devolver
-        lang: Idioma de la búsqueda
+        num_results: Número máximo de resultados a devolver
+        timeout: Tiempo máximo de espera en segundos
         
     Returns:
-        Lista de URLs encontradas
+        Lista de URLs de resultados
     """
     logger.info(f"Iniciando búsqueda en Google para '{query}' con {num_results} resultados.")
-    # Añadir un retardo aleatorio para evitar el bloqueo
-    sleep_time = random.uniform(5, 15)
-    logger.info(f"Esperando {sleep_time:.2f} segundos antes de la búsqueda en Google...")
-    await asyncio.sleep(sleep_time)
-    try:
-        # La librería googlesearch es síncrona, por lo que la ejecutamos en un thread
-        # para no bloquear el bucle de eventos de asyncio.
-        results = await asyncio.to_thread(
-            google_search_lib,
-            query,  # Pasado como argumento posicional
-            num_results=num_results,
-            lang=lang
-        )
-        
-        # La librería devuelve un generador, lo convertimos a lista
-        urls = list(results)
-        
-        logger.info(f"Búsqueda en Google completada con {len(urls)} resultados.")
-        return urls
-
-    except Exception as e:
-        # Capturamos errores específicos si es necesario, como bloqueos de IP
-        if "HTTP Error 429" in str(e) or "Too Many Requests" in str(e):
-            logger.error(f"Error de Rate Limit en Google: {e}")
-        else:
-            logger.error(f"Error inesperado en búsqueda Google: {e}", exc_info=True)
-        return []
+    
+    # Importar aquí para evitar problemas de importación circular
+    from googlesearch import search
+    
+    max_retries = 3
+    base_delay = 10
+    urls = []
+    
+    for attempt in range(max_retries):
+        try:
+            # Añadir un retardo exponencial para evitar el bloqueo
+            sleep_time = base_delay * (2 ** attempt) + random.uniform(1, 5)
+            logger.info(f"Intento {attempt+1}/{max_retries} - Esperando {sleep_time:.2f} segundos antes de la búsqueda en Google...")
+            await asyncio.sleep(sleep_time)
+            
+            # La librería googlesearch-python tiene limitaciones en sus parámetros
+            # Según los errores, parece que 'num' ya no es soportado
+            # Usamos solo los parámetros básicos que sabemos que funcionan
+            urls = list(search(
+                query, 
+                lang="es"
+            ))
+            
+            # Limitamos los resultados manualmente
+            if len(urls) > num_results:
+                urls = urls[:num_results]
+            
+            logger.info(f"Búsqueda en Google completada con {len(urls)} resultados.")
+            return urls
+            
+        except Exception as e:
+            error_msg = str(e).lower()
+            if "429" in error_msg or "too many requests" in error_msg or "captcha" in error_msg or "sorry" in error_msg:
+                logger.warning(f"Error de Rate Limit en Google (intento {attempt+1}/{max_retries}): {e}")
+                if attempt < max_retries - 1:
+                    continue  # Intentar de nuevo con un retardo mayor
+                else:
+                    logger.error("Se superó el número máximo de reintentos para Google.")
+            else:
+                logger.error(f"Error inesperado en Google: {e}", exc_info=True)
+                break  # No reintentar en caso de errores inesperados
+    
+    return urls  # Devolver lista vacía o resultados parciales si hubo errores
 
 async def search_duckduckgo(query: str, num_results: int = 100, timeout: int = 30) -> List[str]:
     """
@@ -124,7 +137,8 @@ async def search_duckduckgo(query: str, num_results: int = 100, timeout: int = 3
         for i in range(retries):
             try:
                 logger.info(f"Intento de búsqueda en DuckDuckGo {i+1}/{retries}...")
-                with DDGS(headers=get_headers(), timeout=timeout) as ddgs:
+                # Aumentar el timeout para evitar errores de timeout
+                with DDGS(headers=get_headers(), timeout=timeout * 2) as ddgs:
                     for r in ddgs.text(query, max_results=num_results):
                         if 'href' in r:
                             thread_results.append(r['href'])
@@ -261,16 +275,15 @@ async def search_gigablast(query: str, num_results: int = 100, timeout: int = 30
 # Semaforo para limitar peticiones concurrentes a la API de Brave
 brave_semaphore = None
 
-async def search_brave(query: str, num_results: int = 10, timeout: int = 60, offset: int = 0, retry_count: int = 0) -> List[str]:
+async def search_brave(query: str, num_results: int = 10, timeout: int = 60) -> List[str]:
     """
-    Realiza una búsqueda usando la API de Brave Search con manejo de concurrencia y rate limiting.
+    Realiza una búsqueda usando la API de Brave Search con manejo de concurrencia, 
+    paginación y rate limiting mejorado.
     
     Args:
         query: Término de búsqueda
-        num_results: Número máximo de resultados a devolver (máx 100 por petición)
+        num_results: Número máximo de resultados a devolver
         timeout: Tiempo máximo de espera en segundos
-        offset: Desplazamiento para la paginación de resultados
-        retry_count: Número de reintentos realizados (para uso interno)
         
     Returns:
         Lista de URLs de resultados
@@ -278,144 +291,176 @@ async def search_brave(query: str, num_results: int = 10, timeout: int = 60, off
     import os
     api_key = os.getenv('BRAVE_API_KEY')
     if not api_key:
-        raise ValueError("La variable de entorno BRAVE_API_KEY no está configurada")
-    global brave_semaphore
+        logger.error("La variable de entorno BRAVE_API_KEY no está configurada")
+        return []
     
-    # Obtener configuración de delays y reintentos
+    # Configuración
     max_concurrent = int(os.getenv('BRAVE_MAX_CONCURRENT', '1'))
     request_delay = float(os.getenv('BRAVE_REQUEST_DELAY', '5.0'))
-    error_delay = float(os.getenv('BRAVE_ERROR_DELAY', '10.0'))
     max_retries = int(os.getenv('BRAVE_MAX_RETRIES', '3'))
     
-    # Inicializar el semáforo si no existe
+    # Inicializar semáforo para controlar concurrencia
+    global brave_semaphore
     if brave_semaphore is None:
         brave_semaphore = asyncio.Semaphore(max_concurrent)
     
-    # Si no es el primer intento, aplicar delay de error
-    if retry_count > 0:
-        logger.warning(f"Reintento {retry_count}/{max_retries} después de {error_delay} segundos...")
-        await asyncio.sleep(error_delay)
+    # Configuración de la API
+    url = "https://api.search.brave.com/res/v1/web/search"
+    headers = {
+        "X-Subscription-Token": api_key,
+        "Accept": "application/json",
+        "Accept-Encoding": "gzip",
+        "User-Agent": get_random_user_agent()
+    }
     
-    try:
-        # Usar semáforo para limitar peticiones concurrentes
-        async with brave_semaphore:
-            # Agregar delay entre peticiones consecutivas
-            if offset > 0 or retry_count > 0:
-                wait_time = error_delay if retry_count > 0 else request_delay
-                logger.info(f"Esperando {wait_time} segundos antes de la siguiente petición...")
-                await asyncio.sleep(wait_time)
-            
-            # Configuración de la petición
-            url = "https://api.search.brave.com/res/v1/web/search"
-            headers = {
-                "X-Subscription-Token": api_key,
-                "Accept": "application/json",
-                "Accept-Encoding": "gzip",
-                "User-Agent": get_random_user_agent()
-            }
-            
-            # Limitar resultados por petición a 20 (máximo permitido por la API)
-            count = min(num_results, 20)
-            
-            params = {
-                "q": query,
-                "count": count,
-                "offset": offset,
-                "safesearch": "moderate",
-                "result_filter": "web",
-                "country": "es",  # Priorizar resultados de España
-                "ui_lang": "es-ES"    # Idioma de la interfaz
-            }
-            
-            # Usar aiohttp para mejor manejo de timeouts asíncronos
-            async with aiohttp.ClientSession() as session:
-                logger.info(f"Enviando petición a Brave API (offset={offset}, count={count}, intento={retry_count+1}/{max_retries+1})")
-                
-                try:
-                    async with session.get(
-                        url,
-                        headers=headers,
-                        params=params,
-                        timeout=timeout,
-                        ssl=False  # Desactivar verificación SSL si hay problemas
-                    ) as response:
-                        # Verificar estado de la respuesta
-                        if response.status == 401:
-                            error_msg = "Error de autenticación en la API de Brave. Verifica tu API key."
-                            logger.error(error_msg)
-                            raise Exception(error_msg)
-                            
-                        elif response.status == 429:
-                            retry_after = int(response.headers.get('Retry-After', error_delay))
-                            logger.warning(f"Demasiadas peticiones. Rate limit alcanzado. Reintentando en {retry_after} segundos...")
-                            await asyncio.sleep(retry_after)
-                            return await search_brave(query, num_results, timeout, offset, min(retry_count + 1, max_retries))
-                            
-                        elif response.status >= 500:
-                            logger.error(f"Error del servidor (HTTP {response.status}). Reintentando...")
-                            raise aiohttp.ClientError(f"HTTP {response.status}")
-                            
+    # Resultados acumulados
+    all_results = []
+    seen_urls = set()  # Para evitar duplicados
+    
+    # Calcular número de páginas necesarias (máximo 10 resultados por página)
+    results_per_page = 10
+    max_pages = min(10, (num_results + results_per_page - 1) // results_per_page)
+    
+    # Iterar por páginas
+    for page in range(max_pages):
+        offset = page * results_per_page
+        
+        # Si no es la primera página, esperar para evitar rate limits
+        if page > 0:
+            wait_time = request_delay + random.uniform(0, 2)
+            logger.info(f"Esperando {wait_time:.2f} segundos antes de la siguiente página...")
+            await asyncio.sleep(wait_time)
+        
+        # Parámetros de búsqueda
+        params = {
+            "q": query,
+            "count": results_per_page,
+            "offset": offset,
+            "safesearch": "moderate",
+            "result_filter": "web",
+            "country": "es",
+            "ui_lang": "es-ES"
+        }
+        
+        # Intentar con reintentos y backoff exponencial
+        page_results = []
+        for attempt in range(max_retries):
+            try:
+                # Usar semáforo para limitar concurrencia
+                async with brave_semaphore:
+                    logger.info(f"Enviando petición a Brave API (offset={offset}, count={results_per_page}, intento={attempt+1}/{max_retries})")
+                    
+                    # Si es un reintento, esperar con backoff exponencial
+                    if attempt > 0:
+                        backoff_time = min(30, (2 ** attempt) * 5) + random.uniform(0, 2)
+                        logger.info(f"Reintento {attempt+1}/{max_retries} - Esperando {backoff_time:.2f} segundos...")
+                        await asyncio.sleep(backoff_time)
+                    
+                    # Realizar petición HTTP
+                    async with httpx.AsyncClient(timeout=timeout) as client:
+                        response = await client.get(url, params=params, headers=headers)
                         response.raise_for_status()
-                        data = await response.json()
-                        
-                        # Procesar resultados
-                        results = []
-                        seen_urls = set()  # Para evitar duplicados
-                        
-                        for result in data.get("web", {}).get("results", []):
+                        data = response.json()
+                    
+                    # Procesar resultados
+                    if "web" in data and "results" in data["web"]:
+                        for result in data["web"]["results"]:
                             url = result.get("url", "")
                             if not url:
                                 continue
-                                
-                            # Limpiar y normalizar la URL
+                            
+                            # Limpiar y normalizar URL
                             clean_url = url.split('?')[0].split('#')[0].rstrip('/')
                             
                             # Filtrar dominios no deseados
                             if any(domain in clean_url.lower() for domain in ['google.', 'bing.', 'yandex.', 'facebook.', 'twitter.']):
                                 continue
-                                
+                            
                             # Evitar duplicados
                             if clean_url not in seen_urls:
                                 seen_urls.add(clean_url)
-                                results.append(clean_url)
-                                
-                                # Limitar al número de resultados solicitados
-                                if len(results) >= num_results:
-                                    break
+                                page_results.append(clean_url)
                         
-                        logger.info(f"Búsqueda Brave completada. Resultados: {len(results)}/{num_results}")
-
-                        # Si hemos obtenido menos resultados de los solicitados, no hay más páginas.
-                        if len(results) < count:
+                        logger.info(f"Búsqueda Brave completada. Resultados: {len(page_results)}/{results_per_page}")
+                        
+                        # Si obtenemos menos resultados que los solicitados, no hay más páginas
+                        if len(page_results) < results_per_page:
+                            all_results.extend(page_results)
                             logger.info("No hay más páginas de resultados en Brave.")
-                            return results
-                            
-                        return results
+                            return all_results[:num_results]
                         
-                except aiohttp.ClientError as e:
-                    if "422" in str(e):
-                        logger.warning(f"Error 422 en Brave, probablemente no hay más páginas: {e}")
-                        return [] # Devolver lista vacía para que no se propague el error
-                    if retry_count < max_retries:
-                        logger.warning(f"Error de conexión (intento {retry_count + 1}/{max_retries}): {str(e)}")
-                        return await search_brave(query, num_results, timeout, offset, retry_count + 1)
-                    logger.error(f"Error de cliente en Brave después de {max_retries} intentos: {e}")
-                    return []
+                        # Salir del bucle de reintentos si todo fue bien
+                        break
+                    else:
+                        logger.warning("Formato de respuesta inesperado de Brave API")
+                        if attempt < max_retries - 1:
+                            continue
                 
-    except asyncio.TimeoutError as e:
-        if retry_count < max_retries:
-            logger.warning(f"Timeout en la petición (intento {retry_count + 1}/{max_retries}). Reintentando...")
-            return await search_brave(query, num_results, timeout, offset, retry_count + 1)
-        logger.error(f"Tiempo de espera agotado en búsqueda Brave después de {max_retries} intentos")
-        return []
-        
-    except Exception as e:
-        if retry_count < max_retries and not isinstance(e, aiohttp.ClientResponseError):
-            logger.warning(f"Error en la petición (intento {retry_count + 1}/{max_retries}): {str(e)}")
-            return await search_brave(query, num_results, timeout, offset, retry_count + 1)
+            except httpx.HTTPStatusError as e:
+                # Manejar errores HTTP
+                if e.response.status_code == 422:
+                    # Error 422 indica que no hay más resultados disponibles
+                    logger.warning(f"Error 422 en Brave, probablemente no hay más páginas: {e}")
+                    break
+                
+                elif e.response.status_code in [429, 403]:
+                    # Rate limit o bloqueo temporal
+                    retry_after = int(e.response.headers.get('Retry-After', 10))
+                    logger.warning(f"Rate limit en Brave API. Reintentando en {retry_after} segundos...")
+                    
+                    if attempt < max_retries - 1:
+                        await asyncio.sleep(retry_after)
+                        continue
+                    else:
+                        logger.error("Se superó el número máximo de reintentos para Brave API")
+                        break
+                
+                elif e.response.status_code >= 500:
+                    # Error de servidor
+                    logger.warning(f"Error del servidor Brave: {e.response.status_code}")
+                    if attempt < max_retries - 1:
+                        continue
+                    else:
+                        break
+                
+                else:
+                    # Otros errores HTTP
+                    logger.error(f"Error HTTP en Brave API: {e}")
+                    if attempt < max_retries - 1:
+                        continue
+                    else:
+                        break
             
-        logger.error(f"Error en búsqueda Brave después de {retry_count + 1} intentos: {str(e)}", exc_info=True)
-        return []
+            except (httpx.RequestError, asyncio.TimeoutError) as e:
+                # Errores de red o timeout
+                logger.warning(f"Error de conexión o timeout en Brave API: {e}")
+                if attempt < max_retries - 1:
+                    continue
+                else:
+                    logger.error("Se superó el número máximo de reintentos por errores de conexión")
+                    break
+            
+            except Exception as e:
+                # Cualquier otro error
+                logger.error(f"Error inesperado en Brave API: {e}", exc_info=True)
+                if attempt < max_retries - 1:
+                    continue
+                else:
+                    break
+        
+        # Añadir resultados de esta página al total
+        all_results.extend(page_results)
+        
+        # Si no obtuvimos resultados en esta página, no hay más páginas
+        if not page_results:
+            break
+        
+        # Si ya tenemos suficientes resultados, terminar
+        if len(all_results) >= num_results:
+            break
+    
+    logger.info(f"Búsqueda en brave completada con {len(all_results)} resultados.")
+    return all_results[:num_results]
 
 # ==================== BING (web scraping) ====================
 
@@ -573,11 +618,11 @@ async def search_multiple_engines(
     
     if "google" in engines:
         # Para Google, la librería maneja la paginación internamente.
-        # Hacemos una sola petición con el número total de resultados deseados (e.g., 20).
+        # Hacemos una sola petición a Google (la función maneja internamente el número de resultados)
         search_tasks.append((
             "google",
             safe_search(
-                search_google(query, num_results=20),
+                search_google(query, num_results=20),  # Mantenemos el parámetro para la lógica interna
                 "google",
                 engine_timeouts['google'] + 5
             )
@@ -620,11 +665,11 @@ async def search_multiple_engines(
     if "brave" in engines:
         # Brave Search con paginación
         for page in range(pages):
-            offset = page * 10  # Brave usa offset para paginación
+            # No pasamos offset porque la nueva implementación maneja la paginación internamente
             search_tasks.append((
                 "brave",
                 safe_search(
-                    search_brave(query, num_results=10, offset=offset),
+                    search_brave(query, num_results=10),
                     "brave",
                     engine_timeouts['brave'] + 5
                 )
