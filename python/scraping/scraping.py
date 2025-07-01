@@ -16,6 +16,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Deque, Dict, List, Optional, Set, Tuple, Union
 from urllib.parse import parse_qs, quote_plus, urlencode, urlparse
+import urllib.error
 
 # Third-party imports
 import aiohttp
@@ -133,7 +134,7 @@ class SearchConfig:
 try:
     import config
 except ImportError:
-    print("ERROR: No se pudo importar el archivo 'config.py'. Asegrate de que existe en el mismo directorio.")
+    logger.error("No se pudo importar el archivo 'config.py'. Asegrate de que existe en el mismo directorio.")
     # Definir valores por defecto si falla la importacin para evitar ms errores
     class ConfigFallback:
         BASE_EMPRESITE = "https://empresite.eleconomista.es"
@@ -206,295 +207,149 @@ def random_headers():
 
 def extract_emails_from_html(html_content: str, soup: BeautifulSoup) -> List[str]:
     """
-    Extrae direcciones de correo electrónico de múltiples fuentes en el HTML.
-    
-    Args:
-        html_content: Contenido HTML como string
-        soup: Objeto BeautifulSoup del contenido HTML
-        
-    Returns:
-        Lista de correos electrónicos encontrados
+    Extrae direcciones de correo electrónico de forma conservadora desde el HTML.
+    Se centra en fuentes fiables para minimizar falsos positivos.
     """
-    all_emails = []
-    
-    # 1. Patrones de búsqueda mejorados
-    email_patterns = [
-        # Formato estándar
-        r'[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}(?:\.[A-Za-z]{2,})*',
-        # Con espacios alrededor de @ y .
-        r'[A-Za-z0-9._%+-]+\s*@\s*[A-Za-z0-9.-]+\s*\.\s*[A-Za-z]{2,}',
-        # Con [at] y [dot]
-        r'[A-Za-z0-9._%+-]+\s*(?:\[\s*at\s*\]|\(\s*at\s*\))\s*[A-Za-z0-9.-]+\s*(?:\[\s*dot\s*\]|\(\s*dot\s*\))\s*[A-Za-z]{2,}'
-    ]
-    
-    # 2. Buscar en el contenido HTML con todos los patrones
-    for pattern in email_patterns:
+    # Descartar scripts y estilos para no extraer código
+    for script_or_style in soup(["script", "style"]):
+        script_or_style.decompose()
+
+    all_emails = set()
+
+    # 1. Buscar en enlaces mailto: (fuente más fiable)
+    for a in soup.select('a[href^="mailto:"]'):
         try:
-            matches = re.findall(pattern, html_content, re.IGNORECASE)
-            all_emails.extend(matches)
-        except Exception as e:
-            print(f"[Email Extract] Error con patrón {pattern}: {e}")
-    
-    # 3. Buscar en enlaces mailto:
-    for mailto in soup.select('a[href^="mailto:"]'):
-        try:
-            mailto_href = mailto.get('href', '')
-            # Extraer solo la parte del correo (puede tener parámetros adicionales)
-            mailto_email = mailto_href.split('mailto:')[-1].split('?')[0].split('&')[0].strip()
-            if '@' in mailto_email and '.' in mailto_email.split('@')[-1]:
-                all_emails.append(mailto_email.lower())
-        except Exception as e:
-            print(f"[Mailto Extract] Error procesando mailto: {e}")
-    
-    # 4. Buscar en atributos de datos que puedan contener emails
-    data_attrs = ['data-email', 'data-contact', 'data-contact-email', 'data-email-address', 
-                 'data-email-to', 'data-contacto', 'data-correo', 'data-mail', 'data-cfemail']
-    
-    for tag in soup.find_all(True, attrs={attr: True for attr in data_attrs}):
-        for attr_name, attr_value in tag.attrs.items():
-            if isinstance(attr_value, str) and '@' in attr_value:
-                try:
-                    # Buscar correos en el valor del atributo
-                    emails_in_attr = re.findall(r'[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}', attr_value.lower())
-                    all_emails.extend(emails_in_attr)
-                    
-                    # Procesar correos ofuscados (comunes en Cloudflare)
-                    if attr_name == 'data-cfemail':
-                        try:
-                            # Intentar decodificar correo ofuscado por Cloudflare
-                            import base64, binascii
-                            email_bytes = binascii.unhexlify(attr_value)
-                            decoded_email_bytes = bytearray()
-                            key = email_bytes[0]
-                            for i in range(1, len(email_bytes)):
-                                decoded_email_bytes.append(email_bytes[i] ^ key)
-                            decoded_email = decoded_email_bytes.decode('utf-8', errors='ignore').lower()
-                            
-                            # Validar que el correo decodificado cumple un patrón estricto
-                            strict_email_pattern = r'^[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}$'
-                            if re.match(strict_email_pattern, decoded_email):
-                                all_emails.append(decoded_email)
-                            else:
-                                # Omitir silenciosamente si no es válido
-                                pass
-                        except Exception as cf_e:
-                            # Omitir silenciosamente cualquier error de decodificación o validación
-                            pass
-                except Exception as e:
-                    print(f"[Attr Extract] Error en atributo {attr_name}: {e}")
-    
-    # 5. Buscar en scripts (especialmente en JSON-LD y datos estructurados)
-    for script in soup.find_all('script', {'type': 'application/ld+json'}):
-        try:
-            script_text = script.get_text()
-            if script_text:
-                # Buscar correos en formato estándar
-                emails_in_script = re.findall(r'[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}', script_text.lower())
-                all_emails.extend(emails_in_script)
-                
-                # Buscar correos ofuscados en scripts
-                obfuscated_emails = re.findall(r'[a-z0-9._%+-]+\s*\[?\s*(?:at|en|arroba)\s*\]?\s*[a-z0-9.-]+\s*\[?\s*(?:\.|dot|punto|dt|do)\s*\]?\s*[a-z]{2,}', script_text.lower())
-                for email in obfuscated_emails:
-                    email = re.sub(r'\s*\[?\s*(?:at|en|arroba)\s*\]?\s*', '@', email)
-                    email = re.sub(r'\s*\[?\s*(?:\.|dot|punto|dt|do)\s*\]?\s*', '.', email)
-                    if '@' in email and '.' in email.split('@')[-1]:
-                        all_emails.append(email)
-        except Exception as e:
-            print(f"[Script Extract] Error: {e}")
-    
-    # 6. Buscar en meta tags
-    for meta in soup.find_all('meta', attrs={'content': True, 'property': True}):
-        if any(prop in meta.get('property', '').lower() for prop in ['email', 'contact', 'contact_email']):
-            content = meta.get('content', '').lower()
-            if '@' in content:
-                emails_in_meta = re.findall(r'[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}', content)
-                all_emails.extend(emails_in_meta)
-    
-    # 7. Buscar en elementos con clases/ids que sugieran contener emails
-    email_selectors = [
-        '.email', '.mail', '.correo', '.contact-email', '.email-address',
-        '#email', '#mail', '#correo', '#contact-email', '#email-address'
-    ]
-    for selector in email_selectors:
-        for elem in soup.select(selector):
-            try:
-                text = elem.get_text().strip()
-                if '@' in text:
-                    emails_in_elem = re.findall(r'[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}', text.lower())
-                    all_emails.extend(emails_in_elem)
-            except:
-                pass
-    
-    # 8. Búsqueda agresiva en todo el texto si no se encontraron correos
-    if not all_emails:
-        try:
-            # Patrones más permisivos para correos ofuscados
-            aggressive_patterns = [
-                r'[a-z0-9._%+-]+\s*[\[\(]?\s*(?:at|en|arroba|@)\s*[\]\)]?\s*[a-z0-9.-]+\s*[\[\(]?\s*(?:\.|dot|punto|dt|do|@)\s*[\]\)]?\s*[a-z]{2,}',
-                r'contacto\s*[\[\(]?\s*(?:at|en|arroba|@)\s*[\]\)]?\s*[a-z0-9.-]+\s*[\[\(]?\s*(?:\.|dot|punto|dt|do|@)\s*[\]\)]?\s*[a-z]{2,}',
-                r'email\s*[\[\(]?\s*(?:at|en|arroba|@)\s*[\]\)]?\s*[a-z0-9.-]+\s*[\[\(]?\s*(?:\.|dot|punto|dt|do|@)\s*[\]\)]?\s*[a-z]{2,}'
-            ]
+            mailto_href = a.get('href', '')
+            email = mailto_href.split('mailto:')[-1].split('?')[0].strip()
+            if email:
+                all_emails.add(email.lower())
+        except Exception:
+            pass  # Ignorar errores en mailto malformados
+
+    # 2. Buscar con un regex estricto en el texto visible del cuerpo
+    try:
+        # Patrón estricto para emails
+        email_pattern = r'\b[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}\b'
+        
+        # Obtener solo el texto visible para evitar JS y datos ofuscados
+        visible_text = soup.body.get_text(separator=' ', strip=True)
+        
+        # Reemplazar ofuscaciones comunes
+        visible_text = visible_text.replace('[at]', '@').replace('(at)', '@')
+        visible_text = visible_text.replace('[dot]', '.').replace('(dot)', '.')
+        
+        found_emails = re.findall(email_pattern, visible_text, re.IGNORECASE)
+        for email in found_emails:
+            all_emails.add(email.lower())
             
-            for pattern in aggressive_patterns:
-                try:
-                    matches = re.findall(pattern, html_content.lower())
-                    for email in matches:
-                        # Limpiar el email encontrado
-                        email = re.sub(r'\s*[\(\[].*?[\)\]]\s*', '', email)  # Eliminar texto entre paréntesis/corchetes
-                        email = re.sub(r'\s+', '', email)  # Eliminar espacios
-                        email = re.sub(r'\[?\s*(?:at|en|arroba)\s*\]?', '@', email, flags=re.IGNORECASE)
-                        email = re.sub(r'\[?\s*(?:\.|dot|punto|dt|do)\s*\]?', '.', email, flags=re.IGNORECASE)
-                        
-                        if '@' in email and '.' in email.split('@')[-1]:
-                            all_emails.append(email)
-                except Exception as e:
-                    print(f"[Aggressive Email] Error con patrón {pattern}: {e}")
-        except Exception as e:
-            print(f"[Aggressive Search] Error: {e}")
-    
-    # 9. Filtrar y limpiar los correos encontrados
-    return _filter_emails(all_emails)
+    except Exception as e:
+        logger.warning(f"[Email Extract] Error al buscar emails en el texto: {e}")
+
+    return _filter_emails(list(all_emails))
 
 def extract_contact_info(html_content: str, soup: BeautifulSoup) -> Dict[str, Any]:
     """
-    Extrae información de contacto (emails y teléfonos) del contenido HTML.
-    
-    Args:
-        html_content: Contenido HTML como string
-        soup: Objeto BeautifulSoup del contenido HTML
-        
-    Returns:
-        Diccionario con las listas de correos y teléfonos encontrados
+    Extrae información de contacto (emails y teléfonos) del contenido HTML de forma robusta.
     """
-    result = {
-        "emails": [],
-        "phones": []
-    }
-    
+    # Descomponer scripts y estilos para limpiar el HTML
+    for script_or_style in soup(["script", "style"]):
+        script_or_style.decompose()
+
     # Extraer correos electrónicos
     try:
         emails = extract_emails_from_html(html_content, soup)
-        result["emails"] = _filter_emails(emails)
     except Exception as e:
-        print(f"[Extract Contact] Error extrayendo correos: {e}")
-    
-    # Extraer números de teléfono en todos los formatos españoles
+        logger.error(f"[Extract Contact] Error extrayendo correos: {e}")
+        emails = []
+
+    # Extraer números de teléfono
+    phones = set()
     try:
-        # Patrón regex estricto para números de teléfono españoles de 9 dígitos
-        # Captura números que empiezan por 6, 7, 8 o 9, opcionalmente precedidos por +34, 0034 o 34,
-        # y permite espacios, guiones o puntos como separadores, pero normaliza a 9 dígitos puros.
-        phone_pattern = r'(?:(?:\+34|0034|34)[ -.]*)?([6-9]\d{2}[ -.]?\d{3}[ -.]?\d{3})'
+        # 1. Buscar en enlaces tel:
+        for a in soup.select('a[href^="tel:"]'):
+            try:
+                phone_href = a.get('href', '').split('tel:')[-1].strip()
+                # Normalizar el número
+                normalized_phone = re.sub(r'[^0-9]', '', phone_href)
+                if len(normalized_phone) >= 9:
+                    phones.add(normalized_phone)
+            except Exception:
+                pass
+
+        # 2. Buscar en el texto visible con un patrón estricto
+        phone_pattern = r'(?:(?:\+|00)34[ -.]*)?([6789]\d{2}[ -.]?\d{3}[ -.]?\d{3})\b'
+        visible_text = soup.body.get_text(separator=' ', strip=True)
         
-        seen_phones = set()  # Para evitar duplicados
-        
-        matches = re.finditer(phone_pattern, html_content, re.IGNORECASE)
+        matches = re.finditer(phone_pattern, visible_text)
         for match in matches:
-            # El grupo 1 captura directamente los 9 dígitos del número
             pure_phone_digits = re.sub(r'[^0-9]', '', match.group(1))
-            
-            # Validar que el número tenga exactamente 9 dígitos y comience con 6, 7, 8 o 9
-            if len(pure_phone_digits) == 9 and pure_phone_digits[0] in '6789':
-                if pure_phone_digits not in seen_phones:
-                    result["phones"].append(pure_phone_digits)
-                    seen_phones.add(pure_phone_digits)
-                
+            if len(pure_phone_digits) == 9:
+                phones.add(pure_phone_digits)
+
     except Exception as e:
-        print(f"[Extract Contact] Error extrayendo teléfonos: {e}")
-    
-    return result
+        logger.error(f"[Extract Contact] Error extrayendo teléfonos: {e}")
+
+    return {
+        "emails": emails,
+        "phones": list(phones)
+    }
 
 def _filter_emails(emails: List[str]) -> List[str]:
     """
-    Filtra y limpia direcciones de correo electrónico.
-    
-    Args:
-        emails: Lista de correos electrónicos a filtrar
-        
-    Returns:
-        Lista de correos electrónicos únicos y válidos
+    Filtra y limpia direcciones de correo electrónico con reglas más estrictas.
     """
     if not emails:
         return []
         
-    valid_emails = []
-    # Patrón más permisivo para emails (soporta dominios con múltiples extensiones)
-    email_pattern = r'[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}(?:\.[a-z]{2,})*'
+    valid_emails = set()
+    # Patrón de validación de email estricto
+    email_pattern = re.compile(r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$")
     
+    # Extensiones de archivo comunes para descartar falsos positivos
+    discarded_extensions = {
+        'png', 'jpg', 'jpeg', 'gif', 'bmp', 'svg', 'webp', 'ico', 'pdf',
+        'js', 'css', 'html', 'php', 'asp', 'xml', 'json', 'txt', 'woff', 'woff2', 'ttf',
+        'zip', 'rar', 'exe', 'dll', 'bin', 'dat', 'tmp', 'log', 'bak', 'old'
+    }
+    
+    # Dominios de spam o no válidos
+    spam_domains = {
+        'example.com', 'domain.com', 'email.com', 'sentry.io', 'wixpress.com',
+        'localhost', 'yourdomain.com', 'company.com', 'site.com', 'test.com'
+    }
+
     for email in emails:
-        if not email or not isinstance(email, str):
-            continue
-            
-        # Limpiar el correo
         email = email.strip().lower()
         
-        # Buscar todos los emails que coincidan con el patrón en el texto
-        found_emails = re.findall(email_pattern, email)
-        if not found_emails:
+        if not email_pattern.match(email):
             continue
             
-        # Procesar cada email encontrado
-        for found_email in found_emails:
-            # Verificar longitud mínima razonable
-            if len(found_email) < 6:  # a@b.cd
-                continue
-                
-            # Filtrar extensiones de imagen y archivos en el dominio
-            # Extraer el TLD real (la parte después del último punto)
-            tld = found_email.split('.')[-1]
+        try:
+            local_part, domain = email.split('@', 1)
             
-            # Lista de extensiones descartadas
-            discarded_extensions = {
-                'png', 'jpg', 'jpeg', 'gif', 'bmp', 'svg', 'webp', 'ico', 'pdf',
-                'js', 'css', 'html', 'php', 'asp', 'xml', 'json', 'txt',
-                'zip', 'rar', 'exe', 'dll', 'bin', 'dat', 'tmp', 'log', 'bak', 'old',
-                'conf', 'ini', 'yml', 'yaml', 'md', 'git', 'env', 'sql', 'db', 'sqlite',
-                'csv', 'tsv', 'xls', 'xlsx', 'doc', 'docx', 'ppt', 'pptx'
-            }
-            
-            if tld in discarded_extensions:
-                continue
-                
-            # Extraer dominio
-            domain = found_email.split('@')[-1] if '@' in found_email else ''
-            
-            # Filtrar dominios no deseados (lista ampliada)
-            spam_domains = {
-                'example.com', 'domain.com', 'email.com', 'sentry.io',
-                'wixpress.com', 'localhost', 'domain.net', 'test.com',
-                'example.org', 'example.net', 'yoursite.com', 'yourdomain.com',
-                'company.com', 'site.com', 'web.com', 'domain.org', 'test.org',
-                'example.co.uk', 'example.es', 'example.eu', 'example.info',
-                'example.biz', 'example.mx', 'example.ar', 'example.br',
-                'example.cl', 'example.co', 'example.me', 'example.io',
-                'example.ai', 'example.app', 'example.dev', 'example.tech',
-                'placeholder.com', 'yourcompany.com'
-            }
-            
-            if domain in spam_domains:
-                continue
-                
-            # Filtrar direcciones IP en lugar de dominios
+            # Descartar si el dominio es una IP
             if re.match(r'^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$', domain):
                 continue
-                
-            # Asegurarse de que el dominio tenga al menos un punto después de la @
-            if '@' in found_email and found_email.count('.', found_email.find('@')) == 0:
+            
+            # Descartar si el TLD es una extensión de archivo
+            tld = domain.split('.')[-1]
+            if tld in discarded_extensions:
                 continue
-                
-            # Validar estructura básica del dominio
-            domain_parts = domain.split('.')
-            if len(domain_parts) < 2 or any(not part for part in domain_parts):
+            
+            # Descartar dominios de spam
+            if domain in spam_domains:
                 continue
-                
-            # Validar que el dominio no contenga caracteres inválidos
-            if not re.match(r'^[a-z0-9.-]+$', domain):
-                continue
-                
-            valid_emails.append(found_email)
-    
-    # Eliminar duplicados manteniendo el orden
-    seen = set()
-    return [x for x in valid_emails if not (x in seen or seen.add(x))]
+            
+            # Descartar si el nombre local parece un placeholder
+            if local_part in ['info', 'contact', 'admin', 'test', 'email']:
+                # Podría ser legítimo, pero a menudo es un placeholder
+                pass
+
+            valid_emails.add(email)
+        except (ValueError, IndexError):
+            continue # Ignorar emails malformados
+
+    return sorted(list(valid_emails))
 
 def extract_data_from_url(url: str) -> Dict[str, Any]:
     """Extrae nombre, correos y telfono de una URL usando requests (SNCRONO)."""
@@ -529,7 +384,7 @@ def extract_data_from_url(url: str) -> Dict[str, Any]:
             if len(phone) >= 9:  # Asegurar que tenga al menos 9 dígitos
                 data["telefono"] = f"+34 {phone[:3]} {phone[3:6]} {phone[6:]}"
     except Exception as e:
-        print(f"[Extract] Error procesando {url}: {e}")
+        logger.error(f"[Extract] Error procesando {url}: {e}")
     
     return data
 
@@ -558,11 +413,11 @@ async def extract_data_from_url_async(url: str, client: httpx.AsyncClient) -> Di
     
     # Saltar LinkedIn ya que bloquea las peticiones
     if is_linkedin_url(url):
-        print(f"[Async Extract] Saltando LinkedIn: {url}")
+        logger.info(f"[Async Extract] Saltando LinkedIn: {url}")
         return data
         
     try:
-        print(f"[Async Extract] Procesando URL: {url}")
+        logger.info(f"[Async Extract] Procesando URL: {url}")
         headers = random_headers()
         
         # Configurar timeout y redirecciones (optimizado)
@@ -582,14 +437,14 @@ async def extract_data_from_url_async(url: str, client: httpx.AsyncClient) -> Di
                 break  # Si la petición es exitosa, salir del bucle de reintentos
             except Exception as e:
                 if attempt == max_retries - 1:  # Último intento
-                    print(f"[Async Extract] Error en petición HTTP a {url} (intento {attempt + 1}/{max_retries}): {e}")
+                    logger.error(f"[Async Extract] Error en petición HTTP a {url} (intento {attempt + 1}/{max_retries}): {e}")
                     return data
                 await asyncio.sleep(0.5)  # Reducido de 1 a 0.5 segundos
         
         # Verificar si es una respuesta HTML
         content_type = response.headers.get('content-type', '').lower()
         if 'text/html' not in content_type:
-            print(f"[Async Extract] Contenido no HTML en {url}: {content_type}")
+            logger.warning(f"[Async Extract] Contenido no HTML en {url}: {content_type}")
             return data
         
         # Detectar la codificación de la respuesta
@@ -616,7 +471,7 @@ async def extract_data_from_url_async(url: str, client: httpx.AsyncClient) -> Di
                     # Si todos los intentos fallan, forzar el parsing
                     soup = BeautifulSoup(content, 'html.parser', from_encoding='utf-8', exclude_encodings=[])
         except Exception as e:
-            print(f"[Async Extract] Error al analizar HTML de {url}: {e}")
+            logger.error(f"[Async Extract] Error al analizar HTML de {url}: {e}")
             return data
         
         # Extraer título de la página
@@ -633,13 +488,13 @@ async def extract_data_from_url_async(url: str, client: httpx.AsyncClient) -> Di
             # Procesar correos electrónicos
             emails = contact_info.get("emails", [])
             if emails:
-                print(f"[Async Extract] Encontrados {len(emails)} correos en {url}")
+                logger.info(f"[Async Extract] Encontrados {len(emails)} correos en {url}")
                 data["correos"] = list(set(emails))  # Eliminar duplicados
             
             # Procesar teléfonos
             phones = contact_info.get("phones", [])
             if phones:
-                print(f"[Async Extract] Encontrados {len(phones)} teléfonos en {url}")
+                logger.info(f"[Async Extract] Encontrados {len(phones)} teléfonos en {url}")
                 # Tomar el primer teléfono y formatearlo
                 phone = phones[0]
                 if len(phone) == 9:  # Aseguramos que sea un número de 9 dígitos
@@ -648,25 +503,21 @@ async def extract_data_from_url_async(url: str, client: httpx.AsyncClient) -> Di
                     data["telefono"] = "No encontrado" # Si no cumple el formato, se considera no encontrado
             
         except Exception as e:
-            print(f"[Async Extract] Error al extraer información de contacto de {url}: {e}")
-            import traceback
-            print(f"[Async Extract] Traceback: {traceback.format_exc()}")
+            logger.error(f"[Async Extract] Error al extraer información de contacto de {url}: {e}", exc_info=True)
             
     except httpx.HTTPStatusError as e:
-        print(f"[Async Extract] Error HTTP {e.response.status_code} al acceder a {url}")
+        logger.warning(f"[Async Extract] Error HTTP {e.response.status_code} al acceder a {url}")
     except httpx.RequestError as e:
-        print(f"[Async Extract] Error de conexión al acceder a {url}: {e}")
+        logger.warning(f"[Async Extract] Error de conexión al acceder a {url}: {e}")
     except Exception as e:
-        print(f"[Async Extract] Error inesperado al procesar {url}: {e}")
-        import traceback
-        print(f"[Async Extract] Traceback: {traceback.format_exc()}")
+        logger.error(f"[Async Extract] Error inesperado al procesar {url}: {e}", exc_info=True)
     
     return data
 
 def duckduckgo_search_sync(q: str, n: int) -> List[str]:
     """Realiza una bsqueda SNCRONA en DuckDuckGo y devuelve URLs."""
     results = []
-    print(f"[DDG Sync] Buscando: '{q}'")
+    logger.info(f"[DDG Sync] Buscando: '{q}'")
     try:
         headers = random_headers()
         with DDGS(headers=headers, timeout=config.DDG_TIMEOUT) as ddgs:
@@ -675,8 +526,8 @@ def duckduckgo_search_sync(q: str, n: int) -> List[str]:
                 if "href" in r:
                     results.append(r["href"])
     except Exception as e:
-        print(f"[DDG Sync] Error durante la bsqueda: {e}")
-    print(f"[DDG Sync] Encontradas {len(results)} URLs.")
+        logger.error(f"[DDG Sync] Error durante la bsqueda: {e}")
+    logger.info(f"[DDG Sync] Encontradas {len(results)} URLs.")
     return results
 
 async def safe_google_search(query: str, num_results: int, lang: str = 'es', timeout: int = 120, user_agent: str = None, max_retries: int = 5):
@@ -751,17 +602,31 @@ async def safe_google_search(query: str, num_results: int, lang: str = 'es', tim
                 logger.warning("[Google Search] La búsqueda no devolvió resultados")
                 return []
             
+        except urllib.error.HTTPError as e:
+            last_error = e
+            error_msg = str(e).replace('\n', ' ')
+            # Intentar leer el cuerpo de la respuesta para obtener más detalles
+            response_body = ""
+            try:
+                response_body = e.read().decode('utf-8', errors='ignore')
+            except Exception as read_err:
+                response_body = f"(No se pudo leer la respuesta: {read_err})"
+            
+            logger.error(f"[Google Search] Error HTTP en el intento {attempt + 1}/{max_retries}: {error_msg} - Respuesta: {response_body[:500]}")
+
+            if e.code == 429:
+                wait_time = 300  # 5 minutos de espera para rate limiting
+                logger.warning(f"[Google Search] Rate limit (429) alcanzado. Esperando {wait_time} segundos...")
+                await asyncio.sleep(wait_time)
+            elif attempt < max_retries - 1:
+                wait_time = random.uniform(10, 30)
+                await asyncio.sleep(wait_time)
         except Exception as e:
             last_error = e
             error_msg = str(e).replace('\n', ' ')
-            logger.error(f"[Google Search] Error en el intento {attempt + 1}/{max_retries}: {error_msg}")
+            logger.error(f"[Google Search] Error general en el intento {attempt + 1}/{max_retries}: {error_msg}")
             
-            # Manejar específicamente el error 429 (Too Many Requests)
-            if "429" in str(e):
-                wait_time = 300  # 5 minutos de espera para rate limiting
-                logger.warning(f"[Google Search] Rate limit alcanzado. Esperando {wait_time} segundos...")
-                await asyncio.sleep(wait_time)
-            elif attempt < max_retries - 1:  # No esperar en el último intento fallido
+            if attempt < max_retries - 1:  # No esperar en el último intento fallido
                 wait_time = random.uniform(10, 30)
                 await asyncio.sleep(wait_time)
     
@@ -779,15 +644,15 @@ async def send_callback(callback_url: str, payload: Dict[str, Any]):
         try:
             response = await client.post(callback_url, json=payload)
             response.raise_for_status()
-            print(f"Callback enviado exitosamente a {callback_url} (Task ID: {payload.get('task_id', 'N/A')}), Status: {response.status_code}")
+            logger.info(f"Callback enviado exitosamente a {callback_url} (Task ID: {payload.get('task_id', 'N/A')}), Status: {response.status_code}")
         except httpx.RequestError as e:
-            print(f"Error al enviar callback a {callback_url} (Task ID: {payload.get('task_id', 'N/A')}): {e}")
+            logger.error(f"Error al enviar callback a {callback_url} (Task ID: {payload.get('task_id', 'N/A')}): {e}")
         except Exception as e:
-            print(f"Error inesperado durante el envo del callback a {callback_url} (Task ID: {payload.get('task_id', 'N/A')}): {e}")
+            logger.error(f"Error inesperado durante el envo del callback a {callback_url} (Task ID: {payload.get('task_id', 'N/A')}): {e}")
 
 async def run_google_ddg_task(keyword: str, results_num: int, callback_url: str, task_id: str):
     """Tarea de fondo para buscar en Google/DDG y enviar callback."""
-    print(f"[BG Task Google/DDG - {task_id}] Iniciando para keyword: '{keyword}'")
+    logger.info(f"[BG Task Google/DDG - {task_id}] Iniciando para keyword: '{keyword}'")
     start_time = time.time()
     error_message = None
     resultados_finales = {}
@@ -840,7 +705,7 @@ async def run_google_ddg_task(keyword: str, results_num: int, callback_url: str,
         # Continuar con el resto de la funcin...
         ddg_urls = await run_in_threadpool(duckduckgo_search_sync, keyword, results_num)
         urls = list(set(google_urls + ddg_urls))
-        print(f"[BG Task Google/DDG - {task_id}] Encontradas {len(urls)} URLs nicas para '{keyword}'")
+        logger.info(f"[BG Task Google/DDG - {task_id}] Encontradas {len(urls)} URLs nicas para '{keyword}'")
         
         async with httpx.AsyncClient(verify=False) as client:
             tasks = [extract_data_from_url_async(url, client) for url in urls]
@@ -849,7 +714,7 @@ async def run_google_ddg_task(keyword: str, results_num: int, callback_url: str,
             
             for i in range(0, len(tasks), chunk_size):
                 chunk = tasks[i:i + chunk_size]
-                print(f"[BG Task Google/DDG - {task_id}] Procesando chunk de {len(chunk)} URLs...")
+                logger.info(f"[BG Task Google/DDG - {task_id}] Procesando chunk de {len(chunk)} URLs...")
                 results_chunk = await asyncio.gather(*chunk, return_exceptions=True)
                 all_extracted_data.extend(results_chunk)
                 await asyncio.sleep(0.5)
@@ -859,7 +724,7 @@ async def run_google_ddg_task(keyword: str, results_num: int, callback_url: str,
         for i, result in enumerate(all_extracted_data):
             url = urls[i]
             if isinstance(result, Exception):
-                print(f"[BG Task Google/DDG - {task_id}] Error procesando URL {url}: {result}")
+                logger.error(f"[BG Task Google/DDG - {task_id}] Error procesando URL {url}: {result}")
             elif isinstance(result, dict):
                 if result.get("correos") or (result.get("telefono") and result.get("telefono") != "No encontrado"):
                     urls_con_datos += 1
@@ -869,15 +734,15 @@ async def run_google_ddg_task(keyword: str, results_num: int, callback_url: str,
                         "telefono": result.get("telefono", "No encontrado")
                     }
             else:
-                print(f"[BG Task Google/DDG - {task_id}] Resultado inesperado para URL {url}: {type(result)}")
+                logger.warning(f"[BG Task Google/DDG - {task_id}] Resultado inesperado para URL {url}: {type(result)}")
                 
     except Exception as e:
         error_message = f"Error general en la tarea: {e}"
-        print(f"[BG Task Google/DDG - {task_id}] {error_message}")
+        logger.error(f"[BG Task Google/DDG - {task_id}] {error_message}")
     
     end_time = time.time()
     duration = round(end_time - start_time, 2)
-    print(f"[BG Task Google/DDG - {task_id}] Tarea completada en {duration} segundos.")
+    logger.info(f"[BG Task Google/DDG - {task_id}] Tarea completada en {duration} segundos.")
     
     callback_payload = {
         "task_id": task_id,
@@ -969,6 +834,8 @@ async def run_google_ddg_limpio_task(keyword: str, results_num: int, callback_ur
             if isinstance(urls, list) and urls:  # Solo agregar si hay resultados y es una lista
                 logger.info(f"[Task {task_id}] {engine.upper()} devolvió {len(urls)} resultados")
                 all_urls.extend(urls)
+            elif isinstance(urls, list) and not urls:
+                logger.info(f"[Task {task_id}] {engine.upper()} devolvió resultados vacíos (0 resultados).")
             else:
                 logger.warning(f"[Task {task_id}] {engine.upper()} no devolvió resultados o devolvió un tipo inesperado: {type(urls)}")
         
@@ -1048,7 +915,41 @@ async def run_google_ddg_limpio_task(keyword: str, results_num: int, callback_ur
     # Preparar el payload para el callback
     end_time = time.time()
     duration = round(end_time - start_time, 2)
-    
+    processed_urls_count = len(all_urls)
+
+    # Aplanar los resultados para la clave 'empresas' (un registro por correo/teléfono)
+    empresas_flat = []
+    for result in flat_results:
+        correos = result.get("correos", [])
+        telefono = result.get("telefono", "No encontrado")
+        nombre = result.get("nombre", "No encontrado")
+        url = result.get("url", "")
+
+        if correos:
+            for correo in correos:
+                empresas_flat.append({
+                    "url": url,
+                    "nombre": nombre,
+                    "correo": correo,
+                    "telefono": telefono
+                })
+        elif telefono != "No encontrado":
+            empresas_flat.append({
+                "url": url,
+                "nombre": nombre,
+                "correo": "No encontrado",
+                "telefono": telefono
+            })
+
+    # Crear los diccionarios 'datos' y 'resultados' (agrupados por URL)
+    datos_by_url = {
+        result["url"]: {
+            "nombre": result.get("nombre", "No encontrado"),
+            "correos": result.get("correos", []),
+            "telefono": result.get("telefono", "No encontrado")
+        } for result in flat_results
+    }
+
     # Estadísticas
     total_emails = sum(len(result.get("correos", [])) for result in flat_results)
     total_phones = sum(1 for result in flat_results if result.get("telefono") != "No encontrado")
@@ -1061,13 +962,16 @@ async def run_google_ddg_limpio_task(keyword: str, results_num: int, callback_ur
         "status": "failed" if error_message else "completed",
         "error_message": error_message,
         "duration_seconds": duration,
-        "fuente": "multi_search",
+        "fuente": "google_ddg_limpio",
         "keyword": keyword,
         "urls_procesadas": processed_urls_count,
         "urls_con_datos_encontrados": len(flat_results),
+        "total_entradas_generadas": len(empresas_flat),
         "total_emails": total_emails,
         "total_phones": total_phones,
-        "resultados": flat_results,
+        "empresas": empresas_flat,
+        "datos": datos_by_url,
+        "resultados": datos_by_url,
         "timestamp": datetime.utcnow().isoformat()
     }
     
@@ -1117,143 +1021,6 @@ async def run_google_ddg_limpio_task(keyword: str, results_num: int, callback_ur
     
     logger.info(f"[Task {task_id}] Tarea completada en {duration} segundos")
     
-    # Verificar si hay resultados antes de procesar
-    if not flat_results:
-        logger.warning(f"[Task {task_id}] No se encontraron resultados para la búsqueda")
-        await send_callback(callback_url, {
-            'task_id': task_id,
-            'status': 'completed',
-            'error_message': 'No se encontraron resultados',
-            'fuente': 'google_ddg_limpio',
-            'keyword': keyword,
-            'results_requested': results_num,
-            'urls_procesadas': 0,
-            'total_entradas_generadas': 0,
-            'empresas': [],
-            'datos': {},
-            'resultados': {}
-        })
-        return
-        
-    try:
-        logger.info(f"[Task {task_id}] Procesando {len(all_urls)} URLs encontradas")
-        
-        # Procesar las URLs encontradas
-        async with httpx.AsyncClient(verify=False, timeout=httpx.Timeout(30.0)) as client:
-            tasks = [extract_data_from_url_async(url, client) for url in all_urls]
-            chunk_size = min(config.MAX_CONCURRENT_URL_FETCHES, 5)  # Reducir el chunk size para evitar timeouts
-            all_extracted_data = []
-            
-            try:
-                for i in range(0, len(tasks), chunk_size):
-                    chunk = tasks[i:i + chunk_size]
-                    logger.info(f"[Task {task_id}] Procesando chunk de {len(chunk)} URLs...")
-                    results_chunk = await asyncio.gather(*chunk, return_exceptions=True)
-                    all_extracted_data.extend(results_chunk)
-                    await asyncio.sleep(1)  # Añadir un pequeño delay entre chunks
-                
-                processed_urls_count = len(all_urls)
-                
-                # Procesar resultados
-                for i, result in enumerate(all_extracted_data):
-                    if i >= len(all_urls):
-                        continue  # Prevenir index out of range
-                        
-                    url = all_urls[i]
-                    if isinstance(result, Exception):
-                        logger.error(f"[Task {task_id}] Error procesando URL {url}: {result}")
-                    elif isinstance(result, dict):
-                        nombre = result.get("nombre", "No encontrado")
-                        telefono = result.get("telefono", "No encontrado")
-                        correos = result.get("correos", [])
-                        
-                        if correos:
-                            for mail in correos:
-                                flat_results.append({
-                                    "url": url,
-                                    "nombre": nombre,
-                                    "correo": mail,
-                                    "telefono": telefono
-                                })
-                        elif telefono != "No encontrado":
-                            flat_results.append({
-                                "url": url,
-                                "nombre": nombre,
-                                "correo": "No encontrado",
-                                "telefono": telefono
-                            })
-                    else:
-                        logger.warning(f"[Task {task_id}] Resultado inesperado para URL {url}: {type(result)}")
-                
-                # Si no hay resultados, lanzar excepción
-                if not flat_results:
-                    raise Exception("No se encontraron datos válidos en las URLs")
-                    
-            except Exception as e:
-                logger.error(f"[Task {task_id}] Error al procesar URLs: {str(e)}")
-                if not flat_results:  # Solo fallar si no hay ningún resultado
-                    await send_callback(callback_url, {
-                        'task_id': task_id,
-                        'status': 'failed',
-                        'error_message': f'Error al procesar URLs: {str(e)}',
-                        'fuente': 'google_ddg_limpio',
-                        'keyword': keyword,
-                        'results_requested': results_num,
-                        'urls_procesadas': 0,
-                        'total_entradas_generadas': 0,
-                        'empresas': [],
-                        'datos': {},
-                        'resultados': {}
-                    })
-                    return
-                
-                # Si hay algunos resultados, continuar con ellos
-                logger.info(f"[Task {task_id}] Continuando con {len(flat_results)} resultados parciales")
-    except Exception as e:
-        logger.error(f"[Task {task_id}] Error inesperado: {str(e)}")
-        if not flat_results:
-            await send_callback(callback_url, {
-                'task_id': task_id,
-                'status': 'failed',
-                'error_message': f'Error inesperado: {str(e)}',
-                'fuente': 'google_ddg_limpio',
-                'keyword': keyword,
-                'results_requested': results_num,
-                'urls_procesadas': 0,
-                'total_entradas_generadas': 0,
-                'empresas': [],
-                'datos': {},
-                'resultados': {}
-            })
-            return
-                
-    except Exception as e:
-        error_message = f"Error general en la tarea: {e}"
-        logger.error(f"[Task {task_id}] {error_message}")
-        
-        # Asegurarse de que siempre se envíe un callback, incluso en caso de error
-        await send_callback(callback_url, {
-            'task_id': task_id,
-            'status': 'failed',
-            'error_message': str(e),
-            'fuente': 'google_ddg_limpio',
-            'keyword': keyword,
-            'results_requested': results_num,
-            'urls_procesadas': processed_urls_count,
-            'total_entradas_generadas': len(flat_results),
-            'empresas': flat_results,
-            'datos': {item['url']: {
-                'nombre': item['nombre'],
-                'correos': [item['correo']] if item['correo'] != 'No encontrado' else [],
-                'telefono': item['telefono']
-            } for item in flat_results},
-            'resultados': {item['url']: {
-                'nombre': item['nombre'],
-                'correos': [item['correo']] if item['correo'] != 'No encontrado' else [],
-                'telefono': item['telefono']
-            } for item in flat_results}
-        })
-        return
     
     end_time = time.time()
     duration = round(end_time - start_time, 2)
@@ -1535,5 +1302,5 @@ async def startup_event():
     logger.info("Procesador de cola iniciado correctamente")
 
 if __name__ == "__main__":
-    print("Iniciando servidor FastAPI en http://0.0.0.0:9000")
+    logger.info("Iniciando servidor FastAPI en http://0.0.0.0:9000")
     uvicorn.run("scraping:app", host="0.0.0.0", port=9000, reload=True, log_level="info")

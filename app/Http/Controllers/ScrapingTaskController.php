@@ -50,10 +50,7 @@ class ScrapingTaskController extends Controller
         // Esta es la corrección más importante. Asegura que la consulta SOLO
         // obtenga las tareas que pertenecen al usuario que ha iniciado sesión.
         // Sin esta línea, todos los usuarios verían todas las tareas.
-        $query = ScrapingTask::where('user_id', $userId)
-            ->select([
-                'id', 'source', 'keyword', 'region', 'status', 'api_task_id', 'created_at'
-            ]);
+        $query = ScrapingTask::where('user_id', $userId);
 
         try {
             return DataTables::of($query)

@@ -514,13 +514,26 @@ async def safe_search(coroutine, engine_name, timeout):
         return []
 
 async def search_multiple_engines(
-    query: str, 
-    engines: list = ["google", "duckduckgo"], 
+    query: str,
+    engines: list = ["google", "duckduckgo"],
     brave_api_key: str = None,
     num_results: int = 500,  # Aumentado de 10 a 20 resultados por defecto
     timeouts: Dict[str, int] = None,
     pages: int = 10  # Número de páginas a buscar por motor
 ) -> Dict[str, List[str]]:
+    # Eliminar motores duplicados manteniendo el orden
+    engines = list(dict.fromkeys(engines))
+    
+    # Inicializar engine_timeouts con valores por defecto si no se proporciona
+    engine_timeouts = {
+        'google': 30,
+        'duckduckgo': 25,
+        'gigablast': 20,
+        'bing': 20,
+        'brave': 30
+    }
+    if timeouts:
+        engine_timeouts.update(timeouts)
     """
     Busca en múltiples motores de búsqueda y devuelve los resultados combinados.
     
@@ -534,18 +547,33 @@ async def search_multiple_engines(
     Returns:
         Diccionario con los resultados de cada motor
     """
-    # Configurar timeouts por defecto (más cortos para evitar esperas largas)
-    default_timeout = 15  # Aumentado de 10 a 15 segundos por defecto
-    if timeouts is None:
-        timeouts = {}
-    
-    # Configurar timeouts específicos para cada motor
-    engine_timeouts = {
-        'google': timeouts.get('google', 20),     # Google puede ser más lento
-        'duckduckgo': timeouts.get('duckduckgo', default_timeout),
-        'gigablast': timeouts.get('gigablast', default_timeout),
-        'bing': timeouts.get('bing', default_timeout),
-        'brave': timeouts.get('brave', 20)        # Brave API puede ser más lenta
+    # Configurar timeouts y reintentos por motor
+    engine_config = {
+        'google': {
+            'timeout': timeouts.get('google', 30),
+            'max_retries': 2,
+            'retry_delay': 5
+        },
+        'duckduckgo': {
+            'timeout': timeouts.get('duckduckgo', 25),
+            'max_retries': 3,
+            'retry_delay': 10
+        },
+        'gigablast': {
+            'timeout': timeouts.get('gigablast', 20),
+            'max_retries': 1,
+            'retry_delay': 3
+        },
+        'bing': {
+            'timeout': timeouts.get('bing', 20),
+            'max_retries': 2,
+            'retry_delay': 5
+        },
+        'brave': {
+            'timeout': timeouts.get('brave', 30),
+            'max_retries': 3,
+            'retry_delay': 15
+        }
     }
     
     # Preparar tareas de búsqueda con paginación
@@ -613,20 +641,41 @@ async def search_multiple_engines(
                 )
             ))
     
-    # Ejecutar búsquedas en paralelo
+    # Ejecutar búsquedas con manejo de rate limits
     results = {}
     if search_tasks:
-        logger.info(f"Ejecutando búsquedas en paralelo: {[name for name, _ in search_tasks]}")
+        task_groups = {}
+        for name, task in search_tasks:
+            if name not in task_groups:
+                task_groups[name] = []
+            task_groups[name].append(task)
         
-        # Ejecutar todas las búsquedas en paralelo
-        search_results = await asyncio.gather(
-            *[task for _, task in search_tasks],
-            return_exceptions=False  # Ya manejamos las excepciones en safe_search
-        )
+        logger.info(f"Ejecutando búsquedas en motores: {list(task_groups.keys())}")
+        
+        search_results = {}
+        for engine, tasks in task_groups.items():
+            config = engine_config[engine]
+            last_error = None
+            
+            for attempt in range(config['max_retries'] + 1):
+                try:
+                    result = await tasks[0]
+                    if result:  # Solo guardar si hay resultados
+                        search_results[engine] = result
+                    break
+                except Exception as e:
+                    last_error = e
+                    if attempt < config['max_retries']:
+                        delay = config['retry_delay'] * (attempt + 1)  # Backoff exponencial
+                        logger.warning(f"Intento {attempt + 1}/{config['max_retries']} fallido para {engine}. Reintentando en {delay}s...")
+                        await asyncio.sleep(delay)
+            
+            if last_error and engine not in search_results:
+                logger.error(f"Error final en {engine}: {str(last_error)}")
+                search_results[engine] = []
         
         # Procesar resultados
-        for (engine_name, _), result in zip(search_tasks, search_results):
-            results[engine_name] = result if isinstance(result, list) else []
+        results = search_results
     
     # Resumen de resultados
     result_summary = {k: len(v) for k, v in results.items()}
