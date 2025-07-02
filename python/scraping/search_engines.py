@@ -470,6 +470,58 @@ async def search_brave(query: str, num_results: int = 10, timeout: int = 60, off
 
 BLACKLISTED_DOMAINS = ["zhihu.com", "baidu.com"]
 
+async def scrape_page(url: str, timeout: int = 60) -> Optional[Dict[str, Any]]:
+    """
+    Visita una URL y extrae contenido, URLs adicionales y datos relevantes.
+    
+    Args:
+        url: URL a visitar
+        timeout: Tiempo máximo de espera en segundos
+        
+    Returns:
+        Diccionario con datos extraídos o None si hay error
+    """
+    try:
+        headers = get_headers()
+        timeout = aiohttp.ClientTimeout(total=timeout)
+        
+        async with aiohttp.ClientSession(headers=headers, timeout=timeout) as session:
+            async with session.get(url) as response:
+                if response.status != 200:
+                    logger.warning(f"HTTP {response.status} al acceder a {url}")
+                    return None
+                    
+                html = await response.text()
+                soup = BeautifulSoup(html, 'html.parser')
+                
+                # Extraer todas las URLs válidas de la página
+                found_urls = []
+                for link in soup.find_all('a', href=True):
+                    href = link['href']
+                    if href.startswith('http') and not any(d in href for d in BLACKLISTED_DOMAINS):
+                        found_urls.append(href.split('?')[0].split('#')[0].rstrip('/'))
+                
+                # Extraer emails y teléfonos usando expresiones regulares
+                text = soup.get_text()
+                emails = list(set(re.findall(r'[\w\.-]+@[\w\.-]+\.\w+', text)))
+                phones = list(set(re.findall(r'(\+?\d{1,3}[-.\s]?)?\(?\d{2,3}\)?[-.\s]?\d{2,4}[-.\s]?\d{2,4}', text)))
+                
+                return {
+                    'main_url': url,
+                    'found_urls': found_urls,
+                    'emails': emails,
+                    'phones': phones,
+                    'title': soup.title.string if soup.title else None,
+                    'status': response.status
+                }
+                
+    except asyncio.TimeoutError:
+        logger.error(f"Timeout al acceder a {url}")
+        return None
+    except Exception as e:
+        logger.error(f"Error al scrapear {url}: {str(e)}", exc_info=True)
+        return None
+
 async def search_duckduckgo_manual(query: str, num_results: int = 10, timeout: int = 30) -> List[str]:
     logger.info(f"Iniciando búsqueda en DuckDuckGo para: {query} (resultados: {num_results})")
     results = []
@@ -621,8 +673,10 @@ async def search_multiple_engines(
     num_results: int = 500,  # Aumentado de 10 a 20 resultados por defecto
     timeouts: Dict[str, int] = None,
     pages: int = 10,  # Número de páginas a buscar por motor
-    search_config: Optional[SearchConfig] = None # Nuevo parámetro
-) -> Dict[str, List[str]]:
+    search_config: Optional[SearchConfig] = None, # Nuevo parámetro
+    deep_scrape: bool = False, # Habilitar scraping profundo
+    scrape_timeout: int = 60 # Timeout para scraping profundo
+) -> Dict[str, Union[List[str], Dict[str, Any]]]:
     # Eliminar motores duplicados manteniendo el orden
     engines = list(dict.fromkeys(engines))
     
@@ -759,6 +813,33 @@ async def search_multiple_engines(
     # Resumen de resultados
     result_summary = {k: len(v) for k, v in results.items()}
     logger.info(f"Búsqueda completada. Resultados: {result_summary}")
+    
+    # Realizar scraping profundo si está habilitado
+    if deep_scrape:
+        logger.info("Iniciando scraping profundo de URLs encontradas...")
+        scrape_tasks = []
+        
+        # Crear tareas de scraping para todas las URLs encontradas
+        for engine_urls in results.values():
+            for url in engine_urls:
+                scrape_tasks.append(scrape_page(url, timeout=scrape_timeout))
+        
+        # Ejecutar scraping en paralelo con semáforo para limitar concurrencia
+        semaphore = asyncio.Semaphore(10) # Limitar a 10 conexiones concurrentes
+        async def limited_scrape(task):
+            async with semaphore:
+                return await task
+                
+        scrape_results = await asyncio.gather(*[limited_scrape(task) for task in scrape_tasks])
+        
+        # Filtrar resultados nulos y agregar datos al resultado final
+        valid_scrapes = [r for r in scrape_results if r is not None]
+        logger.info(f"Scraping profundo completado. {len(valid_scrapes)}/{len(scrape_tasks)} URLs procesadas")
+        
+        return {
+            'search_results': results,
+            'scrape_data': valid_scrapes
+        }
     
     return results
 
