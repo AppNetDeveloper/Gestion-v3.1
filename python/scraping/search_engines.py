@@ -5,12 +5,15 @@ import time
 import random
 import asyncio
 from typing import List, Dict, Tuple, Optional, Any, Union
+from dataclasses import dataclass
 import logging
 import aiohttp
 import httpx
 from urllib.parse import urlparse, parse_qs, urlencode
 import re
-from collections import defaultdict
+from collections import defaultdict # Añadido: Importar defaultdict
+from duckduckgo_search import DDGS # Añadido: Importar DDGS
+from duckduckgo_search.exceptions import DuckDuckGoSearchException # Añadido: Importar DuckDuckGoSearchException
 
 # Configuración de logging
 logging.basicConfig(
@@ -18,7 +21,7 @@ logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     handlers=[
         logging.StreamHandler(),
-        logging.FileHandler('search_engines.log')
+        logging.FileHandler('/var/www/html/storage/logs/search_engines.log') # Cambiado: Ruta absoluta para el log
     ]
 )
 logger = logging.getLogger(__name__)
@@ -57,7 +60,7 @@ def get_headers() -> Dict[str, str]:
 # Reemplazado por una implementación más robusta usando la librería googlesearch
 from googlesearch import search as google_search_lib
 
-async def search_google(query: str, num_results: int = 100, timeout: int = 30) -> List[str]:
+async def search_google(query: str, num_results: int = 100, timeout: int = 30, proxies: Optional[List[str]] = None) -> List[str]:
     """
     Realiza una búsqueda en Google y devuelve las URLs de los resultados.
     
@@ -71,9 +74,6 @@ async def search_google(query: str, num_results: int = 100, timeout: int = 30) -
     """
     logger.info(f"Iniciando búsqueda en Google para '{query}' con {num_results} resultados.")
     
-    # Importar aquí para evitar problemas de importación circular
-    from googlesearch import search
-    
     max_retries = 3
     base_delay = 10
     urls = []
@@ -86,16 +86,16 @@ async def search_google(query: str, num_results: int = 100, timeout: int = 30) -
             await asyncio.sleep(sleep_time)
             
             # La librería googlesearch-python tiene limitaciones en sus parámetros
-            # Según los errores, parece que 'num' ya no es soportado
             # Usamos solo los parámetros básicos que sabemos que funcionan
-            urls = list(search(
-                query, 
-                lang="es"
-            ))
+            # Si hay proxies disponibles, usar uno aleatorio
+            proxy = random.choice(proxies) if proxies else None
             
-            # Limitamos los resultados manualmente
-            if len(urls) > num_results:
-                urls = urls[:num_results]
+            urls = list(google_search_lib(
+                query, # El término de búsqueda es el primer argumento posicional
+                num=num_results, # Usar 'num' para el número de resultados
+                lang="es",
+                proxy=proxy # Pasar el proxy a la función de búsqueda de Google
+            ))
             
             logger.info(f"Búsqueda en Google completada con {len(urls)} resultados.")
             return urls
@@ -113,7 +113,7 @@ async def search_google(query: str, num_results: int = 100, timeout: int = 30) -
                 break  # No reintentar en caso de errores inesperados
     
     return urls  # Devolver lista vacía o resultados parciales si hubo errores
-
+ 
 async def search_duckduckgo(query: str, num_results: int = 100, timeout: int = 30) -> List[str]:
     """
     Realiza una búsqueda en DuckDuckGo y devuelve las URLs de los resultados.
@@ -129,7 +129,7 @@ async def search_duckduckgo(query: str, num_results: int = 100, timeout: int = 3
     logger.info(f"Iniciando búsqueda en DuckDuckGo para '{query}' con {num_results} resultados.")
     
     def sync_search_with_retry():
-        from duckduckgo_search import DDGS
+        # DDGS ya está importado al principio del archivo
         import time
 
         thread_results = []
@@ -146,7 +146,7 @@ async def search_duckduckgo(query: str, num_results: int = 100, timeout: int = 3
                 logger.info(f"Búsqueda síncrona en DuckDuckGo completada con {len(thread_results)} resultados.")
                 return thread_results # Éxito, salir del bucle
             
-            except Exception as e:
+            except DuckDuckGoSearchException as e: # Usar la excepción específica
                 # Detectar errores de rate limit por el mensaje de error
                 if "Ratelimit" in str(e) or "429" in str(e) or "Too Many Requests" in str(e) or "202" in str(e):
                     logger.warning(f"Error de Rate Limit en DuckDuckGo (intento {i+1}/{retries}): {e}")
@@ -156,6 +156,7 @@ async def search_duckduckgo(query: str, num_results: int = 100, timeout: int = 3
                         time.sleep(wait_time)
                     else:
                         logger.error("Se superó el número máximo de reintentos para DuckDuckGo.")
+                        raise # Re-lanzar la excepción si se agotan los reintentos
                 else:
                     logger.error(f"Error inesperado en la búsqueda síncrona de DuckDuckGo: {e}", exc_info=True)
                     if i < retries - 1:
@@ -163,7 +164,7 @@ async def search_duckduckgo(query: str, num_results: int = 100, timeout: int = 3
                         logger.info(f"Reintentando en {wait_time} segundos...")
                         time.sleep(wait_time)
                     else:
-                        break # No reintentar en errores inesperados
+                        raise # Re-lanzar la excepción si se agotan los reintentos
 
         return thread_results
 
@@ -275,7 +276,7 @@ async def search_gigablast(query: str, num_results: int = 100, timeout: int = 30
 # Semaforo para limitar peticiones concurrentes a la API de Brave
 brave_semaphore = None
 
-async def search_brave(query: str, num_results: int = 10, timeout: int = 60) -> List[str]:
+async def search_brave(query: str, num_results: int = 10, timeout: int = 60, offset: int = 0) -> List[str]:
     """
     Realiza una búsqueda usando la API de Brave Search con manejo de concurrencia, 
     paginación y rate limiting mejorado.
@@ -357,6 +358,8 @@ async def search_brave(query: str, num_results: int = 10, timeout: int = 60) -> 
                         await asyncio.sleep(backoff_time)
                     
                     # Realizar petición HTTP
+                    # Asegurarse de que httpx esté disponible en este ámbito
+                    import httpx
                     async with httpx.AsyncClient(timeout=timeout) as client:
                         response = await client.get(url, params=params, headers=headers)
                         response.raise_for_status()
@@ -464,6 +467,8 @@ async def search_brave(query: str, num_results: int = 10, timeout: int = 60) -> 
 
 # ==================== BING (web scraping) ====================
 
+BLACKLISTED_DOMAINS = ["zhihu.com", "baidu.com"]
+
 async def search_bing(query: str, num_results: int = 10, timeout: int = 30, first: int = 1) -> List[str]:
     """
     Realiza una búsqueda en Bing mediante web scraping.
@@ -500,7 +505,8 @@ async def search_bing(query: str, num_results: int = 10, timeout: int = 30, firs
             'Upgrade-Insecure-Requests': '1',
         })
         
-        async with aiohttp.ClientSession() as session:
+        # Usar CookieJar para manejar cookies de sesión
+        async with aiohttp.ClientSession(cookie_jar=aiohttp.CookieJar(unsafe=True)) as session:
             async with session.get(base_url, params=params, headers=headers, timeout=timeout) as response:
                 response.raise_for_status()
                 html = await response.text()
@@ -511,8 +517,8 @@ async def search_bing(query: str, num_results: int = 10, timeout: int = 30, firs
         # Buscar enlaces en los resultados de búsqueda
         for result in soup.select('li.b_algo h2 a'):
             url = result.get('href', '')
-            # Verificar que la URL sea válida y no sea un enlace de Bing
-            if url and url.startswith('http') and 'bing.com' not in url:
+            # Verificar que la URL sea válida y no sea un enlace de Bing o un dominio en la lista negra
+            if url and url.startswith('http') and 'bing.com' not in url and not any(domain in url for domain in BLACKLISTED_DOMAINS):
                 # Asegurarse de que la URL esté correctamente formada
                 parsed_url = url.split('?')[0].split('#')[0].rstrip('/')
                 if parsed_url not in results:  # Evitar duplicados
@@ -552,64 +558,50 @@ async def safe_search(coroutine, engine_name, timeout):
         logger.error(f"Error en búsqueda {engine_name}: {str(e)}", exc_info=True)
         return []
 
+# Importar SearchConfig desde scraping.py
+# Esto es necesario para que search_engines.py pueda usar la clase SearchConfig
+# y acceder a la configuración de proxies.
+try:
+    from scraping import SearchConfig
+except ImportError:
+    # Fallback si scraping no está disponible (ej. para pruebas unitarias de search_engines)
+    @dataclass
+    class SearchConfig:
+        google_timeout: int = 90
+        bing_timeout: int = 60
+        proxies: Optional[List[str]] = None
+
 async def search_multiple_engines(
     query: str,
     engines: list = ["google", "duckduckgo"],
     num_results: int = 500,  # Aumentado de 10 a 20 resultados por defecto
     timeouts: Dict[str, int] = None,
-    pages: int = 10  # Número de páginas a buscar por motor
+    pages: int = 10,  # Número de páginas a buscar por motor
+    search_config: Optional[SearchConfig] = None # Nuevo parámetro
 ) -> Dict[str, List[str]]:
     # Eliminar motores duplicados manteniendo el orden
     engines = list(dict.fromkeys(engines))
     
-    # Inicializar engine_timeouts con valores por defecto si no se proporciona
-    engine_timeouts = {
-        'google': 30,
-        'duckduckgo': 25,
-        'gigablast': 20,
-        'bing': 20,
-        'brave': 30
-    }
-    if timeouts:
-        engine_timeouts.update(timeouts)
-    """
-    Busca en múltiples motores de búsqueda y devuelve los resultados combinados.
+    # Configuración de timeouts y reintentos por motor
+    # Si timeouts es None, usar valores por defecto
+    if timeouts is None:
+        timeouts = {}
     
-    Args:
-        query: Término de búsqueda
-        engines: Lista de motores a usar ("google", "duckduckgo", "gigablast", "bing", "brave")
-        num_results: Número máximo de resultados por motor
-        timeouts: Diccionario con timeouts personalizados por motor
-        
-    Returns:
-        Diccionario con los resultados de cada motor
-    """
-    # Configurar timeouts y reintentos por motor
-    engine_config = {
+    # Asegurarse de que timeouts es un diccionario
+    if not isinstance(timeouts, dict):
+        timeouts = {}
+    
+    # Configurar timeouts con valores por defecto si no se proporcionan
+    engine_timeouts = {
         'google': {
-            'timeout': timeouts.get('google', 30),
-            'max_retries': 2,
-            'retry_delay': 5
-        },
-        'duckduckgo': {
-            'timeout': timeouts.get('duckduckgo', 25),
-            'max_retries': 3,
-            'retry_delay': 10
-        },
-        'gigablast': {
-            'timeout': timeouts.get('gigablast', 20),
-            'max_retries': 1,
-            'retry_delay': 3
+            'timeout': timeouts.get('google', {}).get('timeout', 30) if isinstance(timeouts.get('google'), dict) else timeouts.get('google', 30),
+            'max_retries': timeouts.get('google', {}).get('max_retries', 3) if isinstance(timeouts.get('google'), dict) else 3,
+            'retry_delay': timeouts.get('google', {}).get('retry_delay', 10) if isinstance(timeouts.get('google'), dict) else 10
         },
         'bing': {
-            'timeout': timeouts.get('bing', 20),
-            'max_retries': 2,
-            'retry_delay': 5
-        },
-        'brave': {
-            'timeout': timeouts.get('brave', 30),
-            'max_retries': 3,
-            'retry_delay': 15
+            'timeout': timeouts.get('bing', {}).get('timeout', 20) if isinstance(timeouts.get('bing'), dict) else timeouts.get('bing', 20),
+            'max_retries': timeouts.get('bing', {}).get('max_retries', 2) if isinstance(timeouts.get('bing'), dict) else 2,
+            'retry_delay': timeouts.get('bing', {}).get('retry_delay', 5) if isinstance(timeouts.get('bing'), dict) else 5
         }
     }
     
@@ -619,39 +611,27 @@ async def search_multiple_engines(
     if "google" in engines:
         # Para Google, la librería maneja la paginación internamente.
         # Hacemos una sola petición a Google (la función maneja internamente el número de resultados)
+        # Obtener la configuración para Google
+        google_config = engine_timeouts.get('google', {})
+        google_timeout = int(google_config.get('timeout', 30))
+        
         search_tasks.append((
             "google",
             safe_search(
-                search_google(query, num_results=20),  # Mantenemos el parámetro para la lógica interna
+                search_google(query, num_results=20, proxies=search_config.proxies),
                 "google",
-                engine_timeouts['google'] + 5
-            )
-        ))
-    
-    if "duckduckgo" in engines:
-        # DuckDuckGo maneja la paginación internamente
-        search_tasks.append((
-            "duckduckgo",
-            safe_search(
-                search_duckduckgo(query, num_results * pages),
-                "duckduckgo",
-                engine_timeouts['duckduckgo'] + 5 * pages  # Aumentar timeout para más resultados
-            )
-        ))
-    
-    if "gigablast" in engines:
-        search_tasks.append((
-            "gigablast",
-            safe_search(
-                search_gigablast(query, num_results),
-                "gigablast",
-                engine_timeouts['gigablast'] + 5
+                google_timeout + 5  # Añadir margen de 5 segundos
             )
         ))
     
     if "bing" in engines:
         # Bing con paginación - Ampliamos a más páginas (hasta 20)
-        bing_pages = min(20, pages * 2)  # Duplicamos las páginas para Bing, con un máximo de 20
+        bing_pages = min(20, pages * 2)  
+        
+        # Obtener la configuración para Bing
+        bing_config = engine_timeouts.get('bing', {})
+        bing_timeout = int(bing_config.get('timeout', 20))
+        
         for page in range(bing_pages):
             first = page * 10 + 1  # Bing usa first=1, 11, 21, etc.
             search_tasks.append((
@@ -659,20 +639,7 @@ async def search_multiple_engines(
                 safe_search(
                     search_bing(query, num_results=10, first=first),
                     "bing",
-                    engine_timeouts['bing'] + 5
-                )
-            ))
-    
-    if "brave" in engines:
-        # Brave Search con paginación
-        for page in range(pages):
-            # No pasamos offset porque la nueva implementación maneja la paginación internamente
-            search_tasks.append((
-                "brave",
-                safe_search(
-                    search_brave(query, num_results=10),
-                    "brave",
-                    engine_timeouts['brave'] + 5
+                    bing_timeout + 5
                 )
             ))
     
@@ -707,6 +674,27 @@ async def search_multiple_engines(
         engine_coroutines = [
             run_engine_tasks(engine, tasks) for engine, tasks in task_groups.items()
         ]
+        
+        # Añadir Brave Search si está habilitado
+        if "brave" in engines:
+            brave_config = engine_timeouts.get('brave', {})
+            brave_timeout = int(brave_config.get('timeout', 60))
+            
+            # Brave API devuelve un máximo de 10 resultados por página
+            brave_pages = min(pages, (num_results + 9) // 10)
+            
+            for page in range(brave_pages):
+                offset = page * 10
+                engine_coroutines.append(
+                    run_engine_tasks(
+                        "brave",
+                        [safe_search(
+                            search_brave(query, num_results=10, offset=offset, timeout=brave_timeout), # Pasar timeout a search_brave
+                            "brave",
+                            brave_timeout + 5
+                        )]
+                    )
+                )
         
         # Ejecutar las corrutinas de todos los motores en paralelo
         final_results = await asyncio.gather(*engine_coroutines)

@@ -122,6 +122,11 @@ class SearchConfig:
         # Configuración de resultados
         self.results_per_engine = int(os.getenv('RESULTS_PER_ENGINE', self.results_per_engine))
 
+        # Configuración de proxies
+        self.proxies: Optional[List[str]] = os.getenv('PROXIES', None)
+        if self.proxies:
+            self.proxies = [p.strip() for p in self.proxies.split(',')]
+
 # Importar configuracin
 try:
     import config
@@ -778,29 +783,28 @@ async def run_google_ddg_limpio_task(keyword: str, results_num: int, callback_ur
     try:
         search_config = SearchConfig()
         
-        # Determinar qué motores de búsqueda usar
+        # Determinar qué motores de búsqueda usar (solo Google y Bing)
         engines = []
         if search_config.google_enabled:
             engines.append("google")
-        if search_config.duckduckgo_enabled:
-            engines.append("duckduckgo")
-        if search_config.gigablast_enabled:
-            engines.append("gigablast")
         if search_config.bing_enabled:
             engines.append("bing")
-        if search_config.brave_enabled:
-            engines.append("brave")
             
         if not engines:
             raise ValueError("No hay motores de búsqueda habilitados en la configuración")
         
-        # Configurar timeouts personalizados
+        # Configurar timeouts personalizados (solo para Google y Bing)
         timeouts = {
-            'google': search_config.google_timeout,
-            'duckduckgo': search_config.duckduckgo_timeout,
-            'gigablast': search_config.gigablast_timeout,
-            'bing': search_config.bing_timeout,
-            'brave': search_config.brave_timeout
+            'google': {
+                'timeout': search_config.google_timeout,
+                'max_retries': 3,
+                'retry_delay': 10
+            },
+            'bing': {
+                'timeout': search_config.bing_timeout,
+                'max_retries': 2,
+                'retry_delay': 5
+            }
         }
             
         logger.info(f"[Task {task_id}] Usando motores de búsqueda: {', '.join(engines)}")
@@ -813,7 +817,8 @@ async def run_google_ddg_limpio_task(keyword: str, results_num: int, callback_ur
                 query=keyword,
                 engines=engines,
                 num_results=search_config.results_per_engine,
-                timeouts=timeouts
+                timeouts=timeouts,
+                search_config=search_config # Pasar la instancia de SearchConfig
             )
         except Exception as e:
             logger.error(f"[Task {task_id}] Error en la búsqueda: {str(e)}", exc_info=True)
