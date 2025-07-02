@@ -523,45 +523,47 @@ async def scrape_page(url: str, timeout: int = 60) -> Optional[Dict[str, Any]]:
         return None
 
 async def search_duckduckgo_manual(query: str, num_results: int = 10, timeout: int = 30) -> List[str]:
-    logger.info(f"Iniciando búsqueda en DuckDuckGo para: {query} (resultados: {num_results})")
-    results = []
+    """Versión mejorada de búsqueda en DuckDuckGo"""
     try:
-        # Construir la URL de DuckDuckGo
         url = f"https://duckduckgo.com/?t=h_&q={urllib.parse.quote_plus(query)}&ia=web"
-
+        
         headers = {
-            "User-Agent": random.choice(USER_AGENTS),
-            "Accept-Language": "en-US,en;q=0.9",
-            "Accept-Encoding": "gzip, deflate, br",
-            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9",
-            "Connection": "keep-alive",
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+            'Accept': 'text/html,application/xhtml+xml',
+            'Accept-Language': 'en-US,en;q=0.9',
+            'Referer': 'https://duckduckgo.com/',
+            'DNT': '1'
         }
-
-        async with aiohttp.ClientSession() as session:
-            async with session.get(url, headers=headers, timeout=timeout) as response:
-                response.raise_for_status()
+        
+        async with aiohttp.ClientSession(
+            headers=headers,
+            cookie_jar=aiohttp.CookieJar(),
+            timeout=aiohttp.ClientTimeout(total=timeout)
+        ) as session:
+            async with session.get(url, allow_redirects=True) as response:
+                if response.status != 200:
+                    logger.error(f"Error HTTP {response.status} en DuckDuckGo para URL: {url}")
+                    return []
+                
                 html = await response.text()
-
-        soup = BeautifulSoup(html, 'html.parser')
-
-        # Selectores para DuckDuckGo (pueden requerir ajuste si la estructura cambia)
-        for link in soup.select('a.result__a'):
-            href = link.get('href')
-            if href and href.startswith('http'): # Asegurarse de que sea una URL completa
-                results.append(href)
-                if len(results) >= num_results:
-                    break
-
-        logger.info(f"Búsqueda en DuckDuckGo completada con {len(results)} resultados.")
-        return results
-
-    except aiohttp.ClientError as e:
-        logger.error(f"Error de cliente en DuckDuckGo: {e}")
+                soup = BeautifulSoup(html, 'html.parser')
+                results = []
+                
+                for result in soup.select('a.result__a'):
+                    if len(results) >= num_results:
+                        break
+                    if result.get('href'):
+                        results.append(result['href'])
+                
+                logger.info(f"Búsqueda DuckDuckGo exitosa. Resultados: {len(results)}")
+                return results
+                
     except asyncio.TimeoutError:
-        logger.error(f"Tiempo de espera agotado para DuckDuckGo.")
+        logger.error(f"Timeout en DuckDuckGo después de {timeout} segundos")
+        return []
     except Exception as e:
-        logger.error(f"Error inesperado en DuckDuckGo: {e}", exc_info=True)
-    return []
+        logger.error(f"Error inesperado en DuckDuckGo: {str(e)}", exc_info=True)
+        return []
 
 async def search_bing(query: str, num_results: int = 10, timeout: int = 30, first: int = 1) -> List[str]:
     """
