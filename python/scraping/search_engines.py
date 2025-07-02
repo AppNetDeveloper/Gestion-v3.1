@@ -628,6 +628,87 @@ async def search_bing(query: str, num_results: int = 10, timeout: int = 30, firs
         logger.error(f"Error en búsqueda Bing (first={first}): {str(e)}")
         return []
 
+# ==================== ECOSIA ====================
+
+async def search_ecosia(query: str, num_results: int = 10, timeout: int = 30) -> List[str]:
+    """
+    Realiza una búsqueda en Ecosia y devuelve las URLs de los resultados.
+    
+    Args:
+        query: Término de búsqueda
+        num_results: Número máximo de resultados a devolver
+        timeout: Tiempo máximo de espera en segundos
+        
+    Returns:
+        Lista de URLs de resultados
+    """
+    try:
+        url = f"https://www.ecosia.org/search?q={urllib.parse.quote_plus(query)}"
+        headers = {'User-Agent': random.choice(USER_AGENTS)}
+        
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url, headers=headers, timeout=timeout) as response:
+                html = await response.text()
+                soup = BeautifulSoup(html, 'html.parser')
+                return [a['href'] for a in soup.select('.result-url')[:num_results] if a.get('href')]
+    except Exception as e:
+        logger.error(f"Error en Ecosia: {str(e)}")
+        return []
+
+# ==================== QWANT ====================
+
+async def search_qwant(query: str, num_results: int = 10, timeout: int = 30) -> List[str]:
+    """
+    Realiza una búsqueda en Qwant y devuelve las URLs de los resultados.
+    
+    Args:
+        query: Término de búsqueda
+        num_results: Número máximo de resultados a devolver
+        timeout: Tiempo máximo de espera en segundos
+        
+    Returns:
+        Lista de URLs de resultados
+    """
+    try:
+        url = f"https://www.qwant.com/?q={urllib.parse.quote_plus(query)}&t=web"
+        headers = {'User-Agent': random.choice(USER_AGENTS)}
+        
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url, headers=headers, timeout=timeout) as response:
+                html = await response.text()
+                soup = BeautifulSoup(html, 'html.parser')
+                return [a['href'] for a in soup.select('.result a')[:num_results] if a.get('href')]
+    except Exception as e:
+        logger.error(f"Error en Qwant: {str(e)}")
+        return []
+
+# ==================== STARTPAGE ====================
+
+async def search_startpage(query: str, num_results: int = 10, timeout: int = 30) -> List[str]:
+    """
+    Realiza una búsqueda en Startpage y devuelve las URLs de los resultados.
+    
+    Args:
+        query: Término de búsqueda
+        num_results: Número máximo de resultados a devolver
+        timeout: Tiempo máximo de espera en segundos
+        
+    Returns:
+        Lista de URLs de resultados
+    """
+    try:
+        url = f"https://www.startpage.com/do/search?query={urllib.parse.quote_plus(query)}"
+        headers = {'User-Agent': random.choice(USER_AGENTS)}
+        
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url, headers=headers, timeout=timeout) as response:
+                html = await response.text()
+                soup = BeautifulSoup(html, 'html.parser')
+                return [a['href'] for a in soup.select('.w-gl__result-url')[:num_results] if a.get('href')]
+    except Exception as e:
+        logger.error(f"Error en Startpage: {str(e)}")
+        return []
+
 # ==================== FUNCIÓN UNIFICADA ====================
 
 async def safe_search(coroutine, engine_name, timeout):
@@ -669,7 +750,7 @@ except ImportError:
 
 async def search_multiple_engines(
     query: str,
-    engines: list = ["google", "duckduckgo"],
+    engines: list = ["google", "duckduckgo", "ecosia", "qwant", "startpage"],
     num_results: int = 500,  # Aumentado de 10 a 20 resultados por defecto
     timeouts: Dict[str, int] = None,
     pages: int = 10,  # Número de páginas a buscar por motor
@@ -729,6 +810,36 @@ async def search_multiple_engines(
                 search_duckduckgo_manual(query, num_results=min(10, num_results)),
                 "duckduckgo",
                 timeouts.get('duckduckgo', 30)
+            )
+        ))
+
+    if "ecosia" in engines:
+        search_tasks.append((
+            "ecosia",
+            safe_search(
+                search_ecosia(query, num_results=min(10, num_results)),
+                "ecosia",
+                timeouts.get('ecosia', 30)
+            )
+        ))
+
+    if "qwant" in engines:
+        search_tasks.append((
+            "qwant",
+            safe_search(
+                search_qwant(query, num_results=min(10, num_results)),
+                "qwant",
+                timeouts.get('qwant', 30)
+            )
+        ))
+
+    if "startpage" in engines:
+        search_tasks.append((
+            "startpage",
+            safe_search(
+                search_startpage(query, num_results=min(10, num_results)),
+                "startpage",
+                timeouts.get('startpage', 30)
             )
         ))
 
