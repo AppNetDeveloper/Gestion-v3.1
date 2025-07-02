@@ -92,7 +92,7 @@ async def search_google(query: str, num_results: int = 100, timeout: int = 30, p
             
             urls = list(google_search_lib(
                 query, # El término de búsqueda es el primer argumento posicional
-                num=num_results, # Usar 'num' para el número de resultados
+                num_results=num_results, # Usar 'num_results' para el número de resultados
                 lang="es",
                 proxy=proxy # Pasar el proxy a la función de búsqueda de Google
             ))
@@ -506,7 +506,9 @@ async def search_bing(query: str, num_results: int = 10, timeout: int = 30, firs
         })
         
         # Usar CookieJar para manejar cookies de sesión
-        async with aiohttp.ClientSession(cookie_jar=aiohttp.CookieJar(unsafe=True)) as session:
+        async with aiohttp.ClientSession(
+            cookie_jar=aiohttp.CookieJar(unsafe=True)
+        ) as session:
             async with session.get(base_url, params=params, headers=headers, timeout=timeout) as response:
                 response.raise_for_status()
                 html = await response.text()
@@ -515,7 +517,7 @@ async def search_bing(query: str, num_results: int = 10, timeout: int = 30, firs
         results = []
         
         # Buscar enlaces en los resultados de búsqueda
-        for result in soup.select('li.b_algo h2 a'):
+        for result in soup.select('ol#b_results li.b_algo h2 a'):
             url = result.get('href', '')
             # Verificar que la URL sea válida y no sea un enlace de Bing o un dominio en la lista negra
             if url and url.startswith('http') and 'bing.com' not in url and not any(domain in url for domain in BLACKLISTED_DOMAINS):
