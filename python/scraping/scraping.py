@@ -787,6 +787,8 @@ async def run_google_ddg_limpio_task(keyword: str, results_num: int, callback_ur
         engines = []
         if search_config.google_enabled:
             engines.append("google")
+        if search_config.duckduckgo_enabled:
+            engines.append("duckduckgo")
         if search_config.bing_enabled:
             engines.append("bing")
             

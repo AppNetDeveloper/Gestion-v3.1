@@ -10,6 +10,7 @@ import logging
 import aiohttp
 import httpx
 from urllib.parse import urlparse, parse_qs, urlencode
+import urllib.parse
 import re
 from collections import defaultdict # Añadido: Importar defaultdict
 from duckduckgo_search import DDGS # Añadido: Importar DDGS
@@ -469,6 +470,47 @@ async def search_brave(query: str, num_results: int = 10, timeout: int = 60, off
 
 BLACKLISTED_DOMAINS = ["zhihu.com", "baidu.com"]
 
+async def search_duckduckgo_manual(query: str, num_results: int = 10, timeout: int = 30) -> List[str]:
+    logger.info(f"Iniciando búsqueda en DuckDuckGo para: {query} (resultados: {num_results})")
+    results = []
+    try:
+        # Construir la URL de DuckDuckGo
+        url = f"https://duckduckgo.com/?t=h_&q={urllib.parse.quote_plus(query)}&ia=web"
+
+        headers = {
+            "User-Agent": random.choice(USER_AGENTS),
+            "Accept-Language": "en-US,en;q=0.9",
+            "Accept-Encoding": "gzip, deflate, br",
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9",
+            "Connection": "keep-alive",
+        }
+
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url, headers=headers, timeout=timeout) as response:
+                response.raise_for_status()
+                html = await response.text()
+
+        soup = BeautifulSoup(html, 'html.parser')
+
+        # Selectores para DuckDuckGo (pueden requerir ajuste si la estructura cambia)
+        for link in soup.select('a.result__a'):
+            href = link.get('href')
+            if href and href.startswith('http'): # Asegurarse de que sea una URL completa
+                results.append(href)
+                if len(results) >= num_results:
+                    break
+
+        logger.info(f"Búsqueda en DuckDuckGo completada con {len(results)} resultados.")
+        return results
+
+    except aiohttp.ClientError as e:
+        logger.error(f"Error de cliente en DuckDuckGo: {e}")
+    except asyncio.TimeoutError:
+        logger.error(f"Tiempo de espera agotado para DuckDuckGo.")
+    except Exception as e:
+        logger.error(f"Error inesperado en DuckDuckGo: {e}", exc_info=True)
+    return []
+
 async def search_bing(query: str, num_results: int = 10, timeout: int = 30, first: int = 1) -> List[str]:
     """
     Realiza una búsqueda en Bing mediante web scraping.
@@ -626,6 +668,16 @@ async def search_multiple_engines(
             )
         ))
     
+    if "duckduckgo" in engines:
+        search_tasks.append((
+            "duckduckgo",
+            safe_search(
+                search_duckduckgo_manual(query, num_results=min(10, num_results)),
+                "duckduckgo",
+                timeouts.get('duckduckgo', 30)
+            )
+        ))
+
     if "bing" in engines:
         # Bing con paginación - Ampliamos a más páginas (hasta 20)
         bing_pages = min(20, pages * 2)  
@@ -717,7 +769,7 @@ if __name__ == "__main__":
     # Realizar búsqueda en todos los motores
     results = search_multiple_engines(
         query=test_query,
-        engines=["gigablast", "bing"],  # Sin Brave para la prueba
+        engines=["gigablast", "bing", "duckduckgo"],  # Sin Brave para la prueba
         num_results=5
     )
     
