@@ -36,6 +36,32 @@ from requests.packages.urllib3.exceptions import InsecureRequestWarning
 # Local application imports
 from search_engines import search_multiple_engines
 
+# ================== BÚSQUEDA HTML EN DUCKDUCKGO ==================
+import aiohttp
+from bs4 import BeautifulSoup
+
+async def search_duckduckgo_html(query, num_results=20):
+    """
+    Realiza una búsqueda en DuckDuckGo usando la web pública y parsea el HTML para extraer URLs.
+    """
+    search_url = f"https://duckduckgo.com/?t=h_&q={query.replace(' ', '+')}"
+    headers = random_headers()
+    results = []
+    try:
+        async with aiohttp.ClientSession(headers=headers) as session:
+            async with session.get(search_url, timeout=15) as resp:
+                html = await resp.text()
+                soup = BeautifulSoup(html, 'html.parser')
+                for a in soup.select('a.result__a'):
+                    href = a.get('href')
+                    if href and href.startswith('http'):
+                        results.append(href)
+                        if len(results) >= num_results:
+                            break
+    except Exception as e:
+        logger.warning(f"[DuckDuckGo HTML] Error en búsqueda HTML: {e}")
+    return results
+
 # Suppress InsecureRequestWarning
 warnings.filterwarnings("ignore", category=InsecureRequestWarning)
 
@@ -202,18 +228,25 @@ def random_headers():
         'Upgrade-Insecure-Requests': '1'
     }
 
+# ================== CONFIGURACIÓN DE CRAWLING PROFUNDO ==================
+MAX_CRAWL_DEPTH = 2           # Profundidad máxima de crawling
+MAX_CRAWL_PAGES = 20          # Máximo de páginas por dominio
+CRAWL_TIMEOUT_PER_PAGE = 15   # Timeout por página (segundos)
+MAX_CRAWL_CONCURRENCY = 5     # Máximas peticiones simultáneas
+
+# ================== EXTRACTOR MEJORADO DE EMAILS ==================
 def extract_emails_from_html(html_content: str, soup: BeautifulSoup) -> List[str]:
     """
-    Extrae direcciones de correo electrónico de forma conservadora desde el HTML.
-    Se centra en fuentes fiables para minimizar falsos positivos.
+    Extrae direcciones de correo electrónico de forma robusta desde el HTML y texto visible.
+    Incluye mailto, texto visible, atributos data-email y comentarios, y detecta ofuscaciones comunes.
     """
-    # Descartar scripts y estilos para no extraer código
+    # Limpiar scripts y estilos
     for script_or_style in soup(["script", "style"]):
         script_or_style.decompose()
 
     all_emails = set()
 
-    # 1. Buscar en enlaces mailto: (fuente más fiable)
+    # 1. mailto:
     for a in soup.select('a[href^="mailto:"]'):
         try:
             mailto_href = a.get('href', '')
@@ -221,28 +254,101 @@ def extract_emails_from_html(html_content: str, soup: BeautifulSoup) -> List[str
             if email:
                 all_emails.add(email.lower())
         except Exception:
-            pass  # Ignorar errores en mailto malformados
+            pass
 
-    # 2. Buscar con un regex estricto en el texto visible del cuerpo
+    # 2. data-email y atributos
+    for tag in soup.find_all(attrs={"data-email": True}):
+        email = tag.get("data-email", "").strip()
+        if email:
+            all_emails.add(email.lower())
+
+    # 3. Comentarios HTML
+    comments = soup.find_all(string=lambda text: isinstance(text, type(soup.comment)))
+    for comment in comments:
+        found = re.findall(r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}', comment)
+        for email in found:
+            all_emails.add(email.lower())
+
+    # 4. Texto visible (con ofuscaciones)
     try:
-        # Patrón estricto para emails
-        email_pattern = r'\b[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}\b'
-        
-        # Obtener solo el texto visible para evitar JS y datos ofuscados
         visible_text = soup.body.get_text(separator=' ', strip=True)
-        
-        # Reemplazar ofuscaciones comunes
         visible_text = visible_text.replace('[at]', '@').replace('(at)', '@')
         visible_text = visible_text.replace('[dot]', '.').replace('(dot)', '.')
-        
+        visible_text = visible_text.replace(' arroba ', '@').replace(' punto ', '.')
+        email_pattern = r'\b[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}\b'
         found_emails = re.findall(email_pattern, visible_text, re.IGNORECASE)
         for email in found_emails:
             all_emails.add(email.lower())
-            
     except Exception as e:
-        logger.warning(f"[Email Extract] Error al buscar emails en el texto: {e}")
+        logger.warning(f"[Email Extract] Error al buscar emails en texto: {e}")
 
+    # 5. Regex flexible para emails ofuscados
+    try:
+        flexible_pattern = r'([a-zA-Z0-9._%+-]+\s*(?:@|\[at\]|\(at\)|\sarroba\s)\s*[a-zA-Z0-9.-]+\s*(?:\.|\[dot\]|\(dot\)|\spunto\s)\s*[a-zA-Z]{2,})'
+        visible_text = soup.body.get_text(separator=' ', strip=True)
+        for match in re.findall(flexible_pattern, visible_text, re.IGNORECASE):
+            clean = (
+                match.replace('[at]', '@').replace('(at)', '@').replace(' arroba ', '@')
+                .replace('[dot]', '.').replace('(dot)', '.').replace(' punto ', '.')
+                .replace(' ', '')
+            )
+            if '@' in clean and '.' in clean:
+                all_emails.add(clean.lower())
+    except Exception as e:
+        logger.warning(f"[Email Extract] Error en regex flexible: {e}")
+
+    # Filtrar emails inválidos
     return _filter_emails(list(all_emails))
+
+# ================== CRAWLER PROFUNDO ASÍNCRONO ==================
+async def deep_scrape_url_async(url, client, max_depth=MAX_CRAWL_DEPTH, max_pages=MAX_CRAWL_PAGES, visited=None, depth=0, found_emails=None, found_phones=None):
+    """
+    Crawling profundo: recorre enlaces internos hasta max_depth y max_pages, extrayendo emails/teléfonos de cada página.
+    """
+    from urllib.parse import urlparse, urljoin
+    if visited is None:
+        visited = set()
+    if found_emails is None:
+        found_emails = set()
+    if found_phones is None:
+        found_phones = set()
+
+    if url in visited or len(visited) >= max_pages or depth > max_depth:
+        return found_emails, found_phones
+    visited.add(url)
+
+    try:
+        resp = await client.get(url, timeout=CRAWL_TIMEOUT_PER_PAGE, follow_redirects=True)
+        if resp.status_code != 200 or 'text/html' not in resp.headers.get('content-type', ''):
+            return found_emails, found_phones
+        html = resp.text
+        soup = BeautifulSoup(html, 'html.parser')
+        # Extraer emails/teléfonos
+        emails = extract_emails_from_html(html, soup)
+        for e in emails:
+            found_emails.add(e)
+        contact = extract_contact_info(html, soup)
+        for p in contact.get('phones', []):
+            found_phones.add(p)
+        # Extraer enlaces internos
+        base_domain = urlparse(url).netloc
+        links = set()
+        for a in soup.find_all('a', href=True):
+            link = urljoin(url, a['href'])
+            parsed = urlparse(link)
+            if parsed.scheme.startswith('http') and parsed.netloc == base_domain:
+                # Filtrar archivos
+                if not re.search(r'\.(pdf|jpg|jpeg|png|zip|rar|doc|docx|xls|xlsx|ppt|pptx|mp3|mp4|avi|mov|exe|svg)$', parsed.path, re.IGNORECASE):
+                    links.add(link.split('#')[0].rstrip('/'))
+        # Recursividad controlada
+        for link in links:
+            if len(visited) >= max_pages:
+                break
+            await deep_scrape_url_async(link, client, max_depth, max_pages, visited, depth+1, found_emails, found_phones)
+    except Exception as e:
+        logger.warning(f"[DeepCrawler] Error en {url}: {e}")
+    return found_emails, found_phones
+
 
 def extract_contact_info(html_content: str, soup: BeautifulSoup) -> Dict[str, Any]:
     """
@@ -392,22 +498,46 @@ def is_linkedin_url(url: str) -> bool:
 
 async def extract_data_from_url_async(url: str, client: httpx.AsyncClient) -> Dict[str, Any]:
     """
-    Extrae nombre, correos y teléfono de una URL usando httpx (ASÍNCRONO).
-    
+    Extrae nombre, todos los correos y teléfonos de una URL usando crawling profundo (asíncrono).
     Args:
         url: URL de la que extraer la información
         client: Cliente HTTP asíncrono
-        
     Returns:
-        Diccionario con los datos extraídos (nombre, correos, teléfono)
+        Diccionario con los datos extraídos (nombre, correos, teléfono, url)
     """
     data = {
         "nombre": "No encontrado",
         "correos": [],
         "telefono": "No encontrado",
-        "url": url  # Añadimos la URL para facilitar el seguimiento
+        "url": url
     }
-    
+    try:
+        logger.info(f"[Deep Async Extract] Iniciando crawling profundo en: {url}")
+        # Usar el crawler profundo
+        emails, phones = await deep_scrape_url_async(url, client)
+        emails = list(set(emails))
+        phones = list(set(phones))
+        if emails:
+            logger.info(f"[Deep Async Extract] {len(emails)} correos encontrados en crawling profundo de {url}")
+            data["correos"] = emails
+        if phones:
+            logger.info(f"[Deep Async Extract] {len(phones)} teléfonos encontrados en crawling profundo de {url}")
+            # Guardar el primero como teléfono principal, el resto quedan en la lista
+            data["telefono"] = phones[0] if phones else "No encontrado"
+        # Obtener título de la página raíz si es posible
+        try:
+            resp = await client.get(url, timeout=CRAWL_TIMEOUT_PER_PAGE, follow_redirects=True)
+            if resp.status_code == 200 and 'text/html' in resp.headers.get('content-type', ''):
+                soup = BeautifulSoup(resp.text, 'html.parser')
+                if soup.title and soup.title.string:
+                    title = soup.title.string.strip()
+                    data["nombre"] = ' '.join(title.split())[:255]
+        except Exception:
+            pass
+    except Exception as e:
+        logger.error(f"[Deep Async Extract] Error en crawling profundo de {url}: {e}")
+    return data
+
     # # Saltar LinkedIn ya que bloquea las peticiones
     # if is_linkedin_url(url):
     #     logger.info(f"[Async Extract] Saltando LinkedIn: {url}")
