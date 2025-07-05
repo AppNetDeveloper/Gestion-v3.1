@@ -1,0 +1,26 @@
+[
+  {
+    "keyword": "empresa transporte murcia",
+    "results_num": 10,
+    "callback_url": "https://app.appnet.dev/api/scraping-callback?task_id=151",
+    "task_id": "b0495b94-0209-4040-9fb7-23ca28bb71e2"
+  },
+  {
+    "keyword": "cristaleria , fabricante de vidriso espa\u00f1a",
+    "results_num": 10,
+    "callback_url": "https://app.appnet.dev/api/scraping-callback?task_id=152",
+    "task_id": "9ae4cba7-03e9-4ec3-b293-bdee8d39f1b1"
+  },
+  {
+    "keyword": "departamento rrhh elpozo",
+    "results_num": 10,
+    "callback_url": "https://app.appnet.dev/api/scraping-callback?task_id=153",
+    "task_id": "8d94ef81-8ea3-40d5-8918-980dd31e877d"
+  },
+  {
+    "keyword": "empresa transporte murcia",
+    "results_num": 10,
+    "callback_url": "https://app.appnet.dev/api/scraping-callback?task_id=154",
+    "task_id": "73fbda69-1016-402b-8c31-a035a841e25f"
+  }
+]

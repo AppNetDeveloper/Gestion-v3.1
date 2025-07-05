@@ -176,8 +176,11 @@ class SearchConfig:
         import os
         
         # Configuración de habilitación de motores
-        self.google_enabled = os.getenv('GOOGLE_ENABLED', str(self.google_enabled)).lower() == 'true'
-        self.duckduckgo_enabled = os.getenv('DUCKDUCKGO_ENABLED', str(self.duckduckgo_enabled)).lower() == 'true'
+        google_env = os.getenv('GOOGLE_ENABLED')
+        duck_env = os.getenv('DUCKDUCKGO_ENABLED')
+        self.google_enabled = True if google_env is None else google_env.lower() == 'true'
+        self.duckduckgo_enabled = True if duck_env is None else duck_env.lower() == 'true'
+        logger.info(f"[Motores] Google enabled: {self.google_enabled}, DuckDuckGo enabled: {self.duckduckgo_enabled}")
         self.gigablast_enabled = os.getenv('GIGABLAST_ENABLED', str(self.gigablast_enabled)).lower() == 'true'
         self.bing_enabled = os.getenv('BING_ENABLED', str(self.bing_enabled)).lower() == 'true'
         self.brave_enabled = os.getenv('BRAVE_ENABLED', str(self.brave_enabled)).lower() == 'true'
@@ -229,10 +232,37 @@ logging.getLogger("httpx").setLevel(logging.WARNING)
 
 # Inicializar variables globales para el sistema de cola de búsquedas
 search_queue = asyncio.Queue()
-active_searches: Set[str] = set()  # Para evitar búsquedas duplicadas
-search_lock = asyncio.Lock()  # Bloqueo para operaciones en active_searches
 search_config = SearchConfig()  # Configuración de búsqueda
 current_tasks = set()  # Track currently running tasks
+
+# Persistencia de tareas pendientes
+PENDING_TASKS_FILE = '/var/www/html/python/scraping/pending_tasks.json'
+
+def load_pending_tasks():
+    try:
+        if os.path.exists(PENDING_TASKS_FILE):
+            with open(PENDING_TASKS_FILE, 'r') as f:
+                return json.load(f)
+    except Exception as e:
+        logger.error(f"Error cargando tareas pendientes: {e}")
+    return []
+
+def save_pending_tasks(tasks):
+    try:
+        with open(PENDING_TASKS_FILE, 'w') as f:
+            json.dump(tasks, f, indent=2)
+    except Exception as e:
+        logger.error(f"Error guardando tareas pendientes: {e}")
+
+def add_pending_task(task):
+    tasks = load_pending_tasks()
+    tasks.append(task)
+    save_pending_tasks(tasks)
+
+def remove_pending_task(task_id):
+    tasks = load_pending_tasks()
+    tasks = [t for t in tasks if t.get('task_id') != task_id]
+    save_pending_tasks(tasks)
 
 app = FastAPI(
     title="Buscador Multi-Fuente Asncrono v3.4 (Callbacks, Concurrencia, Config)",
@@ -883,25 +913,71 @@ async def safe_google_search(query: str, num_results: int, lang: str = 'es', tim
                 wait_time = random.uniform(10, 30)
                 await asyncio.sleep(wait_time)
     
-    # Si llegamos aquí, todos los intentos fallaron
-    logger.error(f"[Google Search] Error después de {max_retries} intentos: {last_error}")
-    return []
 
 async def send_callback(callback_url: str, payload: Dict[str, Any]):
-    """Funcin auxiliar para enviar el resultado al callback_url."""
+    """Función auxiliar para enviar el resultado al callback_url."""
     if not callback_url:
         return
-        
     payload["timestamp_completion"] = time.strftime("%Y-%m-%d %H:%M:%S %Z")
+    if not payload.get("fuente"):
+        payload["fuente"] = "Scraping"
+    
+    # Log detallado del payload antes de enviarlo
+    task_id = payload.get('task_id', 'N/A')
+    logger.info(f"[Task {task_id}] ENVIANDO CALLBACK a {callback_url}")
+    
+    # Logging de estructura principal
+    logger.info(f"[Task {task_id}] Estructura del payload: {list(payload.keys())}")
+    
+    # Logging de campos críticos
+    if 'resultados' in payload:
+        if isinstance(payload['resultados'], dict):
+            logger.info(f"[Task {task_id}] resultados: diccionario con {len(payload['resultados'])} URLs")
+            if payload['resultados'] and list(payload['resultados'].values()):
+                sample = next(iter(payload['resultados'].values()))
+                logger.info(f"[Task {task_id}] Ejemplo de estructura de resultado: {list(sample.keys())}")
+        elif isinstance(payload['resultados'], list):
+            logger.info(f"[Task {task_id}] resultados: lista con {len(payload['resultados'])} elementos")
+            if payload['resultados']:
+                logger.info(f"[Task {task_id}] Ejemplo de estructura de resultado: {list(payload['resultados'][0].keys())}")
+    
+    if 'empresas' in payload:
+        logger.info(f"[Task {task_id}] empresas: lista con {len(payload['empresas'])} elementos")
+        if payload['empresas']:
+            logger.info(f"[Task {task_id}] Ejemplo de estructura de empresa: {list(payload['empresas'][0].keys())}")
+            # Verificar si hay correo en el primer elemento
+            if 'correo' in payload['empresas'][0]:
+                logger.info(f"[Task {task_id}] Primer correo: {payload['empresas'][0]['correo']}")
+    
     async with httpx.AsyncClient(timeout=config.CALLBACK_TIMEOUT, verify=False) as client:
         try:
             response = await client.post(callback_url, json=payload)
             response.raise_for_status()
-            logger.info(f"Callback enviado exitosamente a {callback_url} (Task ID: {payload.get('task_id', 'N/A')}), Status: {response.status_code}")
+            logger.info(f"[Task {task_id}] ✓ CALLBACK EXITOSO: Status {response.status_code}")
+            
+            # Intentar obtener y loggear la respuesta
+            try:
+                resp_text = response.text
+                if len(resp_text) > 500:
+                    resp_text = resp_text[:500] + "... (truncado)"
+                logger.info(f"[Task {task_id}] Respuesta del servidor: {resp_text}")
+            except Exception as resp_error:
+                logger.warning(f"[Task {task_id}] No se pudo leer la respuesta completa: {resp_error}")
+                
         except httpx.RequestError as e:
-            logger.error(f"Error al enviar callback a {callback_url} (Task ID: {payload.get('task_id', 'N/A')}): {e}")
+            logger.error(f"[Task {task_id}] ✗ ERROR DE CONEXIÓN: {e}")
+        except httpx.HTTPStatusError as e:
+            logger.error(f"[Task {task_id}] ✗ ERROR HTTP {e.response.status_code}: {e}")
+            # Intentar obtener el cuerpo de la respuesta de error
+            try:
+                resp_text = e.response.text
+                if len(resp_text) > 500:
+                    resp_text = resp_text[:500] + "... (truncado)"
+                logger.error(f"[Task {task_id}] Detalles del error: {resp_text}")
+            except Exception:
+                pass
         except Exception as e:
-            logger.error(f"Error inesperado durante el envo del callback a {callback_url} (Task ID: {payload.get('task_id', 'N/A')}): {e}")
+            logger.error(f"[Task {task_id}] ✗ ERROR INESPERADO: {str(e)}")
 
 async def run_google_ddg_task(keyword: str, results_num: int, callback_url: str, task_id: str):
     """Tarea de fondo para buscar en Google/DDG y enviar callback."""
@@ -999,6 +1075,7 @@ async def run_google_ddg_task(keyword: str, results_num: int, callback_url: str,
     
     callback_payload = {
         "task_id": task_id,
+        "id": int(task_id) if str(task_id).isdigit() else None,
         "status": "failed" if error_message else "completed",
         "error_message": error_message,
         "duration_seconds": duration,
@@ -1129,12 +1206,14 @@ async def run_google_ddg_limpio_task(keyword: str, results_num: int, callback_ur
                             # Enviar callback parcial tras cada scraping profundo
                             partial_payload = {
                                 "task_id": task_id,
+                                "id": int(task_id) if str(task_id).isdigit() else None,
                                 "status": "partial",
                                 "completo": False,
                                 "keyword": keyword,
                                 "url_procesada": url,
                                 "result": result,
                                 "timestamp": time.strftime("%Y-%m-%d %H:%M:%S %Z"),
+                                "fuente": "google_ddg_limpio"
                             }
                             await send_callback(callback_url, partial_payload)
 
@@ -1196,6 +1275,7 @@ async def run_google_ddg_limpio_task(keyword: str, results_num: int, callback_ur
                 empresas_flat.append({
                     "url": url,
                     "nombre": nombre,
+                    "empresa": nombre,
                     "correo": correo,
                     "telefono": telefono
                 })
@@ -1203,6 +1283,7 @@ async def run_google_ddg_limpio_task(keyword: str, results_num: int, callback_ur
             empresas_flat.append({
                 "url": url,
                 "nombre": nombre,
+                "empresa": nombre,
                 "correo": "No encontrado",
                 "telefono": telefono
             })
@@ -1225,6 +1306,7 @@ async def run_google_ddg_limpio_task(keyword: str, results_num: int, callback_ur
     # Crear el payload para el callback
     payload = {
         "task_id": task_id,
+        "id": int(task_id) if str(task_id).isdigit() else None,
         "status": "failed" if error_message else "completed",
         "error_message": error_message,
         "duration_seconds": duration,
@@ -1260,10 +1342,28 @@ async def run_google_ddg_limpio_task(keyword: str, results_num: int, callback_ur
                             headers={"Content-Type": "application/json", "User-Agent": "ScrapingService/1.0"}
                         )
                         response.raise_for_status()
-                        logger.info(f"[Task {task_id}] Resultados enviados correctamente. Respuesta: {response.status_code}")
+                        logger.info(f"[Task {task_id}] ✓ Resultados enviados correctamente. Status: {response.status_code}")
+                        
+                        # Logging de la respuesta
+                        try:
+                            resp_text = response.text
+                            if len(resp_text) > 500:
+                                resp_text = resp_text[:500] + "... (truncado)"
+                            logger.info(f"[Task {task_id}] Respuesta del servidor: {resp_text}")
+                        except Exception as resp_error:
+                            logger.warning(f"[Task {task_id}] No se pudo leer la respuesta: {resp_error}")
                         break  # Salir del bucle si el envío es exitoso
                         
                     except (httpx.HTTPStatusError, httpx.RequestError) as e:
+                        # Logging detallado del error HTTP
+                        if isinstance(e, httpx.HTTPStatusError):
+                            try:
+                                resp_text = e.response.text
+                                if len(resp_text) > 500:
+                                    resp_text = resp_text[:500] + "... (truncado)"
+                                logger.error(f"[Task {task_id}] Error HTTP {e.response.status_code}: {resp_text}")
+                            except Exception:
+                                pass
                         if attempt == max_retries - 1:  # Último intento
                             logger.error(f"[Task {task_id}] Error al enviar resultados (intento {attempt + 1}/{max_retries}): {str(e)}")
                             # Guardar los resultados en un archivo local como respaldo
@@ -1289,38 +1389,6 @@ async def run_google_ddg_limpio_task(keyword: str, results_num: int, callback_ur
     
     
     end_time = time.time()
-    duration = round(end_time - start_time, 2)
-    logger.info(f"[Task {task_id}] Tarea completada en {duration} segundos. Resultados: {len(flat_results)}")
-    
-    # Preparar y enviar el callback
-    callback_payload = {
-        'task_id': task_id,
-        'status': 'completed',
-        'error_message': None,
-        'fuente': 'google_ddg_limpio',  # Asegurar que este campo esté presente
-        'keyword': keyword,
-        'urls_procesadas': processed_urls_count,
-        'total_entradas_generadas': len(flat_results),
-        'empresas': flat_results,  # Usar 'empresas' en lugar de 'datos' para consistencia
-        'datos': {item['url']: {
-            'nombre': item.get('nombre', ''),
-            'correos': [item['correo']] if item.get('correo') and item['correo'] != 'No encontrado' else [],
-            'telefono': item.get('telefono', '')
-        } for item in flat_results},
-        'resultados': {item['url']: {
-            'nombre': item.get('nombre', ''),
-            'correos': [item['correo']] if item.get('correo') and item['correo'] != 'No encontrado' else [],
-            'telefono': item.get('telefono', '')
-        } for item in flat_results}
-    }
-    
-    try:
-        logger.info(f"[Task {task_id}] Enviando callback a {callback_url}")
-        await send_callback(callback_url, callback_payload)
-        logger.info(f"[Task {task_id}] Callback enviado exitosamente")
-    except Exception as e:
-        logger.error(f"[Task {task_id}] Error al enviar callback: {str(e)}")
-        raise
 
 @app.post(
     "/buscar-google-ddg-limpio",
@@ -1404,6 +1472,9 @@ async def buscador_google_ddg_limpio(
             queue_position = search_queue.qsize()
             logger.info(f"[Queue] Búsqueda {task_id} agregada a la cola. Posición: {queue_position}")
             
+            # Guardar persistente
+            add_pending_task({"keyword": d.keyword, "results_num": d.results, "callback_url": d.callback_url, "task_id": task_id})
+            
             return {
                 "status": "enqueued",
                 "task_id": task_id,  # Ensure task_id is included in the response
@@ -1469,9 +1540,11 @@ async def process_search_queue():
                 logger.error(f"Tarea inválida en la cola: {task}")
                 if task:
                     search_queue.task_done()
-                await asyncio.sleep(5)
                 continue
-                
+            keyword, results_num, callback_url, task_id = task
+            # Eliminar de las tareas pendientes (persistencia)
+            remove_pending_task(task_id)
+
             keyword, results_num, callback_url, task_id = task
             logger.info(f"[Queue] Procesando tarea {task_id}: {keyword}")
             
@@ -1563,6 +1636,13 @@ async def process_search_queue():
 async def startup_event():
     """Inicia el procesador de la cola de búsquedas al arrancar la aplicación."""
     logger.info("Iniciando el servicio de búsqueda...")
+    # Restaurar tareas pendientes del JSON
+    try:
+        for t in load_pending_tasks():
+            await search_queue.put((t['keyword'], t['results_num'], t['callback_url'], t['task_id']))
+            logger.info(f"[Startup] Tarea pendiente restaurada: {t['task_id']}")
+    except Exception as e:
+        logger.error(f"Error restaurando tareas pendientes: {e}")
     logger.info("Iniciando procesador de cola de búsquedas...")
     asyncio.create_task(process_search_queue())
     logger.info("Procesador de cola iniciado correctamente")

@@ -69,28 +69,27 @@ class ProcessScrapingTasks extends Command
                 // 1. Gestionar tareas atascadas que han superado el tiempo de espera de 15 minutos.
                 $this->handleStuckTasks();
 
-                // 2. Verificar si, después de la limpieza, aún hay una tarea legítimamente en proceso.
-                $isTaskProcessing = ScrapingTask::where('status', 'processing')->exists();
+                // 3. Buscamos una nueva tarea pendiente.
+                $this->info("Buscando una tarea pendiente...");
+                
+                $this->cleanupOldFailedTasks();
 
-                if ($isTaskProcessing) {
-                    $this->info("Hay una tarea en proceso. Esperando a que termine...");
-                } else {
-                    // 3. Si no hay tareas procesándose, buscamos una nueva.
-                    $this->info("No hay tareas en proceso. Buscando una tarea pendiente...");
-                    
-                    $this->cleanupOldFailedTasks();
+                // Buscar todas las tareas pendientes que NO tengan api_task_id asignado
+                $pendingTasks = ScrapingTask::where('status', 'pending')
+                    ->whereNull('api_task_id')
+                    ->orderBy('retry_attempts', 'asc')
+                    ->orderBy('created_at', 'asc')
+                    ->get();
 
-                    $task = ScrapingTask::where('status', 'pending')
-                                        ->orderBy('retry_attempts', 'asc')
-                                        ->orderBy('created_at', 'asc')
-                                        ->first();
-
-                    if ($task) {
+                if ($pendingTasks->count() > 0) {
+                    foreach ($pendingTasks as $task) {
                         $this->processSingleTask($task);
-                    } else {
-                        $this->info("No hay tareas pendientes. Esperando {$sleepSeconds} segundos...");
                     }
+                } else {
+                    $this->info("No hay tareas pendientes. Esperando {$sleepSeconds} segundos...");
                 }
+                // También buscar tareas stuck con api_task_id asignado más de 30 min y no finalizadas
+                $this->closeTimedOutApiTasks();
             } catch (Throwable $e) {
                 $this->error("Error fatal en el bucle principal: " . $e->getMessage());
                 Log::critical("Error fatal en el bucle principal del procesador de tareas", [
@@ -105,6 +104,27 @@ class ProcessScrapingTasks extends Command
         return Command::SUCCESS;
     }
     
+    /**
+     * Marca tareas con api_task_id asignado como 'finalizada' si han pasado más de 30 minutos y siguen abiertas.
+     */
+    protected function closeTimedOutApiTasks(): void
+    {
+        $timeoutThreshold = now()->subMinutes(30);
+        $tasks = ScrapingTask::whereNotNull('api_task_id')
+            ->whereIn('status', ['pending', 'processing'])
+            ->where('updated_at', '<=', $timeoutThreshold)
+            ->get();
+        foreach ($tasks as $task) {
+            $task->update([
+                'status' => 'completed',
+                'error_message' => 'Finalizada automáticamente por timeout de 30 minutos sin cierre.',
+                'api_task_id' => null
+            ]);
+            $this->warn("⏱️ Tarea ID {$task->id} marcada como finalizada por timeout de 30 minutos.");
+            Log::warning("Tarea ID {$task->id} marcada como finalizada por timeout de 30 minutos.", ['task_id' => $task->id]);
+        }
+    }
+
     /**
      * Procesa una única tarea de scraping.
      *
