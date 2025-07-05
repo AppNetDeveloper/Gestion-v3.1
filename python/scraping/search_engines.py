@@ -752,15 +752,85 @@ except ImportError:
 
 async def search_multiple_engines(
     query: str,
-    engines: list = ["google", "duckduckgo", "ecosia", "qwant", "startpage"],
-    num_results: int = 500,  # Aumentado de 10 a 20 resultados por defecto
+    engines: list = ["google", "bing", "duckduckgo", "gigablast", "brave", "qwant", "ecosia"],
+    num_results: int = 500,
     timeouts: Dict[str, int] = None,
-    pages: int = 10,  # Número de páginas a buscar por motor
-    search_config: Optional[SearchConfig] = None, # Nuevo parámetro
-    deep_scrape: bool = False, # Habilitar scraping profundo
-    scrape_timeout: int = 60 # Timeout para scraping profundo
+    pages: int = 10,
+    search_config: Optional[SearchConfig] = None,
+    deep_scrape: bool = False,
+    scrape_timeout: int = 60
 ) -> Dict[str, Union[List[str], Dict[str, Any]]]:
     # Eliminar motores duplicados manteniendo el orden
+    import sys
+    sys.path.append("/var/www/html/python/scraping")
+    from scraping import search_duckduckgo_html, search_qwant_html, search_ecosia_html
+    
+    # Preparar tareas para todos los motores
+    search_tasks = []
+    for engine in engines:
+        if engine == "duckduckgo":
+            # Usar tanto la API como el scraping HTML
+            search_tasks.append(("duckduckgo_api", search_duckduckgo(query, num_results)))
+            search_tasks.append(("duckduckgo_html", search_duckduckgo_html(query, num_results)))
+        elif engine == "qwant":
+            search_tasks.append(("qwant_html", search_qwant_html(query, num_results)))
+        elif engine == "ecosia":
+            search_tasks.append(("ecosia_html", search_ecosia_html(query, num_results)))
+        elif engine == "google":
+            search_tasks.append(("google", search_google(query, num_results)))
+        elif engine == "bing":
+            search_tasks.append(("bing", search_bing(query, num_results)))
+        elif engine == "gigablast":
+            search_tasks.append(("gigablast", search_gigablast(query, num_results)))
+        elif engine == "brave":
+            search_tasks.append(("brave", search_brave(query, num_results)))
+        elif engine == "startpage":
+            search_tasks.append(("startpage", search_startpage(query, num_results)))
+
+    # Ejecutar búsquedas concurrentes
+    results = {}
+    if search_tasks:
+        from collections import defaultdict
+        task_groups = defaultdict(list)
+        for name, task in search_tasks:
+            task_groups[name].append(task)
+        import asyncio
+        logger.info(f"Ejecutando búsquedas en motores: {list(task_groups.keys())}")
+        async def run_engine_tasks(engine_name, task_list):
+            page_results = await asyncio.gather(*task_list, return_exceptions=True)
+            final_urls = []
+            for res in page_results:
+                if isinstance(res, list) and res:
+                    final_urls.extend(res)
+                elif isinstance(res, Exception):
+                    logger.error(f"Error en una tarea de '{engine_name}': {res}")
+            unique_urls = list(dict.fromkeys(final_urls))
+            return engine_name, unique_urls
+        all_results = await asyncio.gather(*[run_engine_tasks(name, tasks) for name, tasks in task_groups.items()])
+        for engine_name, urls in all_results:
+            results[engine_name] = urls
+
+    # Unificar y deduplicar todas las URLs encontradas
+    all_urls = []
+    for url_list in results.values():
+        all_urls.extend(url_list)
+    all_urls = list(dict.fromkeys(all_urls))
+
+    # Si deep_scrape, lanzar crawling profundo sobre todas las URLs
+    scrape_data = {}
+    if deep_scrape and all_urls:
+        import httpx
+        from scraping import extract_data_from_url_async
+        logger.info(f"Iniciando scraping profundo sobre {len(all_urls)} URLs...")
+        semaphore = asyncio.Semaphore(10)
+        async def process_url(url):
+            async with semaphore:
+                async with httpx.AsyncClient(timeout=scrape_timeout) as client:
+                    return await extract_data_from_url_async(url, client)
+        scrape_results = await asyncio.gather(*[process_url(url) for url in all_urls])
+        for url, data in zip(all_urls, scrape_results):
+            scrape_data[url] = data
+    return {"search_results": results, "all_urls": all_urls, "scrape_data": scrape_data if deep_scrape else None}
     engines = list(dict.fromkeys(engines))
     
     # Configuración de timeouts y reintentos por motor

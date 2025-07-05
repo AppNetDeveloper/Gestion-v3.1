@@ -36,7 +36,7 @@ from requests.packages.urllib3.exceptions import InsecureRequestWarning
 # Local application imports
 from search_engines import search_multiple_engines
 
-# ================== BÚSQUEDA HTML EN DUCKDUCKGO ==================
+# ================== BÚSQUEDA HTML EN DUCKDUCKGO, QWANT Y ECOSIA ==================
 import aiohttp
 from bs4 import BeautifulSoup
 
@@ -60,6 +60,50 @@ async def search_duckduckgo_html(query, num_results=20):
                             break
     except Exception as e:
         logger.warning(f"[DuckDuckGo HTML] Error en búsqueda HTML: {e}")
+    return results
+
+async def search_qwant_html(query, num_results=20):
+    """
+    Realiza una búsqueda en Qwant usando la web pública y parsea el HTML para extraer URLs.
+    """
+    search_url = f"https://www.qwant.com/?l=es&q={query.replace(' ', '+')}&t=web"
+    headers = random_headers()
+    results = []
+    try:
+        async with aiohttp.ClientSession(headers=headers) as session:
+            async with session.get(search_url, timeout=15) as resp:
+                html = await resp.text()
+                soup = BeautifulSoup(html, 'html.parser')
+                for a in soup.select('a[data-testid="result-link"]'):
+                    href = a.get('href')
+                    if href and href.startswith('http'):
+                        results.append(href)
+                        if len(results) >= num_results:
+                            break
+    except Exception as e:
+        logger.warning(f"[Qwant HTML] Error en búsqueda HTML: {e}")
+    return results
+
+async def search_ecosia_html(query, num_results=20):
+    """
+    Realiza una búsqueda en Ecosia usando la web pública y parsea el HTML para extraer URLs.
+    """
+    search_url = f"https://www.ecosia.org/search?tt=pq6881g3&method=index&q={query.replace(' ', '+')}"
+    headers = random_headers()
+    results = []
+    try:
+        async with aiohttp.ClientSession(headers=headers) as session:
+            async with session.get(search_url, timeout=15) as resp:
+                html = await resp.text()
+                soup = BeautifulSoup(html, 'html.parser')
+                for a in soup.select('a.result-title'):
+                    href = a.get('href')
+                    if href and href.startswith('http'):
+                        results.append(href)
+                        if len(results) >= num_results:
+                            break
+    except Exception as e:
+        logger.warning(f"[Ecosia HTML] Error en búsqueda HTML: {e}")
     return results
 
 # Suppress InsecureRequestWarning
@@ -271,29 +315,31 @@ def extract_emails_from_html(html_content: str, soup: BeautifulSoup) -> List[str
 
     # 4. Texto visible (con ofuscaciones)
     try:
-        visible_text = soup.body.get_text(separator=' ', strip=True)
-        visible_text = visible_text.replace('[at]', '@').replace('(at)', '@')
-        visible_text = visible_text.replace('[dot]', '.').replace('(dot)', '.')
-        visible_text = visible_text.replace(' arroba ', '@').replace(' punto ', '.')
-        email_pattern = r'\b[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}\b'
-        found_emails = re.findall(email_pattern, visible_text, re.IGNORECASE)
-        for email in found_emails:
-            all_emails.add(email.lower())
+        if soup.body:
+            visible_text = soup.body.get_text(separator=' ', strip=True)
+            visible_text = visible_text.replace('[at]', '@').replace('(at)', '@')
+            visible_text = visible_text.replace('[dot]', '.').replace('(dot)', '.')
+            visible_text = visible_text.replace(' arroba ', '@').replace(' punto ', '.')
+            email_pattern = r'\b[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}\b'
+            found_emails = re.findall(email_pattern, visible_text, re.IGNORECASE)
+            for email in found_emails:
+                all_emails.add(email.lower())
     except Exception as e:
         logger.warning(f"[Email Extract] Error al buscar emails en texto: {e}")
 
     # 5. Regex flexible para emails ofuscados
     try:
-        flexible_pattern = r'([a-zA-Z0-9._%+-]+\s*(?:@|\[at\]|\(at\)|\sarroba\s)\s*[a-zA-Z0-9.-]+\s*(?:\.|\[dot\]|\(dot\)|\spunto\s)\s*[a-zA-Z]{2,})'
-        visible_text = soup.body.get_text(separator=' ', strip=True)
-        for match in re.findall(flexible_pattern, visible_text, re.IGNORECASE):
-            clean = (
-                match.replace('[at]', '@').replace('(at)', '@').replace(' arroba ', '@')
-                .replace('[dot]', '.').replace('(dot)', '.').replace(' punto ', '.')
-                .replace(' ', '')
-            )
-            if '@' in clean and '.' in clean:
-                all_emails.add(clean.lower())
+        if soup.body:
+            flexible_pattern = r'([a-zA-Z0-9._%+-]+\s*(?:@|\[at\]|\(at\)|\sarroba\s)\s*[a-zA-Z0-9.-]+\s*(?:\.|\[dot\]|\(dot\)|\spunto\s)\s*[a-zA-Z]{2,})'
+            visible_text = soup.body.get_text(separator=' ', strip=True)
+            for match in re.findall(flexible_pattern, visible_text, re.IGNORECASE):
+                clean = (
+                    match.replace('[at]', '@').replace('(at)', '@').replace(' arroba ', '@')
+                    .replace('[dot]', '.').replace('(dot)', '.').replace(' punto ', '.')
+                    .replace(' ', '')
+                )
+                if '@' in clean and '.' in clean:
+                    all_emails.add(clean.lower())
     except Exception as e:
         logger.warning(f"[Email Extract] Error en regex flexible: {e}")
 
@@ -350,13 +396,53 @@ async def deep_scrape_url_async(url, client, max_depth=MAX_CRAWL_DEPTH, max_page
     return found_emails, found_phones
 
 
-def extract_contact_info(html_content: str, soup: BeautifulSoup) -> Dict[str, Any]:
+def extract_contact_info(html_content: str, soup: BeautifulSoup, url: str = None) -> Dict[str, Any]:
     """
     Extrae información de contacto (emails y teléfonos) del contenido HTML de forma robusta.
+    Además, escribe cada contacto encontrado en un archivo temporal para auditoría en directo.
     """
-    # Descomponer scripts y estilos para limpiar el HTML
-    for script_or_style in soup(["script", "style"]):
-        script_or_style.decompose()
+    import os
+    # Limpiar scripts y estilos
+    for tag in soup(['script', 'style', 'noscript']):
+        tag.decompose()
+    text = soup.get_text(separator=' ', strip=True)
+    emails = extract_emails_from_html(html_content, soup)
+
+    # Regex para teléfonos españoles y genéricos
+    phone_pattern = re.compile(r"(?:\+34|0034|34)?[\s\-\.]*(6|7|8|9)[0-9][\s\-\.]*(?:[0-9][\s\-\.]*){7,12}")
+    phones = set()
+    for match in phone_pattern.finditer(text):
+        phone = re.sub(r"\D", "", match.group())
+        # Limpieza avanzada de teléfonos
+        if len(phone) < 9 or len(phone) > 15:
+            continue
+        if phone == phone[0] * len(phone):  # Secuencia repetida
+            continue
+        if phone in ('123456789', '987654321', '0123456789'):
+            continue
+        # Descarta números ascendentes/descendentes simples
+        if phone in ''.join(str(i) for i in range(len(phone))) or phone in ''.join(str(i) for i in range(9, 9-len(phone), -1)):
+            continue
+        phones.add(phone)
+
+    # Escribir en el temporal
+    tmp_path = os.path.join(os.path.dirname(__file__), 'tmp_contactos_scraping.txt')
+    try:
+        with open(tmp_path, 'a', encoding='utf-8') as f:
+            if url is None:
+                url = ''
+            for email in emails:
+                f.write(f"email | {url} | {email}\n")
+            for phone in phones:
+                f.write(f"telefono | {url} | {phone}\n")
+    except Exception as e:
+        pass  # No interrumpir el scraping si hay error de escritura
+
+    return {
+        "emails": emails,
+        "phones": list(phones)
+    }
+
 
     # Extraer correos electrónicos
     try:
@@ -381,13 +467,13 @@ def extract_contact_info(html_content: str, soup: BeautifulSoup) -> Dict[str, An
 
         # 2. Buscar en el texto visible con un patrón estricto
         phone_pattern = r'(?:(?:\+|00)34[ -.]*)?([6789]\d{2}[ -.]?\d{3}[ -.]?\d{3})\b'
-        visible_text = soup.body.get_text(separator=' ', strip=True)
-        
-        matches = re.finditer(phone_pattern, visible_text)
-        for match in matches:
-            pure_phone_digits = re.sub(r'[^0-9]', '', match.group(1))
-            if len(pure_phone_digits) == 9:
-                phones.add(pure_phone_digits)
+        if soup.body:
+            visible_text = soup.body.get_text(separator=' ', strip=True)
+            matches = re.finditer(phone_pattern, visible_text)
+            for match in matches:
+                pure_phone_digits = re.sub(r'[^0-9]', '', match.group(1))
+                if len(pure_phone_digits) == 9:
+                    phones.add(pure_phone_digits)
 
     except Exception as e:
         logger.error(f"[Extract Contact] Error extrayendo teléfonos: {e}")
@@ -400,21 +486,61 @@ def extract_contact_info(html_content: str, soup: BeautifulSoup) -> Dict[str, An
 def _filter_emails(emails: List[str]) -> List[str]:
     """
     Filtra y limpia direcciones de correo electrónico con reglas más estrictas.
+    Descarta: noreply, test, example, emails con más de 2 puntos seguidos, emails que empiezan/terminan con punto o guion, TLDs poco comunes, y otros patrones basura.
     """
     if not emails:
         return []
-        
+
     valid_emails = set()
+    discarded_emails = set()
     # Patrón de validación de email estricto
     email_pattern = re.compile(r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$")
-    
+
     # Extensiones de archivo comunes para descartar falsos positivos
     discarded_extensions = {
-        'png', 'jpg', 'jpeg', 'gif', 'bmp', 'svg', 'webp', 'ico', 'pdf',
-        'js', 'css', 'html', 'php', 'asp', 'xml', 'json', 'txt', 'woff', 'woff2', 'ttf',
-        'zip', 'rar', 'exe', 'dll', 'bin', 'dat', 'tmp', 'log', 'bak', 'old'
+        'png', 'jpg', 'jpeg', 'gif', 'bmp', 'svg', 'ico', 'pdf', 'js', 'css', 'html', 'php', 'asp', 'xml', 'json', 'txt', 'zip', 'rar', 'exe', 'mp3', 'mp4', 'csv', 'xls', 'xlsx', 'doc', 'docx', 'ppt', 'pptx', 'bak', 'tmp', 'log'
     }
-    
+
+    # TLDs poco comunes o de test
+    bad_tlds = {'invalid', 'test', 'example', 'localhost', 'local', 'mail', 'email', 'corp'}
+    # Palabras basura en nombre/local-part
+    bad_local_parts = {'noreply', 'no-reply', 'no_reply', 'test', 'example', 'demo', 'sample', 'null', 'root', 'abuse', 'spam', 'fake', 'robot', 'mailer-daemon', 'do-not-reply', 'donotreply'}
+
+    for email in emails:
+        try:
+            email = email.strip().lower()
+            if not email_pattern.match(email):
+                discarded_emails.add(email)
+                continue
+            if '..' in email:
+                discarded_emails.add(email)
+                continue
+            if email.startswith(('.', '-')) or email.endswith(('.', '-')):
+                discarded_emails.add(email)
+                continue
+            local_part, domain = email.split('@', 1)
+            if local_part in bad_local_parts or local_part.startswith('test') or local_part.endswith('test'):
+                discarded_emails.add(email)
+                continue
+            if any(word in email for word in bad_local_parts):
+                discarded_emails.add(email)
+                continue
+            # TLD check
+            tld = domain.split('.')[-1]
+            if tld in discarded_extensions or tld in bad_tlds or len(tld) < 2 or len(tld) > 6:
+                discarded_emails.add(email)
+                continue
+            # Dominios basura
+            if domain in bad_tlds:
+                discarded_emails.add(email)
+                continue
+            valid_emails.add(email)
+        except Exception:
+            discarded_emails.add(email)
+            continue
+    # Opcional: podrías devolver los descartados para auditoría
+    return sorted(list(valid_emails))
+
     # Dominios de spam o no válidos
     spam_domains = {
         'example.com', 'domain.com', 'email.com', 'sentry.io', 'wixpress.com',
@@ -988,18 +1114,30 @@ async def run_google_ddg_limpio_task(keyword: str, results_num: int, callback_ur
         
             # Procesar en lotes para no sobrecargar la memoria (optimizado)
             batch_size = 10  # Aumentado de 5 a 10 para procesar más URLs por lote
-            semaphore = asyncio.Semaphore(10)  # Aumentado de 5 a 10 peticiones concurrentes
-        
+            semaphore = asyncio.Semaphore(50)  # Aumentado a 50 peticiones concurrentes según solicitud del usuario
+
             async def process_url(url: str) -> Optional[Dict[str, Any]]:
                 async with semaphore:
                     try:
                         async with httpx.AsyncClient(timeout=timeout) as client:
                             result = await extract_data_from_url_async(url, client)
-        
+
                             # Verificar si se encontraron datos válidos
                             has_emails = bool(result.get("correos"))
                             has_phone = result.get("telefono") and result.get("telefono") != "No encontrado"
-        
+
+                            # Enviar callback parcial tras cada scraping profundo
+                            partial_payload = {
+                                "task_id": task_id,
+                                "status": "partial",
+                                "completo": False,
+                                "keyword": keyword,
+                                "url_procesada": url,
+                                "result": result,
+                                "timestamp": time.strftime("%Y-%m-%d %H:%M:%S %Z"),
+                            }
+                            await send_callback(callback_url, partial_payload)
+
                             if has_emails or has_phone:
                                 return {
                                     "url": url,
