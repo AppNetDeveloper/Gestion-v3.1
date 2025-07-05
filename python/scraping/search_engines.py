@@ -565,7 +565,7 @@ async def search_duckduckgo_manual(query: str, num_results: int = 10, timeout: i
         logger.error(f"Error inesperado en DuckDuckGo: {str(e)}", exc_info=True)
         return []
 
-async def search_bing(query: str, num_results: int = 10, timeout: int = 30, first: int = 1) -> List[str]:
+async def search_bing(query: str, num_results: int = 30, timeout: int = 30, first: int = 1) -> List[str]:
     """
     Realiza una búsqueda en Bing mediante web scraping.
     
@@ -580,11 +580,11 @@ async def search_bing(query: str, num_results: int = 10, timeout: int = 30, firs
     logger.info(f"Iniciando búsqueda en Bing para '{query}' con {num_results} resultados (paginado).")
     try:
         base_url = "https://www.bing.com/search"
-        page_size = 10
+        page_size = 5  # Reducimos a 5 para forzar más paginación
         total_needed = num_results
         results = []
         seen = set()
-        max_pages = (num_results + page_size - 1) // page_size
+        max_pages = min(50, (num_results + page_size - 1) // page_size)  # Aumentamos a máximo 50 páginas
         for page in range(max_pages):
             first_param = 1 + page * page_size
             params = {
@@ -594,25 +594,34 @@ async def search_bing(query: str, num_results: int = 10, timeout: int = 30, firs
                 "setlang": "es",
                 "FORM": "PERE"
             }
+            # Rotar User-Agent en cada página
             headers = {
                 "User-Agent": random.choice(USER_AGENTS)
             }
+            # Aumentar delay para evitar bloqueos (8-12 segundos aleatorio)
+            await asyncio.sleep(random.uniform(8.0, 12.0))
             try:
                 async with aiohttp.ClientSession() as session:
                     async with session.get(base_url, params=params, headers=headers, timeout=timeout) as response:
                         html = await response.text()
+                        # Loguear extracto del HTML para detectar bloqueos/captchas
+                        logger.info(f"[Bing] Extracto HTML página {page+1}: {html[:300].replace(chr(10),' ').replace(chr(13),' ')}...")
                         soup = BeautifulSoup(html, "html.parser")
                         page_results = []
+                        # Solo extraer enlaces de resultados principales, como en la versión que mejor funcionaba
                         for a in soup.select("li.b_algo h2 a"):
                             url = a.get("href")
                             if url and url.startswith("http"):
                                 parsed_url = url.split('?')[0].split('#')[0].rstrip('/')
-                                if parsed_url not in seen:
+                                if parsed_url not in seen and not any(domain in parsed_url for domain in ["bing.com", "microsoft.com", "msn.com", "live.com"]):
                                     seen.add(parsed_url)
                                     page_results.append(parsed_url)
                                     results.append(parsed_url)
                                     if len(results) >= total_needed:
                                         break
+                        logger.info(f"Encontradas {len(page_results)} URLs únicas en la página {page+1} de Bing")
+                        if len(results) >= total_needed:
+                            break
                         logger.info(f"Búsqueda en Bing completada con {len(page_results)} resultados en página {page+1} (first={first_param}).")
                         if len(results) >= total_needed or not page_results:
                             break
@@ -772,7 +781,7 @@ async def search_multiple_engines(
         elif engine == "google":
             search_tasks.append(("google", search_google(query, num_results)))
         elif engine == "bing":
-            search_tasks.append(("bing", search_bing(query, num_results)))
+            search_tasks.append(("bing", search_bing(query, num_results=min(num_results * 3, 100))))  # Triplicamos los resultados para Bing con máximo de 100
         elif engine == "gigablast":
             search_tasks.append(("gigablast", search_gigablast(query, num_results)))
         elif engine == "brave":

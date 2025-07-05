@@ -310,6 +310,9 @@ MAX_CRAWL_CONCURRENCY = 5     # Máximas peticiones simultáneas
 
 # ================== EXTRACTOR MEJORADO DE EMAILS ==================
 def extract_emails_from_html(html_content: str, soup: BeautifulSoup) -> List[str]:
+    import logging
+    logger = logging.getLogger('scraping')
+    logger.info('[Extract Email] Procesando extracción de emails...')
     """
     Extrae direcciones de correo electrónico de forma robusta desde el HTML y texto visible.
     Incluye mailto, texto visible, atributos data-email y comentarios, y detecta ofuscaciones comunes.
@@ -317,6 +320,16 @@ def extract_emails_from_html(html_content: str, soup: BeautifulSoup) -> List[str
     # Limpiar scripts y estilos
     for script_or_style in soup(["script", "style"]):
         script_or_style.decompose()
+    # Buscar emails en TODO el HTML (incluyendo scripts y comentarios)
+    all_emails = set()
+    # 0. Regex global sobre todo el HTML
+    try:
+        global_pattern = r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}'
+        found_global = re.findall(global_pattern, html_content)
+        for email in found_global:
+            all_emails.add(email.lower())
+    except Exception as e:
+        logger.warning(f"[Extract Email] Error en regex global: {e}")
 
     all_emails = set()
 
@@ -374,7 +387,9 @@ def extract_emails_from_html(html_content: str, soup: BeautifulSoup) -> List[str
         logger.warning(f"[Email Extract] Error en regex flexible: {e}")
 
     # Filtrar emails inválidos
-    return _filter_emails(list(all_emails))
+    filtered = _filter_emails(list(all_emails))
+    logger.info(f"[Extract Email] Emails encontrados: {filtered if filtered else 'NINGUNO'}")
+    return filtered
 
 # ================== CRAWLER PROFUNDO ASÍNCRONO ==================
 async def deep_scrape_url_async(url, client, max_depth=MAX_CRAWL_DEPTH, max_pages=MAX_CRAWL_PAGES, visited=None, depth=0, found_emails=None, found_phones=None):
@@ -427,6 +442,8 @@ async def deep_scrape_url_async(url, client, max_depth=MAX_CRAWL_DEPTH, max_page
 
 
 def extract_contact_info(html_content: str, soup: BeautifulSoup, url: str = None) -> Dict[str, Any]:
+    import logging
+    logger = logging.getLogger('scraping')
     """
     Extrae información de contacto (emails y teléfonos) del contenido HTML de forma robusta.
     Además, escribe cada contacto encontrado en un archivo temporal para auditoría en directo.
@@ -454,6 +471,7 @@ def extract_contact_info(html_content: str, soup: BeautifulSoup, url: str = None
         if phone in ''.join(str(i) for i in range(len(phone))) or phone in ''.join(str(i) for i in range(9, 9-len(phone), -1)):
             continue
         phones.add(phone)
+    logger.info(f'[Extract Contact] URL: {url} | Teléfonos: {list(phones) if phones else "NINGUNO"}')
 
     # Escribir en el temporal
     tmp_path = os.path.join(os.path.dirname(__file__), 'tmp_contactos_scraping.txt')
@@ -734,27 +752,14 @@ async def extract_data_from_url_async(url: str, client: httpx.AsyncClient) -> Di
         encoding = response.encoding or 'utf-8'
         
         # Usar el parser de manera segura
+        # Intentar con el encoding detectado
+        content = response.content
         try:
-            # Intentar con el encoding detectado
-            content = response.content
-            try:
-                # Primero intentar con el encoding de la respuesta
-                html_content = content.decode(encoding, errors='replace')
-                soup = BeautifulSoup(html_content, 'html.parser')
-            except UnicodeDecodeError:
-                # Si falla, intentar con otros encodings comunes
-                for enc in ['utf-8', 'iso-8859-1', 'windows-1252']:
-                    try:
-                        html_content = content.decode(enc, errors='replace')
-                        soup = BeautifulSoup(html_content, 'html.parser')
-                        break
-                    except UnicodeDecodeError:
-                        continue
-                else:
-                    # Si todos los intentos fallan, forzar el parsing
-                    soup = BeautifulSoup(content, 'html.parser', from_encoding='utf-8', exclude_encodings=[])
+            # Primero intentar con el encoding de la respuesta
+            html_content = content.decode(encoding, errors='replace')
+            soup = BeautifulSoup(html_content, 'html.parser')
         except Exception as e:
-            logger.error(f"[Async Extract] Error al analizar HTML de {url}: {e}")
+            logger.warning(f"[Async Extract] Error al decodificar o parsear HTML de {url}: {e}")
             return data
         
         # Extraer título de la página
@@ -787,14 +792,10 @@ async def extract_data_from_url_async(url: str, client: httpx.AsyncClient) -> Di
             
         except Exception as e:
             logger.error(f"[Async Extract] Error al extraer información de contacto de {url}: {e}", exc_info=True)
-            
-    except httpx.HTTPStatusError as e:
-        logger.warning(f"[Async Extract] Error HTTP {e.response.status_code} al acceder a {url}")
-    except httpx.RequestError as e:
-        logger.warning(f"[Async Extract] Error de conexión al acceder a {url}: {e}")
+
     except Exception as e:
-        logger.error(f"[Async Extract] Error inesperado al procesar {url}: {e}", exc_info=True)
-    
+        logger.error(f"[Async Extract] Error procesando URL {url}: {e}", exc_info=True)
+
     return data
 
 def duckduckgo_search_sync(q: str, n: int) -> List[str]:
@@ -1151,8 +1152,9 @@ async def run_google_ddg_limpio_task(keyword: str, results_num: int, callback_ur
             search_results = await search_multiple_engines(
                 query=keyword,
                 engines=engines,
-                num_results=search_config.results_per_engine,
+                num_results=search_config.results_per_engine * 3,  # Triplicamos el número de resultados
                 timeouts=timeouts,
+                pages=20,  # Aumentamos el número de páginas a 20 (antes era 10 por defecto)
                 search_config=search_config # Pasar la instancia de SearchConfig
             )
         except Exception as e:
@@ -1177,7 +1179,7 @@ async def run_google_ddg_limpio_task(keyword: str, results_num: int, callback_ur
         logger.info(f"[Task {task_id}] Total de URLs únicas encontradas: {len(all_urls)}")
         
         # Limitar el número de URLs si es necesario
-        max_urls = min(results_num * 10, 200)  # Aumentado a 10x el número de resultados o 200 URLs como máximo
+        max_urls = min(results_num * 20, 400)  # Aumentado a 20x el número de resultados o 400 URLs como máximo
         if len(all_urls) > max_urls:
             logger.info(f"[Task {task_id}] Limitando a {max_urls} URLs para procesar")
             all_urls = all_urls[:max_urls]
@@ -1190,8 +1192,8 @@ async def run_google_ddg_limpio_task(keyword: str, results_num: int, callback_ur
             timeout = httpx.Timeout(20.0, connect=30.0)  # Reducido de 30.0 a 20.0 y de 60.0 a 30.0
         
             # Procesar en lotes para no sobrecargar la memoria (optimizado)
-            batch_size = 10  # Aumentado de 5 a 10 para procesar más URLs por lote
-            semaphore = asyncio.Semaphore(50)  # Aumentado a 50 peticiones concurrentes según solicitud del usuario
+            batch_size = 20  # Aumentado de 10 a 20 para procesar más URLs por lote
+            semaphore = asyncio.Semaphore(100)  # Aumentado a 100 peticiones concurrentes para más velocidad
 
             async def process_url(url: str) -> Optional[Dict[str, Any]]:
                 async with semaphore:
