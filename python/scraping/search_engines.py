@@ -578,6 +578,7 @@ async def search_bing(query: str, num_results: int = 10, timeout: int = 30, firs
     Returns:
         Lista de URLs de resultados
     """
+    logger.info(f"Iniciando búsqueda en Bing para '{query}' con {num_results} resultados (first={first}).")
     try:
         base_url = "https://www.bing.com/search"
         params = {
@@ -624,10 +625,10 @@ async def search_bing(query: str, num_results: int = 10, timeout: int = 30, firs
                     if len(results) >= num_results:
                         break
         
+        logger.info(f"Búsqueda en Bing completada con {len(results)} resultados (first={first}).")
         return results
-        
     except Exception as e:
-        logger.error(f"Error en búsqueda Bing (first={first}): {str(e)}")
+        logger.error(f"Error en búsqueda Bing (first={first}): {str(e)}", exc_info=True)
         return []
 
 # ==================== ECOSIA ====================
