@@ -571,67 +571,59 @@ async def search_bing(query: str, num_results: int = 10, timeout: int = 30, firs
     
     Args:
         query: Término de búsqueda
-        num_results: Número máximo de resultados a devolver por página (máx 10)
-        timeout: Tiempo máximo de espera en segundos
-        first: Índice del primer resultado a devolver (para paginación, comienza en 1)
-        
+        num_results: Número máximo de resultados a devolver (puede ser >10)
+        timeout: Tiempo máximo de espera en segundos por página
+        first: (IGNORADO, solo para compatibilidad)
     Returns:
         Lista de URLs de resultados
     """
-    logger.info(f"Iniciando búsqueda en Bing para '{query}' con {num_results} resultados (first={first}).")
+    logger.info(f"Iniciando búsqueda en Bing para '{query}' con {num_results} resultados (paginado).")
     try:
         base_url = "https://www.bing.com/search"
-        params = {
-            "q": query,
-            "count": min(num_results, 10),  # Bing muestra máximo 10 resultados por página
-            "first": first,
-            "FORM": "PORE",  # Formato de resultados
-            "qs": "n",  # No sugerencias
-            "sp": "-1",  # Búsqueda estándar
-            "pq": query,  # Consulta previa
-            "sc": "0-0",  # Sin filtro de país
-            "cvid": ""  # ID de cliente vacío
-        }
-        
-        headers = get_headers()
-        # Añadir headers adicionales para parecer un navegador real
-        headers.update({
-            'Accept-Language': 'es-ES,es;q=0.9,en;q=0.8',
-            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-            'Referer': 'https://www.bing.com/',
-            'Upgrade-Insecure-Requests': '1',
-        })
-        
-        # Usar CookieJar para manejar cookies de sesión
-        async with aiohttp.ClientSession(
-            cookie_jar=aiohttp.CookieJar(unsafe=True)
-        ) as session:
-            async with session.get(base_url, params=params, headers=headers, timeout=timeout) as response:
-                response.raise_for_status()
-                html = await response.text()
-
-        soup = BeautifulSoup(html, 'html.parser')
+        page_size = 10
+        total_needed = num_results
         results = []
-        
-        # Buscar enlaces en los resultados de búsqueda
-        for result in soup.select('ol#b_results li.b_algo h2 a'):
-            url = result.get('href', '')
-            # Verificar que la URL sea válida y no sea un enlace de Bing o un dominio en la lista negra
-            if url and url.startswith('http') and 'bing.com' not in url and not any(domain in url for domain in BLACKLISTED_DOMAINS):
-                # Asegurarse de que la URL esté correctamente formada
-                parsed_url = url.split('?')[0].split('#')[0].rstrip('/')
-                if parsed_url not in results:  # Evitar duplicados
-                    results.append(parsed_url)
-                    if len(results) >= num_results:
-                        break
-        
-        logger.info(f"Búsqueda en Bing completada con {len(results)} resultados (first={first}).")
-        return results
+        seen = set()
+        max_pages = (num_results + page_size - 1) // page_size
+        for page in range(max_pages):
+            first_param = 1 + page * page_size
+            params = {
+                "q": query,
+                "first": first_param,
+                "count": page_size,
+                "setlang": "es",
+                "FORM": "PERE"
+            }
+            headers = {
+                "User-Agent": random.choice(USER_AGENTS)
+            }
+            try:
+                async with aiohttp.ClientSession() as session:
+                    async with session.get(base_url, params=params, headers=headers, timeout=timeout) as response:
+                        html = await response.text()
+                        soup = BeautifulSoup(html, "html.parser")
+                        page_results = []
+                        for a in soup.select("li.b_algo h2 a"):
+                            url = a.get("href")
+                            if url and url.startswith("http"):
+                                parsed_url = url.split('?')[0].split('#')[0].rstrip('/')
+                                if parsed_url not in seen:
+                                    seen.add(parsed_url)
+                                    page_results.append(parsed_url)
+                                    results.append(parsed_url)
+                                    if len(results) >= total_needed:
+                                        break
+                        logger.info(f"Búsqueda en Bing completada con {len(page_results)} resultados en página {page+1} (first={first_param}).")
+                        if len(results) >= total_needed or not page_results:
+                            break
+            except Exception as e:
+                logger.error(f"Error en búsqueda Bing (página {page+1}, first={first_param}): {str(e)}", exc_info=True)
+                continue
+        logger.info(f"Búsqueda en Bing FINALIZADA con {len(results)} resultados totales para '{query}'.")
+        return results[:total_needed]
     except Exception as e:
-        logger.error(f"Error en búsqueda Bing (first={first}): {str(e)}", exc_info=True)
+        logger.error(f"Error general en búsqueda Bing: {str(e)}", exc_info=True)
         return []
-
-# ==================== ECOSIA ====================
 
 async def search_ecosia(query: str, num_results: int = 10, timeout: int = 30) -> List[str]:
     """
