@@ -14,7 +14,7 @@ use App\Http\Controllers\Api\ServerMonitorController;
 use App\Http\Controllers\Api\WhatsappMessageController;
 use App\Http\Controllers\Api\TelegramController;
 use App\Http\Controllers\Api\WhatsappSessionController;
-use App\Http\Controllers\Api\ScrapingCallbackController; // Importar el controlador
+// Controlador de callback de scraping eliminado
 use App\Http\Controllers\Api\OllamaTaskerController;
 
 /*
@@ -122,5 +122,4 @@ Route::post('/whatsapp/send-message-now', [WhatsappMessageController::class, 'se
 
 Route::post('/telegram', [TelegramController::class, 'store']);
 
-// Ruta para recibir el callback de la API de scraping
-Route::post('/scraping-callback', [ScrapingCallbackController::class, 'handleCallback'])->name('api.scraping.callback');
+// Ruta para recibir el callback de la API de scraping - Eliminada

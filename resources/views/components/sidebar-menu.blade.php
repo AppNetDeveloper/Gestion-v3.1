@@ -35,14 +35,6 @@
             <li><a href="{{ route('contacts.index') }}" class="navItem {{ request()->routeIs('contacts.index') ? 'active' : '' }}"><span class="flex items-center"><iconify-icon class="nav-icon" icon="mdi:contact-outline"></iconify-icon><span>{{ __('Contacts') }}</span></span></a></li>
             <li><a href="{{ route('campaigns.index') }}" class="navItem {{ request()->routeIs('campaigns.index') ? 'active' : '' }}"><span class="flex items-center"><iconify-icon class="nav-icon" icon="proicons:send"></iconify-icon><span>{{ __('Campaigns') }}</span></span></a></li>
 
-            @can('menu scrapingtasks')
-            <li class="{{ request()->routeIs('scraping.tasks.*') ? 'active' : '' }}">
-                <a href="{{ route('scraping.tasks.index') }}" class="navItem">
-                    <span class="flex items-center"><iconify-icon class="nav-icon" icon="carbon:data-enrichment"></iconify-icon><span>{{ __('Scraping Tasks') }}</span></span>
-                </a>
-            </li>
-            @endcan
-
             <li class="sidebar-menu-title">{{ __('MANAGEMENT') }}</li>
             @can('menu services')
                 <li class="{{ request()->routeIs('services.*') ? 'active' : '' }}">

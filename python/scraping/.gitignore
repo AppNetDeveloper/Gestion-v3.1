@@ -1,7 +1,0 @@
-# Python
-__pycache__/
-screenshots_pa/
-venv*/
-venv-*/
-*.log
-backups/

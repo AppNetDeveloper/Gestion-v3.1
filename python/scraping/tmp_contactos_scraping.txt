@@ -1,3 +1,0 @@
-# Temporal de contactos encontrados por el scraper
-# Formato: tipo | url | valor
-# Ejemplo: email | https://ejemplo.com | contacto@ejemplo.com

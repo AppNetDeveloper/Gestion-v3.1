@@ -44,7 +44,7 @@ use Webklex\IMAP\Facades\Client;
 use App\Http\Controllers\MediaController;
 use App\Http\Controllers\TelegramController;
 use App\Http\Controllers\MapController;
-use App\Http\Controllers\ScrapingTaskController; // Importa el controlador
+// Controlador de scraping eliminado
 use App\Http\Controllers\ServiceController; // Controlador de Servicios
 use App\Http\Controllers\ClientController;  // Importar Controlador de Clientes
 use App\Http\Controllers\QuoteController;   // Importar Controlador de Presupuestos
@@ -430,15 +430,7 @@ Route::get('/api/history/user/{userId}/date/{date}', [MapController::class, 'get
 
 
 });
-// --- Grupo de rutas para Scraping Tasks ---
-Route::middleware(['auth'])->prefix('scraping-tasks')->name('scraping.tasks.')->group(function () {
-    Route::get('/', [ScrapingTaskController::class, 'index'])->name('index')->middleware('can:scrapingtasks index');
-    Route::post('/', [ScrapingTaskController::class, 'store'])->name('store')->middleware('can:scrapingtasks store');
-    Route::get('/data', [ScrapingTaskController::class, 'data'])->name('data')->middleware('can:scrapingtasks index'); // Mismo permiso que index
-    Route::put('/{task}', [ScrapingTaskController::class, 'update'])->name('update')->middleware('can:scrapingtasks update');
-    Route::delete('/{task}', [ScrapingTaskController::class, 'destroy'])->name('destroy')->middleware('can:scrapingtasks delete');
-    Route::get('/{task}/contacts', [ScrapingTaskController::class, 'showContacts'])->name('contacts')->middleware('can:scrapingtasks show_contacts');
-});
+// --- Grupo de rutas para Scraping Tasks --- (Eliminado)
 
 Route::middleware(['auth'])->group(function () {
 

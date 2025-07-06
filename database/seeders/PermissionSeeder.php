@@ -86,14 +86,7 @@ class PermissionSeeder extends Seeder
             ['name' => 'calendarindividual show',   'module_name' => 'calendarindividual'],
             ['name' => 'calendarindividual index', 'module_name' => 'calendarindividual'],
 
-            // Scraping Tasks (Existentes)
-            ['name' => 'scrapingtasks index',          'module_name' => 'scrapingtasks'],
-            ['name' => 'scrapingtasks create',         'module_name' => 'scrapingtasks'],
-            ['name' => 'scrapingtasks store',          'module_name' => 'scrapingtasks'],
-            ['name' => 'scrapingtasks update',         'module_name' => 'scrapingtasks'],
-            ['name' => 'scrapingtasks delete',         'module_name' => 'scrapingtasks'],
-            ['name' => 'scrapingtasks show_contacts',  'module_name' => 'scrapingtasks'],
-            ['name' => 'menu scrapingtasks', 'module_name' => 'menu'],
+            // Scraping Tasks (Eliminados)
 
             // Services (Servicios)
             ['name' => 'services index',  'module_name' => 'services'],
@@ -188,7 +181,7 @@ class PermissionSeeder extends Seeder
             ['name' => 'menu database_backup', 'module_name' => 'menu'],
             ['name' => 'menu labcalendar', 'module_name' => 'menu'],
             ['name' => 'menu calendarindividual', 'module_name' => 'menu'],
-            ['name' => 'menu scrapingtasks', 'module_name' => 'menu'],
+            // Menu scraping eliminado
             ['name' => 'menu servermonitorbusynes', 'module_name' => 'menu'],
             ['name' => 'menu servermonitor', 'module_name' => 'menu'],
 

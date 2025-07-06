@@ -59,7 +59,7 @@ class RoleSeeder extends Seeder
 
             // Control horario, servidores, calendario
             'timecontrolstatus index', 'timecontrolstatus create', 'timecontrolstatus update', 'timecontrolstatus delete', 'timecontrolstatus show',
-            'scrapingtasks index', 'scrapingtasks create', 'scrapingtasks store', 'scrapingtasks update', 'scrapingtasks delete', 'scrapingtasks show_contacts', 'menu scrapingtasks',
+            // Permisos de scraping eliminados
             'servermonitorbusynes index', 'servermonitorbusynes create', 'servermonitorbusynes update', 'servermonitorbusynes delete', 'servermonitorbusynes show',
             'servermonitor index', 'servermonitor create', 'servermonitor update', 'servermonitor delete', 'servermonitor show', 'menu servermonitor', 'menu servermonitorbusynes',
             'database_backup viewAny', 'database_backup create', 'database_backup delete', 'database_backup download',
