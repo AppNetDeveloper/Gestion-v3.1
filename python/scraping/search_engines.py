@@ -76,7 +76,7 @@ async def search_google(query: str, num_results: int = 100, timeout: int = 30, p
     logger.info(f"Iniciando búsqueda en Google para '{query}' con {num_results} resultados.")
     
     max_retries = 3
-    base_delay = 10
+    base_delay = 20
     urls = []
     
     for attempt in range(max_retries):
@@ -152,8 +152,9 @@ async def search_duckduckgo(query: str, num_results: int = 100, timeout: int = 3
                 if "Ratelimit" in str(e) or "429" in str(e) or "Too Many Requests" in str(e) or "202" in str(e):
                     logger.warning(f"Error de Rate Limit en DuckDuckGo (intento {i+1}/{retries}): {e}")
                     if i < retries - 1:
-                        wait_time = (i + 1) * 10 # Incrementar el tiempo de espera
-                        logger.info(f"Reintentando en {wait_time} segundos...")
+                        # Implementar backoff exponencial para ser menos agresivo
+                        wait_time = 15 * (2 ** i) + random.uniform(1, 5)
+                        logger.info(f"Reintentando en {wait_time:.2f} segundos...")
                         time.sleep(wait_time)
                     else:
                         logger.error("Se superó el número máximo de reintentos para DuckDuckGo.")
@@ -609,7 +610,9 @@ async def search_bing(query: str, num_results: int = 30, timeout: int = 30, firs
                         soup = BeautifulSoup(html, "html.parser")
                         page_results = []
                         # Solo extraer enlaces de resultados principales, como en la versión que mejor funcionaba
-                        for a in soup.select("li.b_algo h2 a"):
+                        # El selector 'h2 > a[href]' funciona para la página 1, pero no para las siguientes.
+                        # Usamos un selector combinado para que funcione en ambas estructuras.
+                        for a in soup.select("li.b_algo h2 a, h2 > a[href]"):
                             url = a.get("href")
                             if url and url.startswith("http"):
                                 parsed_url = url.split('?')[0].split('#')[0].rstrip('/')
