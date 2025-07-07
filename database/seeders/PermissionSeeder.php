@@ -201,6 +201,9 @@ class PermissionSeeder extends Seeder
             ['name' => 'telegram-general show',   'module_name' => 'telegram-general'],
             ['name' => 'telegram-general index',  'module_name' => 'telegram-general'],
 
+            // Knowledge Base (IA Memory)
+            ['name' => 'knowledgebase.upload.user', 'module_name' => 'knowledgebase'],
+            ['name' => 'knowledgebase.upload.company', 'module_name' => 'knowledgebase'],
         ];
 
         

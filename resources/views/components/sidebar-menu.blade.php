@@ -119,7 +119,17 @@
             <li><a href="{{ route('labor-calendar.index') }}" class="navItem {{ request()->routeIs('labor-calendar.index') ? 'active' : '' }}"><span class="flex items-center"><iconify-icon class="nav-icon" icon="tabler:calendar"></iconify-icon><span>{{ __('Labor Calendar') }}</span></span></a></li>
             @endcan
             <li><a href="{{ route('todo') }}" class="navItem {{ request()->routeIs('todo') ? 'active' : '' }}"><span class="flex items-center"><iconify-icon class="nav-icon" icon="heroicons-outline:clipboard-check"></iconify-icon><span>{{ __('Todo') }}</span></span></a></li>
-
+            @canany(['knowledgebase.upload.user', 'knowledgebase.upload.company'])
+                <li class="sidebar-menu-title">IA Memory</li>
+                <li class="{{ request()->routeIs('knowledge_base.upload') ? 'active' : '' }}">
+                    <a href="{{ route('knowledge_base.index') }}" class="navItem">
+                        <span class="flex items-center">
+                            <iconify-icon class="nav-icon" icon="mdi:brain"></iconify-icon>
+                            <span>Subir PDF</span>
+                        </span>
+                    </a>
+                </li>
+            @endcanany
             <li class="sidebar-menu-title">{{ __('PAGES') }}</li>
             <li class="{{ request()->routeIs('utility*') ? 'active' : '' }}">
                 <a href="javascript:void(0)" class="navItem">

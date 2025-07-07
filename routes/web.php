@@ -28,6 +28,7 @@ use App\Http\Controllers\OllamaController;
 use App\Http\Controllers\TaskerLinkedinController;
 use App\Http\Controllers\WhatsappController;
 use App\Http\Controllers\WhatsappApiExplorerController;
+use App\Http\Controllers\KnowledgeBaseController;
 use App\Http\Controllers\ContactController;
 use App\Http\Controllers\AutoProcessController;
 use App\Exports\ContactsExport;
@@ -64,6 +65,9 @@ Route::get('/', function () {
 });
 
 Route::group(['middleware' => ['auth', 'verified']], function () {
+    // Knowledge Base PDF Upload
+    Route::get('/knowledge-base/upload', [App\Http\Controllers\KnowledgeBaseController::class, 'showUploadForm']);
+    Route::post('/knowledge-base/upload', [App\Http\Controllers\KnowledgeBaseController::class, 'handleUpload'])->name('knowledge_base.upload');
     // Dashboard
     Route::get('dashboard', [HomeController::class, 'unifiedDashboard'])->middleware(['auth'])->name('dashboard.unified');
     Route::get('get-time-control-section', [HomeController::class, 'getTimeControlSection'])->middleware('auth');
@@ -508,6 +512,12 @@ Route::post('/invoices/{invoice}/unlock', [InvoiceController::class, 'unlock'])
 
 // Rutas para firma digital de facturas con VeriFact (requieren autenticación)
 Route::middleware(['auth'])->group(function () {
+    Route::get('/knowledge-base', [KnowledgeBaseController::class, 'index'])->name('knowledge_base.index');
+    Route::get('/knowledge-base/upload', [KnowledgeBaseController::class, 'showUploadForm'])->name('knowledge_base.upload');
+    Route::post('/knowledge-base/upload', [KnowledgeBaseController::class, 'handleUpload'])->name('knowledge_base.upload.post');
+    Route::get('/knowledge-base/user-data', [KnowledgeBaseController::class, 'userData'])->name('knowledge_base.user_data');
+    Route::get('/knowledge-base/company-data', [KnowledgeBaseController::class, 'companyData'])->name('knowledge_base.company_data');
+    Route::get('/knowledge-base/download/{id}', [KnowledgeBaseController::class, 'downloadPdf'])->name('knowledge_base.download');
     Route::get('/invoices/{invoice}/sign', [InvoiceSignatureController::class, 'showSignForm'])->name('invoices.sign');
     Route::post('/invoices/{invoice}/sign', [InvoiceSignatureController::class, 'signInvoice'])->name('invoices.sign.process');
 });
