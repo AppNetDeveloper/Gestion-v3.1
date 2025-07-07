@@ -75,13 +75,15 @@ class ScrapingApiController extends Controller
                 return response()->json(['error' => 'Token no proporcionado'], 401);
             }
             
-            $token = $request->query('token');
-            
-            // Buscar usuario por token
-            $user = User::where('api_token', $token)->first();
+            $tokenValue = $request->query('token');
+            $token = \Laravel\Sanctum\PersonalAccessToken::findToken($tokenValue);
+            if (!$token) {
+                return response()->json(['error' => 'Token inválido'], 401);
+            }
 
+            $user = $token->tokenable;
             if (!$user) {
-                return response()->json(['error' => 'Usuario no encontrado o token inválido'], 401);
+                return response()->json(['error' => 'Usuario no encontrado'], 401);
             }
 
             // Buscar la tarea pendiente más antigua para este usuario
@@ -97,7 +99,7 @@ class ScrapingApiController extends Controller
             // Preparar respuesta
             $response = [
                 'taskerId' => $scraping->tasker_id,
-                'token' => $user->api_token,
+                'token' => $request->query('token'), // Devolvemos el mismo token que recibimos
                 'keywords' => $scraping->keywords
             ];
 
@@ -197,11 +199,13 @@ class ScrapingApiController extends Controller
                 return response()->json(['error' => 'Token en URL no coincide con el token en el cuerpo'], 401);
             }
 
-            // Buscar usuario por token
-            $user = User::where('api_token', $urlToken)->first();
-
+            $token = \Laravel\Sanctum\PersonalAccessToken::findToken($urlToken);
+            if (!$token) {
+                return response()->json(['error' => 'Token inválido'], 401);
+            }
+            $user = $token->tokenable;
             if (!$user) {
-                return response()->json(['error' => 'Usuario no autorizado'], 401);
+                return response()->json(['error' => 'Usuario no encontrado'], 401);
             }
 
             // Buscar la tarea de scraping
@@ -239,8 +243,8 @@ class ScrapingApiController extends Controller
                 $scraping->contacts()->attach($contact->id);
             }
 
-            // Actualizar el estado de la tarea a completada
-            $scraping->status = Scraping::STATUS_COMPLETED;
+            // Actualizar el estado de la tarea a completada (status = 1)
+            $scraping->status = 1;
             $scraping->save();
 
             return response()->json([

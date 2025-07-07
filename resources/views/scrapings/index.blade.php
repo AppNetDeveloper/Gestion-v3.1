@@ -93,10 +93,10 @@
                         <div class="flex flex-wrap gap-3">
                             {{-- Botón "Create Scraping Task" con estilo del ejemplo (verde, redondeado, con icono) --}}
                             <button type="submit"
-                                    class="bg-emerald-600 hover:bg-emerald-700 text-white font-medium py-2 px-4 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 dark:focus:ring-offset-slate-800 transition-colors duration-150 flex items-center">
-                                <iconify-icon icon="bi:send-fill" class="mr-2"></iconify-icon>
-                                {{ __('Create Scraping Task') }}
-                            </button>
+    class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-md shadow-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 dark:focus:ring-offset-slate-800 transition-colors duration-150 flex items-center text-lg">
+    <iconify-icon icon="bi:send-fill" class="mr-2"></iconify-icon>
+    {{ __('Create Scraping Task') }}
+</button>
                         </div>
                     </form>
                 </div>

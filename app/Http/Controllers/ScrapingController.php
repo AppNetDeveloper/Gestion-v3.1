@@ -102,6 +102,8 @@ class ScrapingController extends Controller
 
         return view('scrapings.contacts', compact('scraping', 'contacts', 'breadcrumbItems'));
     }
+    
+    // El método generateScrapingToken ha sido eliminado para simplificar la API
 
     /**
      * Remove the specified resource from storage.

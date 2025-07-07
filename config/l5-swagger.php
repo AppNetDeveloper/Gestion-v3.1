@@ -14,7 +14,7 @@ return [
             ],
             'servers' => [
                 [
-                    'url' => config('app.url'),
+                    'url' => env('APP_URL', 'https://app.appnet.dev'),
                     'description' => 'Servidor de la API',
                 ],
             ],
