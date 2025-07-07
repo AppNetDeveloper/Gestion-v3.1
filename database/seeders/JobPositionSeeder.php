@@ -15,10 +15,9 @@ class JobPositionSeeder extends Seeder
      */
     public function run()
     {
-        DB::table('job_posicion')->insert([
+        $positions = [
             ['name' => 'Gerente'],
             ['name' => 'Contable'],
-            
             ['name' => 'Administrador'],
             ['name' => 'Comercial'],
             ['name' => 'Oficina'],
@@ -26,6 +25,17 @@ class JobPositionSeeder extends Seeder
             ['name' => 'Jefe de Fabrica'],
             ['name' => 'Encargado'],
             ['name' => 'Logistica'],
-        ]);
+        ];
+        
+        foreach ($positions as $position) {
+            // Verificar si el registro ya existe antes de insertarlo
+            $exists = DB::table('job_posicion')
+                ->where('name', $position['name'])
+                ->exists();
+                
+            if (!$exists) {
+                DB::table('job_posicion')->insert($position);
+            }
+        }
     }
 }

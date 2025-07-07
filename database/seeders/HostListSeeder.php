@@ -11,10 +11,15 @@ class HostListSeeder extends Seeder
 {
     public function run()
     {
-        HostList::create([
-            'host' => 'localhost',
-            'token' => Str::random(60), // Genera un token único en cada ejecución
-            'name' => 'Localhost Server',
-        ]);
+        // Verificar si el host ya existe antes de crearlo
+        $existingHost = HostList::where('host', 'localhost')->first();
+        
+        if (!$existingHost) {
+            HostList::create([
+                'host' => 'localhost',
+                'token' => Str::random(60), // Genera un token único en cada ejecución
+                'name' => 'Localhost Server',
+            ]);
+        }
     }
 }

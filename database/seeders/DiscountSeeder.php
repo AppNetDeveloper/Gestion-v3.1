@@ -16,27 +16,33 @@ class DiscountSeeder extends Seeder
      */
     public function run()
     {
-        Discount::create([
-            'name' => 'Descuento Bienvenida 10%',
-            'description' => '10% de descuento para nuevos clientes en su primer servicio.',
-            'type' => 'percentage',
-            'value' => 10.00,
-            'is_active' => true,
-            // 'start_date' => now(), // Opcional
-            // 'end_date' => now()->addMonths(3), // Opcional
-        ]);
+        // Descuento de bienvenida
+        if (!Discount::where('name', 'Descuento Bienvenida 10%')->exists()) {
+            Discount::create([
+                'name' => 'Descuento Bienvenida 10%',
+                'description' => '10% de descuento para nuevos clientes en su primer servicio.',
+                'type' => 'percentage',
+                'value' => 10.00,
+                'is_active' => true,
+                // 'start_date' => now(), // Opcional
+                // 'end_date' => now()->addMonths(3), // Opcional
+            ]);
+        }
 
-        Discount::create([
-            'name' => 'Descuento Fijo Verano',
-            'description' => '5€ de descuento en servicios seleccionados durante el verano.',
-            'type' => 'fixed_amount',
-            'value' => 5.00,
-            'is_active' => true,
-        ]);
+        // Descuento fijo verano
+        if (!Discount::where('name', 'Descuento Fijo Verano')->exists()) {
+            Discount::create([
+                'name' => 'Descuento Fijo Verano',
+                'description' => '5€ de descuento en servicios seleccionados durante el verano.',
+                'type' => 'fixed_amount',
+                'value' => 5.00,
+                'is_active' => true,
+            ]);
+        }
 
         // Ejemplo de descuento específico para un cliente (asumiendo que el cliente con ID 1 existe)
         $client1 = Client::find(1);
-        if ($client1) {
+        if ($client1 && !Discount::where('name', 'Descuento VIP Cliente 1')->exists()) {
             Discount::create([
                 'name' => 'Descuento VIP Cliente 1',
                 'client_id' => $client1->id,
@@ -48,7 +54,7 @@ class DiscountSeeder extends Seeder
 
         // Ejemplo de descuento específico para un servicio (asumiendo que el servicio con ID 1 existe)
         $service1 = Service::find(1);
-        if ($service1) {
+        if ($service1 && !Discount::where('code', 'PHPPROMO')->exists()) {
             Discount::create([
                 'name' => 'Oferta Especial Programación PHP',
                 'service_id' => $service1->id,

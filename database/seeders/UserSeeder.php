@@ -40,8 +40,17 @@ class UserSeeder extends Seeder
 
         $users->map(function ($user) {
             $user = collect($user);
-            $newUser = User::create($user->except('role')->toArray());
-            $newUser->assignRole($user['role']);
+            
+            // Verificar si el usuario ya existe antes de crearlo
+            $existingUser = User::where('email', $user['email'])->first();
+            
+            if (!$existingUser) {
+                $newUser = User::create($user->except('role')->toArray());
+                $newUser->assignRole($user['role']);
+            } else {
+                // Actualizar el rol del usuario existente si es necesario
+                $existingUser->syncRoles([$user['role']]);
+            }
         });
     }
 }

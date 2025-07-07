@@ -12,7 +12,7 @@ class MediaSeeder extends Seeder
      */
     public function run(): void
     {
-        \DB::table('media')->insert([
+        $mediaItems = [
             [
                 'id' => 1,
                 'model_type' => 'App\\Models\\GeneralSetting',
@@ -113,6 +113,15 @@ class MediaSeeder extends Seeder
                 'created_at' => '2024-05-22 07:49:28',
                 'updated_at' => '2024-05-22 07:49:28',
             ],
-        ]);
+        ];
+        
+        foreach ($mediaItems as $item) {
+            // Verificar si el registro ya existe antes de insertarlo
+            $exists = \DB::table('media')->where('id', $item['id'])->exists();
+            
+            if (!$exists) {
+                \DB::table('media')->insert($item);
+            }
+        }
     }
 }

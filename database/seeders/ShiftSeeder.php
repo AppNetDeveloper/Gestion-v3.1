@@ -15,11 +15,22 @@ class ShiftSeeder extends Seeder
      */
     public function run()
     {
-        DB::table('shift')->insert([
+        $shifts = [
             ['name' => 'mañana'],
             ['name' => 'tarde'],
             ['name' => 'noche'],
             ['name' => 'hornada partida'],
-        ]);
+        ];
+        
+        foreach ($shifts as $shift) {
+            // Verificar si el registro ya existe antes de insertarlo
+            $exists = DB::table('shift')
+                ->where('name', $shift['name'])
+                ->exists();
+                
+            if (!$exists) {
+                DB::table('shift')->insert($shift);
+            }
+        }
     }
 }

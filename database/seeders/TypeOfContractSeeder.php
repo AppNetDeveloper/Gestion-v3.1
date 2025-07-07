@@ -15,11 +15,22 @@ class TypeOfContractSeeder extends Seeder
      */
     public function run()
     {
-        DB::table('type_of_contract')->insert([
+        $types = [
             ['name' => 'Fijo'],
             ['name' => 'Fijo Discontinuo'],
             ['name' => 'Temporal'],
-        ]);
+        ];
+        
+        foreach ($types as $type) {
+            // Verificar si el registro ya existe antes de insertarlo
+            $exists = DB::table('type_of_contract')
+                ->where('name', $type['name'])
+                ->exists();
+                
+            if (!$exists) {
+                DB::table('type_of_contract')->insert($type);
+            }
+        }
     }
     
 }
