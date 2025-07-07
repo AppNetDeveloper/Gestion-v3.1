@@ -120,9 +120,16 @@ class UtilityController extends Controller
             ],
 
         ];
+        
+        // Obtener el token del usuario autenticado
+        $user = auth()->user();
+        $token = $user->tokens()->latest()->first();
+        
         return view('utility.profile', [
             'pageTitle' => 'Profile',
             'breadcrumbItems' => $breadcrumbsItems,
+            'user' => $user,
+            'token' => $token ? $token->plainTextToken : null,
         ]);
     }
 

@@ -46,6 +46,17 @@
                     </a>
                 </li>
             @endcan
+            
+            @can('menu services')
+                <li class="{{ request()->routeIs('scrapings.*') ? 'active' : '' }}">
+                    <a href="{{ route('scrapings.index') }}" class="navItem">
+                        <span class="flex items-center">
+                            <iconify-icon class="nav-icon" icon="heroicons-outline:search"></iconify-icon>
+                            <span>{{ __('Scraping') }}</span>
+                        </span>
+                    </a>
+                </li>
+            @endcan
             @can('menu clients')
                 <li class="{{ request()->routeIs('clients.*') ? 'active' : '' }}">
                     <a href="{{ route('clients.index') }}" class="navItem">

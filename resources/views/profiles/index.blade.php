@@ -153,9 +153,54 @@
                                 </div>
                             </li>
                             <!-- end single list -->
+                            
+                            <!-- Token API -->
+                            <li class="flex space-x-3 rtl:space-x-reverse">
+                                <div class="flex-none text-2xl text-slate-600 dark:text-slate-300">
+                                    <iconify-icon icon="heroicons:key"></iconify-icon>
+                                </div>
+                                <div class="flex-1">
+                                    <div class="uppercase text-xs text-slate-500 dark:text-slate-300 mb-1 leading-[12px]">
+                                        TOKEN API
+                                    </div>
+                                    <div class="flex flex-col space-y-2">
+                                        <div class="flex items-center">
+                                            <input type="text" id="api-token" value="{{ $token ?? 'No hay token generado' }}" 
+                                                class="form-input w-full bg-slate-50 dark:bg-slate-700 border-0 focus:ring-0 rounded-md" readonly>
+                                            <button type="button" onclick="copyToken()" class="btn btn-sm btn-outline-primary ml-2">
+                                                <iconify-icon icon="heroicons:clipboard-document"></iconify-icon>
+                                            </button>
+                                        </div>
+                                        <div class="flex space-x-2 rtl:space-x-reverse">
+                                            <form action="{{ route('profile.regenerate-token') }}" method="POST">
+                                                @csrf
+                                                <button type="submit" class="btn btn-sm btn-outline-danger">
+                                                    <span class="flex items-center">
+                                                        <iconify-icon icon="heroicons:arrow-path" class="mr-1"></iconify-icon>
+                                                        Regenerar Token
+                                                    </span>
+                                                </button>
+                                            </form>
+                                            <a href="/api/documentation" target="_blank" class="btn btn-sm btn-outline-info">
+                                                <span class="flex items-center">
+                                                    <iconify-icon icon="heroicons:document-text" class="mr-1"></iconify-icon>
+                                                    Documentación API
+                                                </span>
+                                            </a>
+                                        </div>
+                                    </div>
+                                </div>
+                            </li>
+                            <!-- end Token API -->
                         </ul>
                     </div>
                 </div>
+                
+                @if(session('message'))
+                <div class="alert alert-success mt-4">
+                    {{ session('message') }}
+                </div>
+                @endif
             </div>
             <div class="lg:col-span-8 col-span-12">
                 <div class="card ">
@@ -266,6 +311,33 @@
                     URL.revokeObjectURL(output.src) // free memory
                 }
             };
+            
+            function copyToken() {
+                const tokenInput = document.getElementById('api-token');
+                tokenInput.select();
+                document.execCommand('copy');
+                
+                // Mostrar notificación
+                const Toast = Swal.mixin({
+                    toast: true,
+                    position: 'top-end',
+                    showConfirmButton: false,
+                    timer: 3000,
+                    timerProgressBar: true,
+                });
+                
+                Toast.fire({
+                    icon: 'success',
+                    title: 'Token copiado al portapapeles'
+                });
+            }
+            
+            // Si hay un nuevo token en la sesión, actualizarlo en el campo
+            @if(session('token'))
+            document.addEventListener('DOMContentLoaded', function() {
+                document.getElementById('api-token').value = "{{ session('token') }}";
+            });
+            @endif
         </script>
     @endpush
 </x-app-layout>

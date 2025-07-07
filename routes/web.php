@@ -44,7 +44,7 @@ use Webklex\IMAP\Facades\Client;
 use App\Http\Controllers\MediaController;
 use App\Http\Controllers\TelegramController;
 use App\Http\Controllers\MapController;
-// Controlador de scraping eliminado
+use App\Http\Controllers\ScrapingController; // Controlador de scraping
 use App\Http\Controllers\ServiceController; // Controlador de Servicios
 use App\Http\Controllers\ClientController;  // Importar Controlador de Clientes
 use App\Http\Controllers\QuoteController;   // Importar Controlador de Presupuestos
@@ -78,6 +78,8 @@ Route::group(['middleware' => ['auth', 'verified']], function () {
     Route::resource('roles', RoleController::class);
     // Profiles
     Route::resource('profiles', ProfileController::class)->only(['index', 'update'])->parameter('profiles', 'user');
+    // Regenerar token de API
+    Route::post('/regenerate-token', [ProfileController::class, 'regenerateToken'])->name('profile.regenerate-token');
     // Env
     Route::singleton('general-settings', GeneralSettingController::class);
     Route::post('general-settings-logo', [GeneralSettingController::class, 'logoUpdate'])->name('general-settings.logo');
@@ -438,6 +440,11 @@ Route::middleware(['auth'])->group(function () {
     // IMPORTANTE: La ruta específica 'services/data' debe ir ANTES de Route::resource
     Route::get('services/data', [ServiceController::class, 'data'])->name('services.data');
     Route::resource('services', ServiceController::class);
+    
+    // Rutas para Scraping
+    Route::get('scrapings/data', [ScrapingController::class, 'data'])->name('scrapings.data');
+    Route::get('scrapings/{scraping}/contacts', [ScrapingController::class, 'showContacts'])->name('scrapings.contacts');
+    Route::resource('scrapings', ScrapingController::class)->except(['create', 'edit', 'update', 'show']);
 
     // Rutas para Clients
     Route::get('clients/data', [ClientController::class, 'data'])->name('clients.data'); // Para DataTables AJAX

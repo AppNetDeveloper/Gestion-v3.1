@@ -523,21 +523,30 @@ class TelegramController extends Controller
         $importedContacts = [];
 
         foreach ($contacts as $tc) {
-            // Verificar que exista la clave 'id'
-            if (!isset($tc['peer'])) {
-                Log::warning('Contacto sin peer recibido', $tc);
-                continue;
-            }
+        // Normalizar el teléfono: quitar el signo '+' si existe.
+        $phoneNormalized = isset($tc['phone']) ? ltrim($tc['phone'], '+') : null;
+        
+        // Si no hay peer ni teléfono, no podemos identificar el contacto
+        if (!isset($tc['peer']) && !$phoneNormalized) {
+            Log::warning('Contacto sin peer ni teléfono recibido', $tc);
+            continue;
+        }
+        
+        // Si no hay peer, lo registramos pero continuamos con la creación
+        if (!isset($tc['peer'])) {
+            Log::info('Contacto sin peer pero con teléfono, se creará usando el teléfono', $tc);
+        }
 
-            // Normalizar el teléfono: quitar el signo '+' si existe.
-            $phoneNormalized = isset($tc['phone']) ? ltrim($tc['phone'], '+') : null;
-
-            // Buscar un contacto existente para este usuario que tenga el mismo telegram (id) o el mismo teléfono.
-            $contact = \App\Models\Contact::where('user_id', $userId)
-                ->where(function ($query) use ($tc, $phoneNormalized) {
-                    $query->where('telegram', $tc['peer'])
-                        ->orWhere('phone', $phoneNormalized);
-                })->first();
+        // Buscar un contacto existente para este usuario que tenga el mismo telegram (id) o el mismo teléfono.
+        $contact = \App\Models\Contact::where('user_id', $userId)
+            ->where(function ($query) use ($tc, $phoneNormalized) {
+                if (isset($tc['peer'])) {
+                    $query->where('telegram', $tc['peer']);
+                }
+                if ($phoneNormalized) {
+                    $query->orWhere('phone', $phoneNormalized);
+                }
+            })->first();
 
             if (!$contact) {
                 // Si no existe, se crea el contacto.
@@ -546,12 +555,18 @@ class TelegramController extends Controller
                 $lastName = $tc['last_name'] ?? '';
                 $name = trim($firstName . ' ' . $lastName);
 
-                $contact = \App\Models\Contact::create([
+                $contactData = [
                     'user_id'  => $userId,
                     'name'     => $name,
-                    'phone'    => $phoneNormalized,
-                    'telegram' => $tc['peer']
-                ]);
+                    'phone'    => $phoneNormalized
+                ];
+                
+                // Solo añadir el campo telegram si existe el peer
+                if (isset($tc['peer'])) {
+                    $contactData['telegram'] = $tc['peer'];
+                }
+                
+                $contact = \App\Models\Contact::create($contactData);
                 $importedContacts[] = $contact;
                 //Log::info('Nuevo contacto creado', ['contact' => $contact]);
             }

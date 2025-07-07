@@ -10,6 +10,7 @@ use Illuminate\Contracts\View\View;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
+use Illuminate\Support\Facades\DB;
 
 class ProfileController extends Controller
 {
@@ -20,7 +21,22 @@ class ProfileController extends Controller
      */
     public function index()
     {
-        return view('profiles.index');
+        $user = auth()->user();
+        $token = null;
+        
+        // Obtener el token más reciente del usuario
+        $latestToken = $user->tokens()->latest()->first();
+        
+        if ($latestToken) {
+            // Para mostrar el token completo necesitamos recrearlo
+            // ya que el token en texto plano no se almacena en la base de datos
+            $user->tokens()->where('id', '!=', $latestToken->id)->delete();
+            $user->tokens()->delete();
+            $newToken = $user->createToken('default-token');
+            $token = $newToken->plainTextToken;
+        }
+        
+        return view('profiles.index', compact('token'));
     }
 
     /**
@@ -99,5 +115,26 @@ class ProfileController extends Controller
     public function destroy($id)
     {
         //
+    }
+    
+    /**
+     * Regenera el token de API del usuario autenticado
+     * 
+     * @return RedirectResponse
+     */
+    public function regenerateToken()
+    {
+        $user = auth()->user();
+        
+        // Revocar todos los tokens existentes del usuario
+        $user->tokens()->delete();
+        
+        // Crear un nuevo token
+        $token = $user->createToken('default-token');
+        
+        return redirect()->back()->with([
+            'message' => 'Token regenerado correctamente',
+            'token' => $token->plainTextToken
+        ]);
     }
 }

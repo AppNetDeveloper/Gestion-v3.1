@@ -18,7 +18,7 @@ class InvoicePolicy
      */
     public function viewAny(User $user)
     {
-        return $user->hasPermissionTo('view invoices');
+        return $user->hasPermissionTo('invoices index');
     }
 
     /**
@@ -30,7 +30,7 @@ class InvoicePolicy
      */
     public function view(User $user, Invoice $invoice)
     {
-        return $user->hasPermissionTo('view invoices');
+        return $user->hasPermissionTo('invoices show');
     }
 
     /**
@@ -41,7 +41,7 @@ class InvoicePolicy
      */
     public function create(User $user)
     {
-        return $user->hasPermissionTo('create invoices');
+        return $user->hasPermissionTo('invoices create');
     }
 
     /**
@@ -57,7 +57,7 @@ class InvoicePolicy
             return false;
         }
         
-        return $user->hasPermissionTo('edit invoices');
+        return $user->hasPermissionTo('invoices update');
     }
 
     /**
@@ -73,7 +73,7 @@ class InvoicePolicy
             return false;
         }
         
-        return $user->hasPermissionTo('delete invoices');
+        return $user->hasPermissionTo('invoices delete');
     }
 
     /**
@@ -90,7 +90,7 @@ class InvoicePolicy
             return false;
         }
         
-        return $user->hasPermissionTo('sign invoices');
+        return $user->hasPermissionTo('invoices sign');
     }
 
     /**
@@ -107,6 +107,6 @@ class InvoicePolicy
             return false;
         }
         
-        return $user->hasPermissionTo('lock invoices');
+        return $user->hasPermissionTo('invoices update');
     }
 }

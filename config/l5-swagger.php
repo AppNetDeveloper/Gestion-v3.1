@@ -5,8 +5,8 @@ return [
     'documentations' => [
         'default' => [
             'api' => [
-                'title' => 'Ollama Tasker API',
-                'description' => 'Documentación de la API de Ollama Tasker',
+                'title' => 'AppNet API',
+                'description' => 'Documentación de la API de AppNet - Gestión de Contactos y Servicios',
                 'version' => '1.0.0',
                 'contact' => [
                     'email' => 'info@appnet.dev'
@@ -32,7 +32,8 @@ return [
             'security' => [
                 ['bearerAuth' => []],
                 ['whatsappToken' => []],
-                ['telegramToken' => []]
+                ['telegramToken' => []],
+                ['scrapingToken' => []]
             ],
             'securityDefinitions' => [
                 'bearerAuth' => [
@@ -54,6 +55,12 @@ return [
                     'name' => 'Authorization',
                     'in' => 'header',
                     'description' => 'Ingresa el token de la API de Telegram',
+                ],
+                'scrapingToken' => [
+                    'type' => 'apiKey',
+                    'name' => 'token',
+                    'in' => 'query',
+                    'description' => 'Token de autenticación para el servicio de scraping',
                 ]
             ],
             'paths' => [
@@ -78,9 +85,9 @@ return [
                     base_path('app/Http/Controllers/Api/WhatsAppProxyController.php'),
                     base_path('app/Http/Controllers/Api/TelegramController.php'),
                     base_path('app/Http/Controllers/Api/TelegramProxyController.php'),
-                    base_path('app/Http/Controllers/Api/ScrapingCallbackController.php'),
                     base_path('app/Http/Controllers/Api/ServerMonitorController.php'),
                     base_path('app/Http/Controllers/Api/SwaggerController.php'),
+                    base_path('app/Http/Controllers/Api/ContactApiController.php'),
                 ],
             ],
             'scanOptions' => [

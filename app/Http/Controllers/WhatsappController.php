@@ -338,10 +338,7 @@ class WhatsappController extends Controller
                     Contact::updateOrCreate(
                         ['phone' => $phoneNum, 'user_id' => $userId],
                         [
-                            'name' => $contact['name'],
-                            'whatsapp_name' => $contact['name'],
-                            'imported_from' => 'whatsapp',
-                            'last_activity' => now(),
+                            'name' => $contact['name']
                         ]
                     );
                     

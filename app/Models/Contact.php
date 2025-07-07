@@ -39,13 +39,11 @@ class Contact extends Model
 
     /**
      * Obtiene las tareas de scraping que encontraron este contacto.
-     * Define la relación muchos-a-muchos a través de la tabla pivot 'contact_scraping_task'.
+     * Define la relación muchos-a-muchos a través de la tabla pivot 'contact_scraping'.
      */
-    public function scrapingTasks(): BelongsToMany
+    public function scrapings(): BelongsToMany
     {
-        // Laravel infiere los nombres de las claves foráneas y la tabla pivot
-        // si seguimos las convenciones.
-        return $this->belongsToMany(ScrapingTask::class);
+        return $this->belongsToMany(Scraping::class, 'contact_scraping');
     }
 
     /**

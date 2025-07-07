@@ -10,11 +10,592 @@
     },
     "servers": [
         {
-            "url": "https://app.appnet.dev",
+            "url": "http://my-default-host.com",
             "description": "API Server"
         }
     ],
     "paths": {
+        "/api/contacts": {
+            "get": {
+                "tags": [
+                    "Contactos"
+                ],
+                "summary": "Obtener lista de contactos",
+                "description": "Devuelve todos los contactos del usuario autenticado",
+                "operationId": "contactsIndex",
+                "responses": {
+                    "200": {
+                        "description": "Lista de contactos obtenida correctamente",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "success": {
+                                            "type": "boolean",
+                                            "example": true
+                                        },
+                                        "data": {
+                                            "type": "array",
+                                            "items": {
+                                                "properties": {
+                                                    "id": {
+                                                        "type": "integer",
+                                                        "example": 1
+                                                    },
+                                                    "user_id": {
+                                                        "type": "integer",
+                                                        "example": 1
+                                                    },
+                                                    "name": {
+                                                        "type": "string",
+                                                        "example": "Nombre del contacto"
+                                                    },
+                                                    "phone": {
+                                                        "type": "string",
+                                                        "example": "+34600000000"
+                                                    },
+                                                    "address": {
+                                                        "type": "string",
+                                                        "example": "Dirección del contacto"
+                                                    },
+                                                    "email": {
+                                                        "type": "string",
+                                                        "example": "contacto@ejemplo.com"
+                                                    },
+                                                    "web": {
+                                                        "type": "string",
+                                                        "example": "https://ejemplo.com"
+                                                    },
+                                                    "telegram": {
+                                                        "type": "string",
+                                                        "example": "@usuario_telegram"
+                                                    },
+                                                    "created_at": {
+                                                        "type": "string",
+                                                        "format": "date-time"
+                                                    },
+                                                    "updated_at": {
+                                                        "type": "string",
+                                                        "format": "date-time"
+                                                    }
+                                                },
+                                                "type": "object"
+                                            }
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "No autorizado"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            },
+            "post": {
+                "tags": [
+                    "Contactos"
+                ],
+                "summary": "Crear un nuevo contacto",
+                "description": "Crea un nuevo contacto para el usuario autenticado",
+                "operationId": "contactsStore",
+                "requestBody": {
+                    "description": "Datos del nuevo contacto",
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "required": [
+                                    "name",
+                                    "phone"
+                                ],
+                                "properties": {
+                                    "name": {
+                                        "type": "string",
+                                        "example": "Nombre del contacto"
+                                    },
+                                    "phone": {
+                                        "type": "string",
+                                        "example": "+34600000000"
+                                    },
+                                    "address": {
+                                        "type": "string",
+                                        "example": "Dirección del contacto"
+                                    },
+                                    "email": {
+                                        "type": "string",
+                                        "format": "email",
+                                        "example": "contacto@ejemplo.com"
+                                    },
+                                    "web": {
+                                        "type": "string",
+                                        "format": "url",
+                                        "example": "https://ejemplo.com"
+                                    },
+                                    "telegram": {
+                                        "type": "string",
+                                        "example": "@usuario_telegram"
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "201": {
+                        "description": "Contacto creado correctamente",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "success": {
+                                            "type": "boolean",
+                                            "example": true
+                                        },
+                                        "data": {
+                                            "properties": {
+                                                "id": {
+                                                    "type": "integer",
+                                                    "example": 1
+                                                },
+                                                "user_id": {
+                                                    "type": "integer",
+                                                    "example": 1
+                                                },
+                                                "name": {
+                                                    "type": "string",
+                                                    "example": "Nombre del contacto"
+                                                },
+                                                "phone": {
+                                                    "type": "string",
+                                                    "example": "+34600000000"
+                                                },
+                                                "address": {
+                                                    "type": "string",
+                                                    "example": "Dirección del contacto"
+                                                },
+                                                "email": {
+                                                    "type": "string",
+                                                    "example": "contacto@ejemplo.com"
+                                                },
+                                                "web": {
+                                                    "type": "string",
+                                                    "example": "https://ejemplo.com"
+                                                },
+                                                "telegram": {
+                                                    "type": "string",
+                                                    "example": "@usuario_telegram"
+                                                },
+                                                "created_at": {
+                                                    "type": "string",
+                                                    "format": "date-time"
+                                                },
+                                                "updated_at": {
+                                                    "type": "string",
+                                                    "format": "date-time"
+                                                }
+                                            },
+                                            "type": "object"
+                                        },
+                                        "message": {
+                                            "type": "string",
+                                            "example": "Contacto creado correctamente"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Error de validación",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "success": {
+                                            "type": "boolean",
+                                            "example": false
+                                        },
+                                        "errors": {
+                                            "type": "object"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "No autorizado"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/api/contacts/{id}": {
+            "get": {
+                "tags": [
+                    "Contactos"
+                ],
+                "summary": "Obtener un contacto específico",
+                "description": "Devuelve un contacto específico del usuario autenticado",
+                "operationId": "contactsShow",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "description": "ID del contacto",
+                        "required": true,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Contacto obtenido correctamente",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "success": {
+                                            "type": "boolean",
+                                            "example": true
+                                        },
+                                        "data": {
+                                            "properties": {
+                                                "id": {
+                                                    "type": "integer",
+                                                    "example": 1
+                                                },
+                                                "user_id": {
+                                                    "type": "integer",
+                                                    "example": 1
+                                                },
+                                                "name": {
+                                                    "type": "string",
+                                                    "example": "Nombre del contacto"
+                                                },
+                                                "phone": {
+                                                    "type": "string",
+                                                    "example": "+34600000000"
+                                                },
+                                                "address": {
+                                                    "type": "string",
+                                                    "example": "Dirección del contacto"
+                                                },
+                                                "email": {
+                                                    "type": "string",
+                                                    "example": "contacto@ejemplo.com"
+                                                },
+                                                "web": {
+                                                    "type": "string",
+                                                    "example": "https://ejemplo.com"
+                                                },
+                                                "telegram": {
+                                                    "type": "string",
+                                                    "example": "@usuario_telegram"
+                                                },
+                                                "created_at": {
+                                                    "type": "string",
+                                                    "format": "date-time"
+                                                },
+                                                "updated_at": {
+                                                    "type": "string",
+                                                    "format": "date-time"
+                                                }
+                                            },
+                                            "type": "object"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Contacto no encontrado",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "success": {
+                                            "type": "boolean",
+                                            "example": false
+                                        },
+                                        "message": {
+                                            "type": "string",
+                                            "example": "Contacto no encontrado"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "No autorizado"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            },
+            "put": {
+                "tags": [
+                    "Contactos"
+                ],
+                "summary": "Actualizar un contacto existente",
+                "description": "Actualiza un contacto existente del usuario autenticado",
+                "operationId": "contactsUpdate",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "description": "ID del contacto",
+                        "required": true,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "description": "Datos del contacto a actualizar",
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "properties": {
+                                    "name": {
+                                        "type": "string",
+                                        "example": "Nombre actualizado"
+                                    },
+                                    "phone": {
+                                        "type": "string",
+                                        "example": "+34600000001"
+                                    },
+                                    "address": {
+                                        "type": "string",
+                                        "example": "Dirección actualizada"
+                                    },
+                                    "email": {
+                                        "type": "string",
+                                        "format": "email",
+                                        "example": "nuevo@ejemplo.com"
+                                    },
+                                    "web": {
+                                        "type": "string",
+                                        "format": "url",
+                                        "example": "https://nuevo-ejemplo.com"
+                                    },
+                                    "telegram": {
+                                        "type": "string",
+                                        "example": "@nuevo_usuario"
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Contacto actualizado correctamente",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "success": {
+                                            "type": "boolean",
+                                            "example": true
+                                        },
+                                        "data": {
+                                            "properties": {
+                                                "id": {
+                                                    "type": "integer",
+                                                    "example": 1
+                                                },
+                                                "user_id": {
+                                                    "type": "integer",
+                                                    "example": 1
+                                                },
+                                                "name": {
+                                                    "type": "string",
+                                                    "example": "Nombre actualizado"
+                                                },
+                                                "phone": {
+                                                    "type": "string",
+                                                    "example": "+34600000001"
+                                                },
+                                                "address": {
+                                                    "type": "string",
+                                                    "example": "Dirección actualizada"
+                                                },
+                                                "email": {
+                                                    "type": "string",
+                                                    "example": "nuevo@ejemplo.com"
+                                                },
+                                                "web": {
+                                                    "type": "string",
+                                                    "example": "https://nuevo-ejemplo.com"
+                                                },
+                                                "telegram": {
+                                                    "type": "string",
+                                                    "example": "@nuevo_usuario"
+                                                },
+                                                "created_at": {
+                                                    "type": "string",
+                                                    "format": "date-time"
+                                                },
+                                                "updated_at": {
+                                                    "type": "string",
+                                                    "format": "date-time"
+                                                }
+                                            },
+                                            "type": "object"
+                                        },
+                                        "message": {
+                                            "type": "string",
+                                            "example": "Contacto actualizado correctamente"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Contacto no encontrado",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "success": {
+                                            "type": "boolean",
+                                            "example": false
+                                        },
+                                        "message": {
+                                            "type": "string",
+                                            "example": "Contacto no encontrado"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Error de validación",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "success": {
+                                            "type": "boolean",
+                                            "example": false
+                                        },
+                                        "errors": {
+                                            "type": "object"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "No autorizado"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            },
+            "delete": {
+                "tags": [
+                    "Contactos"
+                ],
+                "summary": "Eliminar un contacto",
+                "description": "Elimina un contacto existente del usuario autenticado",
+                "operationId": "contactsDestroy",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "description": "ID del contacto",
+                        "required": true,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Contacto eliminado correctamente",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "success": {
+                                            "type": "boolean",
+                                            "example": true
+                                        },
+                                        "message": {
+                                            "type": "string",
+                                            "example": "Contacto eliminado correctamente"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Contacto no encontrado",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "success": {
+                                            "type": "boolean",
+                                            "example": false
+                                        },
+                                        "message": {
+                                            "type": "string",
+                                            "example": "Contacto no encontrado"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "No autorizado"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
         "/api/ollama-tasks": {
             "post": {
                 "tags": [
@@ -111,61 +692,126 @@
                 ]
             }
         },
-        "/api/scraping/callback": {
+        "/api/scraping": {
+            "get": {
+                "tags": [
+                    "Scraping"
+                ],
+                "summary": "Obtiene una tarea de scraping pendiente",
+                "description": "Devuelve la tarea de scraping pendiente más antigua para ser procesada por el scraper",
+                "operationId": "getScrapingTask",
+                "parameters": [
+                    {
+                        "name": "token",
+                        "in": "query",
+                        "description": "Token de autenticación del usuario",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Tarea de scraping pendiente",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "taskerId": {
+                                            "type": "string",
+                                            "example": "SCRAPER_TASK_XYZ_789"
+                                        },
+                                        "token": {
+                                            "type": "string",
+                                            "example": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+                                        },
+                                        "keywords": {
+                                            "type": "string",
+                                            "example": "desarrollo web barcelona,agencia marketing madrid"
+                                        },
+                                        "linkedinUsername": {
+                                            "type": "string",
+                                            "example": "usuario@ejemplo.com"
+                                        },
+                                        "linkedinPassword": {
+                                            "type": "string",
+                                            "example": "contraseña123"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "No autorizado"
+                    },
+                    "404": {
+                        "description": "No hay tareas pendientes"
+                    }
+                },
+                "security": [
+                    {
+                        "scrapingToken": []
+                    }
+                ]
+            },
             "post": {
                 "tags": [
                     "Scraping"
                 ],
-                "summary": "Recibe un callback del servicio de scraping",
-                "description": "Maneja el callback del servicio de scraping",
-                "operationId": "a7d49541f2946f95a0f823bf1c41c3d0",
+                "summary": "Recibe un contacto del scraper",
+                "description": "Recibe un contacto del scraper y lo asocia a una tarea de scraping",
+                "operationId": "receiveScrapingContact",
+                "parameters": [
+                    {
+                        "name": "token",
+                        "in": "query",
+                        "description": "Token de autenticación del usuario",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
                 "requestBody": {
                     "required": true,
                     "content": {
                         "application/json": {
                             "schema": {
                                 "required": [
-                                    "task_id",
-                                    "status",
-                                    "fuente"
+                                    "type",
+                                    "value",
+                                    "tasker",
+                                    "name",
+                                    "token"
                                 ],
                                 "properties": {
-                                    "task_id": {
+                                    "type": {
+                                        "description": "Tipo de contacto: email o phone",
                                         "type": "string",
-                                        "format": "uuid",
-                                        "example": "550e8400-e29b-41d4-a716-446655440000"
+                                        "example": "email"
                                     },
-                                    "status": {
+                                    "value": {
+                                        "description": "Valor del contacto",
                                         "type": "string",
-                                        "enum": [
-                                            "completed",
-                                            "failed"
-                                        ]
+                                        "example": "contacto@ejemplo.com"
                                     },
-                                    "error_message": {
+                                    "tasker": {
+                                        "description": "ID de la tarea de scraping",
                                         "type": "string",
-                                        "nullable": true
+                                        "example": "TAREA_WEB_001"
                                     },
-                                    "fuente": {
-                                        "type": "string"
+                                    "name": {
+                                        "description": "Nombre del scraper",
+                                        "type": "string",
+                                        "example": "scraping"
                                     },
-                                    "empresas": {
-                                        "type": "array",
-                                        "items": {
-                                            "type": "object"
-                                        },
-                                        "nullable": true
-                                    },
-                                    "datos": {
-                                        "type": "object",
-                                        "nullable": true
-                                    },
-                                    "resultados": {
-                                        "type": "array",
-                                        "items": {
-                                            "type": "object"
-                                        },
-                                        "nullable": true
+                                    "token": {
+                                        "description": "Token de autenticación",
+                                        "type": "string",
+                                        "example": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
                                     }
                                 },
                                 "type": "object"
@@ -175,17 +821,18 @@
                 },
                 "responses": {
                     "200": {
-                        "description": "Callback procesado correctamente",
+                        "description": "Contacto recibido correctamente",
                         "content": {
                             "application/json": {
                                 "schema": {
                                     "properties": {
-                                        "status": {
-                                            "type": "string",
-                                            "example": "success"
+                                        "success": {
+                                            "type": "boolean",
+                                            "example": true
                                         },
                                         "message": {
-                                            "type": "string"
+                                            "type": "string",
+                                            "example": "Contacto recibido correctamente"
                                         }
                                     },
                                     "type": "object"
@@ -193,29 +840,21 @@
                             }
                         }
                     },
-                    "422": {
-                        "description": "Error de validación",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "properties": {
-                                        "status": {
-                                            "type": "string",
-                                            "example": "error"
-                                        },
-                                        "message": {
-                                            "type": "string"
-                                        },
-                                        "errors": {
-                                            "type": "object"
-                                        }
-                                    },
-                                    "type": "object"
-                                }
-                            }
-                        }
+                    "400": {
+                        "description": "Error en los datos enviados"
+                    },
+                    "401": {
+                        "description": "No autorizado"
+                    },
+                    "404": {
+                        "description": "Tarea de scraping no encontrada"
                     }
-                }
+                },
+                "security": [
+                    {
+                        "scrapingToken": []
+                    }
+                ]
             }
         },
         "/api/server-monitor/metrics": {
@@ -1353,10 +1992,24 @@
                 "type": "apiKey",
                 "name": "Authorization",
                 "in": "header"
+            },
+            "scrapingToken": {
+                "type": "apiKey",
+                "description": "Token de autenticación para el servicio de scraping",
+                "name": "token",
+                "in": "query"
             }
         }
     },
     "tags": [
+        {
+            "name": "Contactos",
+            "description": "API para gestionar contactos de usuarios"
+        },
+        {
+            "name": "Scraping",
+            "description": "Endpoints para manejar el servicio de scraping"
+        },
         {
             "name": "WhatsApp",
             "description": "Endpoints para interactuar con la API de WhatsApp"
@@ -1368,10 +2021,6 @@
         {
             "name": "Ollama Tasks",
             "description": "Endpoints para gestionar tareas de Ollama"
-        },
-        {
-            "name": "Scraping",
-            "description": "Endpoints para manejar el servicio de scraping"
         },
         {
             "name": "Server Monitor",

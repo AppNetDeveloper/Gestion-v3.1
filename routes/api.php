@@ -14,7 +14,7 @@ use App\Http\Controllers\Api\ServerMonitorController;
 use App\Http\Controllers\Api\WhatsappMessageController;
 use App\Http\Controllers\Api\TelegramController;
 use App\Http\Controllers\Api\WhatsappSessionController;
-// Controlador de callback de scraping eliminado
+use App\Http\Controllers\Api\ScrapingApiController;
 use App\Http\Controllers\Api\OllamaTaskerController;
 
 /*
@@ -79,6 +79,10 @@ Route::prefix('telegram')->middleware('telegram.token')->group(function () {
     Route::get('/contacts', [\App\Http\Controllers\Api\TelegramProxyController::class, 'getContacts']);
 });
 
+// Rutas de API para scraping (autenticación por token en el controlador)
+Route::get('scraping', [ScrapingApiController::class, 'getTask']);
+Route::post('scraping', [ScrapingApiController::class, 'receiveContact']);
+
 // authenticated routes (requieren autenticación de usuario)
 Route::group(['middleware' => 'auth:sanctum'], function () {
     Route::post('resend-verification', [AuthController::class, 'resendVerification'])
@@ -94,6 +98,9 @@ Route::group(['middleware' => 'auth:sanctum'], function () {
         Route::apiResource('permissions', PermissionController::class);
         Route::resource('roles', RoleController::class)->except('edit');
         Route::apiSingleton('profile', ProfileController::class);
+        
+        // API de Contactos
+        Route::apiResource('contacts', \App\Http\Controllers\Api\ContactApiController::class);
         Route::put('general-settings-images', GeneralSettingsMediaController::class);
         // Database Backup
         Route::apiResource('database-backups', DatabaseBackupController::class)->only(['index', 'destroy']);
