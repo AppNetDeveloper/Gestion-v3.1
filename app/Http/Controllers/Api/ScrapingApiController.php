@@ -229,13 +229,26 @@ class ScrapingApiController extends Controller
             // Buscar si ya existe un contacto con ese valor
             $contact = Contact::where($field, $value)->first();
 
-            // Si no existe, crear uno nuevo
+            // Si no existe, crear uno nuevo evitando duplicados por usuario
             if (!$contact) {
-                $contact = new Contact();
-                $contact->user_id = $user->id;
-                $contact->name = 'Scraping Contact';
-                $contact->$field = $value;
-                $contact->save();
+                // Comprobar si ya hay un contacto con ese email o teléfono para el usuario
+                if ($type === 'email') {
+                    $contact = Contact::where('user_id', $user->id)
+                        ->where('email', $value)
+                        ->first();
+                } elseif ($type === 'phone') {
+                    $contact = Contact::where('user_id', $user->id)
+                        ->where('phone', $value)
+                        ->first();
+                }
+                // Si sigue sin existir, crearlo
+                if (!$contact) {
+                    $contact = new Contact();
+                    $contact->user_id = $user->id;
+                    $contact->name = 'Scraping Contact';
+                    $contact->$field = $value;
+                    $contact->save();
+                }
             }
 
             // Asociar el contacto a la tarea de scraping si no está ya asociado

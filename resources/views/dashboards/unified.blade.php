@@ -974,130 +974,128 @@
         </script>
 
         {{-- ** END: Javascript Block with Persistent Error Display ** --}}
-                const loadAverageDataRaw = {{ Illuminate\Support\Js::from($data['loadAverage'] ?? null) }};
+        <script>
+            const loadAverageDataRaw = @json($data['loadAverage'] ?? []);
 
-                // Flag to prevent multiple simultaneous updates
-                let isUpdatingTimeControl = false;
-                let timeControlIntervalId = null; // To store the interval ID
+            // Flag to prevent multiple simultaneous updates
+            let isUpdatingTimeControl = false;
+            let timeControlIntervalId = null; // To store the interval ID
 
-                // --- References to UI elements ---
-                const buttonsContainer = $("#buttons-container"); // jQuery object
-                const loadingOverlay = $("#loading-overlay"); // jQuery object
-                const errorMessageDiv = $("#time-control-error-message"); // jQuery object
+            // --- References to UI elements ---
+            const buttonsContainer = $("#buttons-container"); // jQuery object
+            const loadingOverlay = $("#loading-overlay"); // jQuery object
+            const errorMessageDiv = $("#time-control-error-message"); // jQuery object
 
-                // --- Geolocation Tracking using watchPosition ---
-                let latestLat = null;
-                let latestLong = null;
-                let watchId = null;
-                let initialLocationObtained = false; // Flag to know if we got at least one location
-                let geolocationSupported = ('geolocation' in navigator);
+            // --- Geolocation Tracking using watchPosition ---
+            let latestLat = null;
+            let latestLong = null;
+            let watchId = null;
+            let initialLocationObtained = false; // Flag to know if we got at least one location
+            let geolocationSupported = ('geolocation' in navigator);
 
+            // Function to show persistent error messages and hide buttons
+            function showPersistentError(message) {
+                console.error("Persistent Error:", message); // Log error for debugging
+                if(errorMessageDiv.length) {
+                    errorMessageDiv.text(message).show(); // Set text and show error div
+                }
+                if(buttonsContainer.length) {
+                    buttonsContainer.hide(); // Hide buttons
+                }
+                if(loadingOverlay.length) {
+                    loadingOverlay.hide(); // Ensure loading is hidden
+                }
+            }
 
-                // Function to show persistent error messages and hide buttons
-                function showPersistentError(message) {
-                    console.error("Persistent Error:", message); // Log error for debugging
-                    if(errorMessageDiv.length) {
-                        errorMessageDiv.text(message).show(); // Set text and show error div
-                    }
-                    if(buttonsContainer.length) {
-                        buttonsContainer.hide(); // Hide buttons
-                    }
-                     if(loadingOverlay.length) {
-                        loadingOverlay.hide(); // Ensure loading is hidden
+            // Function to hide persistent error messages and show buttons
+            function hidePersistentError() {
+                if(errorMessageDiv.length) {
+                    errorMessageDiv.hide().text(''); // Hide error div and clear text
+                }
+                if(buttonsContainer.length) {
+                    // Only show buttons if not currently updating (to avoid race conditions)
+                    if (!isUpdatingTimeControl) {
+                        buttonsContainer.css('display', 'grid'); // Show buttons using grid
                     }
                 }
+            }
 
-                 // Function to hide persistent error messages and show buttons
-                function hidePersistentError() {
-                    if(errorMessageDiv.length) {
-                        errorMessageDiv.hide().text(''); // Hide error div and clear text
-                    }
-                     if(buttonsContainer.length) {
-                         // Only show buttons if not currently updating (to avoid race conditions)
-                         if (!isUpdatingTimeControl) {
-                            buttonsContainer.css('display', 'grid'); // Show buttons using grid
-                         }
-                    }
-                }
-
-
-                if (geolocationSupported) {
-                    console.log('Iniciando seguimiento de ubicación...'); // Log location start
-                    watchId = navigator.geolocation.watchPosition(
-                        (position) => { // Success callback for watchPosition
-                            latestLat = position.coords.latitude;
-                            latestLong = position.coords.longitude;
-                            if (!initialLocationObtained) {
-                                initialLocationObtained = true;
-                                console.log('Ubicación inicial obtenida:', latestLat, latestLong);
-                                hidePersistentError(); // Hide any previous error message once location is obtained
-                            } else {
-                               console.log('Ubicación actualizada:', latestLat, latestLong);
-                            }
-                        },
-                        (error) => { // Error callback for watchPosition
-                            console.error("Error vigilando posición:", error.message, `(Code: ${error.code})`);
-                            latestLat = null; // Invalidate location on error
-                            latestLong = null;
-                            initialLocationObtained = false; // Reset flag
-
-                            // Show specific message for location denied/unavailable
-                            if (error.code === error.PERMISSION_DENIED || error.code === error.POSITION_UNAVAILABLE) {
-                                showPersistentError("La ubicación está desactivada o denegada. Por favor, actívala para poder fichar.");
-                            } else {
-                                // Show generic error for other geolocation issues
-                                showPersistentError(`Error obteniendo ubicación: ${error.message}`);
-                            }
-                        },
-                        { // Options for watchPosition
-                            enableHighAccuracy: true,
-                            timeout: 15000,
-                            maximumAge: 0
+            if (geolocationSupported) {
+                console.log('Iniciando seguimiento de ubicación...'); // Log location start
+                watchId = navigator.geolocation.watchPosition(
+                    (position) => { // Success callback for watchPosition
+                        latestLat = position.coords.latitude;
+                        latestLong = position.coords.longitude;
+                        if (!initialLocationObtained) {
+                            initialLocationObtained = true;
+                            console.log('Ubicación inicial obtenida:', latestLat, latestLong);
+                            hidePersistentError(); // Hide any previous error message once location is obtained
+                        } else {
+                            console.log('Ubicación actualizada:', latestLat, latestLong);
                         }
-                    );
-                } else {
-                    console.warn("Geolocalización no soportada.");
-                    showPersistentError('Geolocalización no soportada por este navegador. No se puede fichar.');
-                }
-                // --- End Geolocation Tracking ---
+                    },
+                    (error) => { // Error callback for watchPosition
+                        console.error("Error vigilando posición:", error.message, `(Code: ${error.code})`);
+                        latestLat = null; // Invalidate location on error
+                        latestLong = null;
+                        initialLocationObtained = false; // Reset flag
 
+                        // Show specific message for location denied/unavailable
+                        if (error.code === error.PERMISSION_DENIED || error.code === error.POSITION_UNAVAILABLE) {
+                            showPersistentError("La ubicación está desactivada o denegada. Por favor, actívala para poder fichar.");
+                        } else {
+                            // Show generic error for other geolocation issues
+                            showPersistentError(`Error obteniendo ubicación: ${error.message}`);
+                        }
+                    },
+                    { // Options for watchPosition
+                        enableHighAccuracy: true,
+                        timeout: 15000,
+                        maximumAge: 0
+                    }
+                );
+            } else {
+                console.warn("Geolocalización no soportada.");
+                showPersistentError('Geolocalización no soportada por este navegador. No se puede fichar.');
+            }
+            // --- End Geolocation Tracking ---
 
-                // --- Chart Initializations (Using Vanilla JS) ---
-                // Restore FULL chart configurations here
-                try {
-                    // Revenue Report Chart (Main Bar Chart)
-                    const barChartOneEl = $q("#barChartOne");
-                    if (barChartOneEl && dashboardData.revenueReport) {
-                        let revenueReportChartConfig = {
-                            series: [
-                                { name: dashboardData.revenueReport.revenue?.title ?? 'Revenue', data: dashboardData.revenueReport.revenue?.data ?? [] },
-                                { name: dashboardData.revenueReport.netProfit?.title ?? 'Net Profit', data: dashboardData.revenueReport.netProfit?.data ?? [] },
-                                { name: dashboardData.revenueReport.cashFlow?.title ?? 'Cash Flow', data: dashboardData.revenueReport.cashFlow?.data ?? [] },
-                            ],
-                            chart: { type: "bar", height: 350, width: "100%", toolbar: { show: false }, background: 'transparent' },
-                            plotOptions: { bar: { horizontal: false, columnWidth: "45%", borderRadius: 4 } },
-                            legend: { show: true, position: "top", horizontalAlign: "right", fontSize: "12px", fontFamily: "Inter", offsetY: 0, markers: { width: 8, height: 8, radius: '50%' }, itemMargin: { horizontal: 10, vertical: 5 }, labels: { colors: document.body.classList.contains('dark') ? '#cbd5e1' : '#475569' } },
-                            title: { text: "Revenue Report", align: "left", style: { fontSize: "18px", fontWeight: "500", fontFamily: "Inter", color: document.body.classList.contains('dark') ? '#cbd5e1' : '#1e293b' } },
-                            dataLabels: { enabled: false },
-                            stroke: { show: true, width: 2, colors: ["transparent"] },
-                            yaxis: { labels: { style: { colors: document.body.classList.contains('dark') ? '#94a3b8' : '#64748b', fontFamily: "Inter" } } },
-                            xaxis: { categories: dashboardData.revenueReport.month ?? [], labels: { style: { colors: document.body.classList.contains('dark') ? '#94a3b8' : '#64748b', fontFamily: "Inter" } }, axisBorder: { show: false }, axisTicks: { show: false } },
-                            fill: { opacity: 1 },
-                            tooltip: { theme: document.body.classList.contains('dark') ? 'dark' : 'light', y: { formatter: (val) => `$ ${val}k` } },
-                            colors: ["#4669FA", "#0CE7FA", "#FA916B"],
-                            grid: { show: true, borderColor: document.body.classList.contains('dark') ? '#334155' : '#e2e8f0', strokeDashArray: 5, position: "back" },
-                            responsive: [ { breakpoint: 600, options: { legend: { position: "bottom", offsetY: 10 }, plotOptions: { bar: { columnWidth: "80%" } } } } ],
-                        };
-                        new ApexCharts(barChartOneEl, revenueReportChartConfig).render();
-                    } else { console.warn("Element #barChartOne or dashboardData.revenueReport not found."); }
+            // --- Chart Initializations (Using Vanilla JS) ---
+            // Restore FULL chart configurations here
+            try {
+                // Revenue Report Chart (Main Bar Chart)
+                const barChartOneEl = $q("#barChartOne");
+                if (barChartOneEl && dashboardData.revenueReport) {
+                    let revenueReportChartConfig = {
+                        series: [
+                            { name: dashboardData.revenueReport.revenue?.title ?? 'Revenue', data: dashboardData.revenueReport.revenue?.data ?? [] },
+                            { name: dashboardData.revenueReport.netProfit?.title ?? 'Net Profit', data: dashboardData.revenueReport.netProfit?.data ?? [] },
+                            { name: dashboardData.revenueReport.cashFlow?.title ?? 'Cash Flow', data: dashboardData.revenueReport.cashFlow?.data ?? [] },
+                        ],
+                        chart: { type: "bar", height: 350, width: "100%", toolbar: { show: false }, background: 'transparent' },
+                        plotOptions: { bar: { horizontal: false, columnWidth: "45%", borderRadius: 4 } },
+                        legend: { show: true, position: "top", horizontalAlign: "right", fontSize: "12px", fontFamily: "Inter", offsetY: 0, markers: { width: 8, height: 8, radius: '50%' }, itemMargin: { horizontal: 10, vertical: 5 }, labels: { colors: document.body.classList.contains('dark') ? '#cbd5e1' : '#475569' } },
+                        title: { text: "Revenue Report", align: "left", style: { fontSize: "18px", fontWeight: "500", fontFamily: "Inter", color: document.body.classList.contains('dark') ? '#cbd5e1' : '#1e293b' } },
+                        dataLabels: { enabled: false },
+                        stroke: { show: true, width: 2, colors: ["transparent"] },
+                        yaxis: { labels: { style: { colors: document.body.classList.contains('dark') ? '#94a3b8' : '#64748b', fontFamily: "Inter" } } },
+                        xaxis: { categories: dashboardData.revenueReport.month ?? [], labels: { style: { colors: document.body.classList.contains('dark') ? '#94a3b8' : '#64748b', fontFamily: "Inter" } }, axisBorder: { show: false }, axisTicks: { show: false } },
+                        fill: { opacity: 1 },
+                        tooltip: { theme: document.body.classList.contains('dark') ? 'dark' : 'light', y: { formatter: (val) => `$ ${val}k` } },
+                        colors: ["#4669FA", "#0CE7FA", "#FA916B"],
+                        grid: { show: true, borderColor: document.body.classList.contains('dark') ? '#334155' : '#e2e8f0', strokeDashArray: 5, position: "back" },
+                        responsive: [ { breakpoint: 600, options: { legend: { position: "bottom", offsetY: 10 }, plotOptions: { bar: { columnWidth: "80%" } } } } ],
+                    };
+                    new ApexCharts(barChartOneEl, revenueReportChartConfig).render();
+                } else { console.warn("Element #barChartOne or dashboardData.revenueReport not found."); }
 
-                    // Small Top Card Charts Helper
-                    const createSmallAreaChart = (selector, seriesData, categories, color) => {
-                        const element = $q(selector);
-                        const cleanData = Array.isArray(seriesData) ? seriesData.map(v => Number(v) || 0) : [];
-                        const cleanCategories = Array.isArray(categories) ? categories : [];
-                        if (element && cleanData.length > 0 && cleanCategories.length === cleanData.length) {
-                            let config = {
+                // Small Top Card Charts Helper
+                const createSmallAreaChart = (selector, seriesData, categories, color) => {
+                    const element = $q(selector);
+                    const cleanData = Array.isArray(seriesData) ? seriesData.map(v => Number(v) || 0) : [];
+                    const cleanCategories = Array.isArray(categories) ? categories : [];
+                    if (element && cleanData.length > 0 && cleanCategories.length === cleanData.length) {
+                        let config = {
                                 chart: { type: "area", height: "48", toolbar: { show: false }, sparkline: { enabled: true }, background: 'transparent' },
                                 dataLabels: { enabled: false }, stroke: { curve: "smooth", width: 2 }, colors: [color],
                                 tooltip: { theme: document.body.classList.contains('dark') ? 'dark' : 'light', x: { show: false }, y: { title: { formatter: () => '' }, formatter: (val) => val } },

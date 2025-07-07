@@ -432,7 +432,16 @@ class HomeController extends Controller
         }
 
         
-        // Add load average to the view data
+        // Normaliza loadAverage: si es string JSON, decodifica; si no es array, pon ['N/A','N/A','N/A']
+        if (is_string($loadAverage)) {
+            $decoded = json_decode($loadAverage, true);
+            if (is_array($decoded)) {
+                $loadAverage = $decoded;
+            }
+        }
+        if (!is_array($loadAverage)) {
+            $loadAverage = ['N/A', 'N/A', 'N/A'];
+        }
         $viewData['loadAverage'] = $loadAverage;
 
         // Add top customers data
