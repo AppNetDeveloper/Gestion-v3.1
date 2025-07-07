@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Diagnóstico de JavaScript</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .container { max-width: 800px; margin: 0 auto; }
+        .card { background: #f5f5f5; border-radius: 8px; padding: 20px; margin-bottom: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        h1, h2 { color: #333; }
+        button { background: #4f46e5; color: white; border: none; padding: 10px 15px; border-radius: 4px; cursor: pointer; margin: 5px; }
+        button:hover { background: #4338ca; }
+        #log { background: #333; color: #fff; padding: 15px; border-radius: 4px; height: 300px; overflow: auto; font-family: monospace; margin-top: 20px; }
+        .test-section { margin-bottom: 30px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Diagnóstico de JavaScript</h1>
+        
+        <div class="card">
+            <h2>Información de librerías</h2>
+            <div id="libraries-info"></div>
+        </div>
+        
+        <div class="card test-section">
+            <h2>Prueba de botones</h2>
+            <p>Haz clic en los botones para probar la funcionalidad:</p>
+            
+            <button id="test-jquery">Probar jQuery</button>
+            <button id="test-datatables">Probar DataTables</button>
+            <button id="test-sweetalert">Probar SweetAlert2</button>
+            <button id="test-select2">Probar Select2</button>
+            
+            <h3>Simulación de botones de la aplicación:</h3>
+            <button id="test-add-item">Simular "Añadir línea"</button>
+            <button id="test-edit">Simular "Editar"</button>
+            <button id="test-delete">Simular "Eliminar"</button>
+        </div>
+        
+        <div class="card">
+            <h2>Consola de diagnóstico</h2>
+            <div id="log"></div>
+        </div>
+    </div>
+
+    <!-- Cargar scripts en orden correcto -->
+    <script>
+        // Función para registrar mensajes en la consola visual
+        function log(message) {
+            const logElement = document.getElementById('log');
+            const logMessage = document.createElement('div');
+            logMessage.textContent = message;
+            logElement.appendChild(logMessage);
+            console.log(message);
+        }
+        
+        // Verificar si una librería está cargada
+        function checkLibrary(name, globalVar) {
+            const isLoaded = typeof window[globalVar] !== 'undefined';
+            log(`${name}: ${isLoaded ? 'CARGADO' : 'NO CARGADO'}`);
+            return isLoaded;
+        }
+        
+        // Inicializar cuando el DOM esté listo
+        document.addEventListener('DOMContentLoaded', function() {
+            log('Iniciando diagnóstico...');
+            
+            // Verificar librerías
+            const jQueryLoaded = checkLibrary('jQuery', 'jQuery');
+            
+            if (jQueryLoaded) {
+                log(`Versión de jQuery: ${jQuery.fn.jquery}`);
+                checkLibrary('DataTables', 'DataTable');
+                checkLibrary('SweetAlert2', 'Swal');
+                checkLibrary('Select2', 'select2');
+                
+                // Configurar eventos de prueba
+                jQuery('#test-jquery').on('click', function() {
+                    log('Botón jQuery clickeado - jQuery funciona correctamente');
+                    jQuery(this).css('background-color', '#22c55e').text('jQuery OK');
+                });
+                
+                jQuery('#test-datatables').on('click', function() {
+                    if (typeof jQuery.fn.DataTable !== 'undefined') {
+                        log('DataTables está disponible');
+                        jQuery(this).css('background-color', '#22c55e').text('DataTables OK');
+                    } else {
+                        log('ERROR: DataTables no está disponible');
+                        jQuery(this).css('background-color', '#ef4444').text('DataTables ERROR');
+                    }
+                });
+                
+                jQuery('#test-sweetalert').on('click', function() {
+                    if (typeof Swal !== 'undefined') {
+                        log('SweetAlert2 está disponible');
+                        Swal.fire('SweetAlert2 funciona!', 'La librería está cargada correctamente', 'success');
+                        jQuery(this).css('background-color', '#22c55e').text('SweetAlert2 OK');
+                    } else {
+                        log('ERROR: SweetAlert2 no está disponible');
+                        jQuery(this).css('background-color', '#ef4444').text('SweetAlert2 ERROR');
+                    }
+                });
+                
+                jQuery('#test-select2').on('click', function() {
+                    if (typeof jQuery.fn.select2 !== 'undefined') {
+                        log('Select2 está disponible');
+                        jQuery(this).css('background-color', '#22c55e').text('Select2 OK');
+                    } else {
+                        log('ERROR: Select2 no está disponible');
+                        jQuery(this).css('background-color', '#ef4444').text('Select2 ERROR');
+                    }
+                });
+                
+                // Simular botones de la aplicación
+                jQuery('#test-add-item').on('click', function() {
+                    log('Simulando clic en "Añadir línea"');
+                    // Verificar si el botón tiene eventos registrados
+                    if (jQuery._data) {
+                        log('Eventos registrados en botones reales:');
+                        const addItemBtn = jQuery('#addQuoteItemBtn');
+                        if (addItemBtn.length) {
+                            log('- Botón "Añadir línea" encontrado');
+                            const events = jQuery._data(addItemBtn[0], 'events');
+                            log(events ? `  Eventos: ${JSON.stringify(Object.keys(events))}` : '  No tiene eventos registrados');
+                        } else {
+                            log('- Botón "Añadir línea" NO encontrado en la página');
+                        }
+                    }
+                });
+            } else {
+                log('ERROR CRÍTICO: jQuery no está disponible. No se pueden realizar más pruebas.');
+                document.getElementById('libraries-info').innerHTML = '<div style="color: red; font-weight: bold;">jQuery no está disponible. Verifica la carga de scripts.</div>';
+            }
+        });
+    </script>
+    
+    <!-- Cargar jQuery primero -->
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+    
+    <!-- Cargar Select2 después de jQuery -->
+    <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+    
+    <!-- Cargar SweetAlert2 -->
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    
+    <!-- Cargar Iconify -->
+    <script src="https://code.iconify.design/iconify-icon/1.0.7/iconify-icon.min.js"></script>
+    
+    <!-- Cargar DataTables -->
+    <script src="https://cdn.datatables.net/1.13.7/js/jquery.dataTables.min.js"></script>
+    
+    <!-- Cargar el script de diagnóstico después de todas las librerías -->
+    <script src="/js/diagnostico.js"></script>
+</body>
+</html>

@@ -8,8 +8,8 @@
     <x-favicon />
     <title>{{ config('app.name', 'AppNetDeveloper') }}</title>
 
-    {{-- Scripts de Vite (CSS/JS principal) --}}
-    @vite(['resources/css/app.scss', 'resources/js/custom/store.js'])
+    {{-- Scripts de Vite (CSS principal) --}}
+    @vite(['resources/css/app.scss'])
 
     {{-- PWA (si corresponde) --}}
     @laravelPWA
@@ -63,11 +63,13 @@
         </div>
     </div>
 
-    {{-- Scripts de Vite (JS principales al final) --}}
-    @vite(['resources/js/app.js', 'resources/js/main.js'])
+    {{-- Cargar jQuery explícitamente primero --}}
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+    
+    {{-- Scripts de Vite (JS principales después de jQuery) --}}
+    @vite(['resources/js/custom/store.js', 'resources/js/app.js', 'resources/js/main.js'])
 
-    <!--
-      {{-- Inyecta los scripts que empujes desde tus vistas --}}
+    {{-- Inyecta los scripts que empujes desde tus vistas --}}
     @stack('scripts')
 </body>
 </html>

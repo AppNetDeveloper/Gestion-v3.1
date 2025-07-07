@@ -287,14 +287,35 @@
     @endpush
 
     @push('scripts')
-        {{-- *** Cargar jQuery PRIMERO *** --}}
-        <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
-
-        {{-- Cargar Select2 DESPUÉS de jQuery --}}
-        <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
-        {{-- Otros scripts --}}
-        <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
-        <script src="https://code.iconify.design/iconify-icon/1.0.7/iconify-icon.min.js"></script>
+        {{-- No cargar jQuery, DataTables, SweetAlert2 ni Iconify aquí, ya se cargan en app.js --}}
+        {{-- Solo cargar Select2 si no está en app.js --}}
+        <script>
+            // Verificar si jQuery y Select2 ya están cargados
+            if (typeof jQuery === 'undefined') {
+                console.error('jQuery no está disponible. Verifica la carga de scripts.');
+            } else {
+                console.log('jQuery está disponible, versión:', jQuery.fn.jquery);
+                
+                // Verificar Select2
+                if (typeof jQuery.fn.select2 === 'undefined') {
+                    console.log('Select2 no está disponible, cargando desde CDN...');
+                    // Cargar Select2 dinámicamente
+                    var select2Script = document.createElement('script');
+                    select2Script.src = 'https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js';
+                    select2Script.onload = function() {
+                        console.log('Select2 cargado correctamente desde CDN');
+                        // Inicializar Select2 después de cargar
+                        initializeQuoteForm();
+                    };
+                    document.head.appendChild(select2Script);
+                } else {
+                    console.log('Select2 ya está disponible');
+                    // Inicializar directamente
+                    jQuery(function() {
+                        initializeQuoteForm();
+                    });
+                }
+            }
 
         <script>
             // Pasar datos de descuentos a JavaScript
@@ -303,55 +324,63 @@
             const defaultVatRate = {{ config('app.vat_rate', 21) }};
             let currentVatRate = defaultVatRate; // Variable para guardar la tasa actual
 
-            // Esperar a que jQuery esté listo
-             $(function() {
-                 // Verificar si Select2 está cargado
-                 const isSelect2Loaded = typeof $.fn.select2 !== 'undefined';
-                 if (!isSelect2Loaded) {
+            // Función principal de inicialización del formulario de presupuestos
+            function initializeQuoteForm() {
+                console.log('Inicializando formulario de presupuestos...');
+                // Verificar si Select2 está cargado
+                const isSelect2Loaded = typeof jQuery.fn.select2 !== 'undefined';
+                if (!isSelect2Loaded) {
                     console.warn('Select2 plugin is not loaded. Using standard dropdowns.');
-                 } else {
-                     console.log('Select2 plugin IS loaded.');
-                     // Inicializar Select2 en los selectores que tengan la clase 'select2'
-                     $('.select2').each(function() {
-                         const $select = $(this);
-                         const placeholderText = $select.find('option[disabled]').text() || $select.find('option[value=""]').text() || 'Select an option';
-                         try {
-                             $select.select2({
-                                 placeholder: placeholderText,
-                                 allowClear: true,
-                                 width: '100%'
-                             });
-                             console.log('Select2 initialized for:', $select.attr('id') || $select.attr('name'));
-                         } catch (error) {
-                             console.error('Error initializing Select2 for:', $select.attr('id') || $select.attr('name'), error);
-                         }
-                     });
+                } else {
+                    console.log('Select2 plugin IS loaded.');
+                    // Inicializar Select2 en los selectores que tengan la clase 'select2'
+                    jQuery('.select2').each(function() {
+                        const $select = jQuery(this);
+                        const placeholderText = $select.find('option[disabled]').text() || $select.find('option[value=""]').text() || 'Select an option';
+                        try {
+                            $select.select2({
+                                placeholder: placeholderText,
+                                allowClear: true,
+                                width: '100%'
+                            });
+                            console.log('Select2 initialized for:', $select.attr('id') || $select.attr('name'));
+                        } catch (error) {
+                            console.error('Error initializing Select2 for:', $select.attr('id') || $select.attr('name'), error);
+                        }
+                    });
 
-                     // Añadir listeners específicos de Select2
-                     $('#client_id').on('select2:select', handleClientChange)
-                                     .on('select2:unselect', handleClientUnselect);
-                     $('#discount_id').on('change', calculateTotals);
+                    // Añadir listeners específicos de Select2
+                    jQuery('#client_id').on('select2:select', handleClientChange)
+                                    .on('select2:unselect', handleClientUnselect);
+                    jQuery('#discount_id').on('change', calculateTotals);
 
-                 } // Fin del else (Select2 está cargado)
+                } // Fin del else (Select2 está cargado)
 
-                 // Si Select2 NO está cargado, añadir listeners 'change' normales
-                 if (!isSelect2Loaded) {
-                     $('#client_id').on('change', handleClientChange);
-                     $('#discount_id').on('change', calculateTotals);
-                 }
+                // Si Select2 NO está cargado, añadir listeners 'change' normales
+                if (!isSelect2Loaded) {
+                    jQuery('#client_id').on('change', handleClientChange);
+                    jQuery('#discount_id').on('change', calculateTotals);
+                }
 
 
-                const itemsContainer = $('#quoteItemsContainer');
-                const addItemBtn = $('#addQuoteItemBtn');
-                const itemTemplateHtml = $('#quoteItemTemplate').html();
+                const itemsContainer = jQuery('#quoteItemsContainer');
+                const addItemBtn = jQuery('#addQuoteItemBtn');
+                const itemTemplateHtml = jQuery('#quoteItemTemplate').html();
                 let itemIndex = 0;
+                
+                console.log('Botón añadir línea encontrado:', addItemBtn.length > 0);
 
                 // Función para añadir una nueva fila de item
                 function addQuoteItemRow() {
-                    if (!itemTemplateHtml || !itemsContainer.length) { return; }
+                    console.log('Ejecutando addQuoteItemRow()');
+                    if (!itemTemplateHtml || !itemsContainer.length) { 
+                        console.error('No se encontró la plantilla o el contenedor');
+                        return; 
+                    }
                     const newItemHtml = itemTemplateHtml.replace(/__INDEX__/g, itemIndex);
-                    const $newRow = $(newItemHtml);
+                    const $newRow = jQuery(newItemHtml);
                     itemsContainer.append($newRow);
+                    console.log('Nueva fila añadida al contenedor');
 
                     const $newSelect = $newRow.find('.item-service');
 
@@ -481,14 +510,24 @@
 
 
                 // Listener para el botón "Add Item"
-                if (addItemBtn.length) { addItemBtn.on('click', addQuoteItemRow); }
+                if (addItemBtn.length) { 
+                    console.log('Registrando evento click en botón añadir línea');
+                    addItemBtn.on('click', function(e) {
+                        console.log('Botón añadir línea clickeado');
+                        addQuoteItemRow();
+                    }); 
+                } else {
+                    console.error('No se encontró el botón añadir línea');
+                }
 
                 // Añadir filas existentes o inicial
                 const oldItems = @json(old('items', []));
+                console.log('Items antiguos:', oldItems);
+                
                 if (oldItems && oldItems.length > 0) {
                     oldItems.forEach((itemData, index) => {
                         addQuoteItemRow();
-                        const $lastRow = $('#quoteItemsContainer .quote-item-row').last();
+                        const $lastRow = jQuery('#quoteItemsContainer .quote-item-row').last();
                         if ($lastRow.length) {
                             $lastRow.find('.item-service').val(itemData.service_id || '').trigger('change');
                             $lastRow.find('.item-description').val(itemData.item_description || '');
@@ -497,7 +536,9 @@
                             updateLineTotal($lastRow);
                         }
                     });
-                } else if ($('#quoteItemsContainer .quote-item-row').length === 0) {
+                } else {
+                    console.log('No hay items antiguos, añadiendo fila inicial');
+                    // Siempre añadir al menos una fila inicial
                     addQuoteItemRow();
                 }
 
@@ -518,7 +559,12 @@
                     calculateTotals(); // Calcular totales iniciales si no hay cliente 'old'
                 }
 
-            }); // Fin document ready jQuery
+            } // Fin de la función initializeQuoteForm
+            
+            // Añadir script de diagnóstico
+            const diagnosticoScript = document.createElement('script');
+            diagnosticoScript.src = '/js/diagnostico.js';
+            document.head.appendChild(diagnosticoScript);
         </script>
     @endpush
 </x-app-layout>
