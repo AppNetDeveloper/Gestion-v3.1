@@ -134,7 +134,7 @@ class HomeController extends Controller
         
         // Obtener datos reales de facturas
         $invoices = \App\Models\Invoice::select(
-                DB::raw('DATE_FORMAT(created_at, "%b %Y") as month'),
+                DB::raw('TO_CHAR(created_at, \'Mon YYYY\') as month'),
                 DB::raw('COUNT(*) as count'),
                 DB::raw('SUM(total_amount) as total_amount')
             )
