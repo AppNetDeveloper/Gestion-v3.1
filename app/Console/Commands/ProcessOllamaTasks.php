@@ -68,7 +68,7 @@ class ProcessOllamaTasks extends Command
             $concurrency = 1;
         }
 
-        $ollamaUrl = env('OLLAMA_URL');
+        $ollamaUrl = config('services.ollama_url');
         if (!$ollamaUrl) {
             $this->error("OLLAMA_URL environment variable is not set. Aborting.");
             return Command::FAILURE; // Usar Command::FAILURE para errores

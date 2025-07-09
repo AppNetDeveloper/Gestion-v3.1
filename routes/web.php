@@ -518,6 +518,7 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/knowledge-base/user-data', [KnowledgeBaseController::class, 'userData'])->name('knowledge_base.user_data');
     Route::get('/knowledge-base/company-data', [KnowledgeBaseController::class, 'companyData'])->name('knowledge_base.company_data');
     Route::get('/knowledge-base/download/{id}', [KnowledgeBaseController::class, 'downloadPdf'])->name('knowledge_base.download');
+    Route::delete('/knowledge-base/delete/{id}', [KnowledgeBaseController::class, 'destroy'])->name('knowledge_base.delete');
     Route::get('/invoices/{invoice}/sign', [InvoiceSignatureController::class, 'showSignForm'])->name('invoices.sign');
     Route::post('/invoices/{invoice}/sign', [InvoiceSignatureController::class, 'signInvoice'])->name('invoices.sign.process');
 });

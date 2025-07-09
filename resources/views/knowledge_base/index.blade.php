@@ -268,4 +268,21 @@
         });
     </script>
     @endpush
+
+    <!-- Formulario oculto para eliminar PDF -->
+    <form id="deletePdfForm" method="POST" style="display: none;">
+        @csrf
+        @method('DELETE')
+        <input type="hidden" name="pdf_id" id="pdfIdToDelete">
+    </form>
+
+    <script>
+        function deleteItem(id) {
+            if (confirm('¿Estás seguro de que quieres eliminar este PDF?')) {
+                document.getElementById('pdfIdToDelete').value = id;
+                document.getElementById('deletePdfForm').action = '{{ url('knowledge-base/delete') }}/' + id;
+                document.getElementById('deletePdfForm').submit();
+            }
+        }
+    </script>
 </x-app-layout>
