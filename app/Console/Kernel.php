@@ -28,11 +28,6 @@ class Kernel extends ConsoleKernel
         $this->load(__DIR__.'/Commands');
 
         require base_path('routes/console.php');
-        
-        // Registrar comando de procesamiento de embeddings RAG
-        $this->commands([
-            \App\Console\Commands\ProcessOllamaEmbeddings::class,
-        ]);
     }
 
 

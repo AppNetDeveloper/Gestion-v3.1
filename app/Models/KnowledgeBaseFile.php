@@ -7,10 +7,31 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use App\Models\KnowledgeBase; // Importamos la clase KnowledgeBase
+use Illuminate\Support\Facades\Log;
+use Illuminate\Database\Eloquent\ModelNotFoundException;
 
 class KnowledgeBaseFile extends Model
 {
     use HasFactory;
+    
+    /**
+     * Boot the model.
+     */
+    protected static function boot()
+    {
+        parent::boot();
+        
+        // Verificar que file_path no sea nulo antes de guardar
+        static::saving(function ($model) {
+            if (empty($model->file_path)) {
+                Log::error('Intento de guardar KnowledgeBaseFile con file_path nulo', [
+                    'user_id' => $model->user_id,
+                    'original_name' => $model->original_name
+                ]);
+                throw new \InvalidArgumentException('El campo file_path no puede ser nulo');
+            }
+        });
+    }
 
     /**
      * The table associated with the model.

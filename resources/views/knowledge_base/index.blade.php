@@ -36,7 +36,7 @@
                     </button>
                 </div>
                 <div id="pdfFormContainer" class="overflow-hidden">
-                    <form action="{{ route('knowledge_base.upload') }}" method="POST" enctype="multipart/form-data" class="space-y-6 pt-6">
+                    <form action="{{ route('knowledge_base.upload.post') }}" method="POST" enctype="multipart/form-data" class="space-y-6 pt-6">
                         @csrf
                         <div>
                             <label for="pdf" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
@@ -277,11 +277,19 @@
     </form>
 
     <script>
-        function deleteItem(id) {
+        function deleteItem(button) {
             if (confirm('¿Estás seguro de que quieres eliminar este PDF?')) {
+                // Extraer el ID del PDF de la URL
+                const url = button.getAttribute('data-url');
+                const id = url.split('/').pop();
+                
+                // Preparar el formulario
+                const form = document.getElementById('deletePdfForm');
+                form.action = url;
                 document.getElementById('pdfIdToDelete').value = id;
-                document.getElementById('deletePdfForm').action = '{{ url('knowledge-base/delete') }}/' + id;
-                document.getElementById('deletePdfForm').submit();
+                
+                // Enviar el formulario
+                form.submit();
             }
         }
     </script>

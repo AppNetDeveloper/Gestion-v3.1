@@ -204,6 +204,10 @@ class PermissionSeeder extends Seeder
             // Knowledge Base (IA Memory)
             ['name' => 'knowledgebase.upload.user', 'module_name' => 'knowledgebase'],
             ['name' => 'knowledgebase.upload.company', 'module_name' => 'knowledgebase'],
+            ['name' => 'viewCompanyKnowledge', 'module_name' => 'knowledgebase'],
+            ['name' => 'download', 'module_name' => 'knowledgebase'],
+            ['name' => 'delete', 'module_name' => 'knowledgebase'],
+            ['name' => 'menu knowledgebase', 'module_name' => 'menu'],
         ];
 
         

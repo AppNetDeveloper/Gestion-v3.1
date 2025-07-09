@@ -36,6 +36,12 @@ class ProcessPdfForRagJob implements ShouldQueue
     {
         try {
             $file = KnowledgeBaseFile::findOrFail($this->knowledgeBaseFileId);
+            
+            if (!$file->file_path) {
+                Log::error("Error en ProcessPdfForRagJob: file_path es nulo para el archivo ID {$this->knowledgeBaseFileId}");
+                return;
+            }
+            
             $fullPath = storage_path('app/' . $file->file_path);
             
             // 1. Extraer texto del PDF

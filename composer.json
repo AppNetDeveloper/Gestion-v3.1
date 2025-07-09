@@ -71,7 +71,8 @@
         "files": [
             "app/Helpers/helpers.php",
             "app/Helpers/EmailDecodeHeader.php",
-            "app/Helpers/decryptMedia.php"
+            "app/Helpers/decryptMedia.php",
+            "app/Helpers/StorageHelper.php"
         ]
     },
     "autoload-dev": {

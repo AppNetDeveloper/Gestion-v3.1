@@ -9,6 +9,7 @@ use Illuminate\Support\Facades\Log;
 use App\Models\KnowledgeBaseFile;
 use App\Models\User;
 use App\Jobs\ProcessPdfForRagJob; // Importamos el Job para el procesamiento
+use App\Helpers\StorageHelper; // Importamos nuestro helper personalizado
 
 class KnowledgeBaseController extends Controller
 {
@@ -114,7 +115,7 @@ class KnowledgeBaseController extends Controller
             return redirect()->back()->with('error', 'No tienes permiso para subir archivos para la empresa.');
         }
         
-        if (!Storage::exists('knowledge_base_uploads')) {
+        if (!StorageHelper::exists('knowledge_base_uploads')) {
             Storage::makeDirectory('knowledge_base_uploads');
         }
         
@@ -151,18 +152,14 @@ class KnowledgeBaseController extends Controller
     {
         $this->authorize('download', $file);
         
-        if (Storage::exists($file->file_path)) {
-            return Storage::download($file->file_path, $file->original_name);
-        }
-        
-        return abort(404, 'Archivo no encontrado en el almacenamiento.');
+        return StorageHelper::download($file->file_path, $file->original_name);
     }
 
     /**
-     * Elimina un archivo PDF y todos sus datos asociados.
+     * Elimina un archivo PDF y sus datos relacionados.
      *
      * @param \App\Models\KnowledgeBaseFile $file
-     * @return \Illuminate\Http\JsonResponse
+     * @return \Illuminate\Http\RedirectResponse
      */
     public function destroy(KnowledgeBaseFile $file)
     {
@@ -171,12 +168,10 @@ class KnowledgeBaseController extends Controller
         // Usamos la relación para borrar los chunks asociados
         $file->knowledgeChunks()->delete();
 
-        if (Storage::exists($file->file_path)) {
-            Storage::delete($file->file_path);
-        }
+        StorageHelper::delete($file->file_path);
 
         $file->delete();
 
-        return response()->json(['success' => 'PDF y datos relacionados eliminados correctamente.']);
+        return redirect()->route('knowledge_base.index')->with('success', 'PDF y datos relacionados eliminados correctamente.');
     }
 }

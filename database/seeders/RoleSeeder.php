@@ -54,6 +54,9 @@ class RoleSeeder extends Seeder
             'menu services', 'menu clients', 'menu quotes', 'menu projects', 'menu tasks', 'menu invoices',
             'menu whatsapp-general', 'menu telegram-general',
 
+            // Knowledge Base (IA Memory)
+            'knowledgebase.upload.user', 'knowledgebase.upload.company', 'viewCompanyKnowledge', 'download', 'delete', 'menu knowledgebase',
+
             // Módulos empresa
             'company index', 'company create', 'company update', 'company delete', 'company show',
 
@@ -102,6 +105,9 @@ class RoleSeeder extends Seeder
             // Acceso WhatsApp/Telegram general SI LO DESEAS
             'menu whatsapp-general', 'whatsapp-general index', 'whatsapp-general show',
             'menu telegram-general', 'telegram-general index', 'telegram-general show',
+            
+            // Knowledge Base (IA Memory)
+            'knowledgebase.upload.user', 'download', 'delete', 'menu knowledgebase',
 
             // Proyectos/Tareas/Gestión
             'projects create', 'projects update', 'projects delete',
@@ -133,6 +139,8 @@ class RoleSeeder extends Seeder
             'invoices index', 'invoices show', 'invoices view_own', 'invoices export_pdf',
             'time_entries edit own', 'time_entries delete own',
             'menu quotes', 'menu projects', 'menu tasks', 'menu invoices',
+            // Knowledge Base (IA Memory)
+            'knowledgebase.upload.user', 'download', 'menu knowledgebase',
         ];
         $employeeWeb->syncPermissions($employeePermissions);
 

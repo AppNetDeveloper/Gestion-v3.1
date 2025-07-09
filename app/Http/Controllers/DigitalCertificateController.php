@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\DigitalCertificate;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
+use App\Helpers\StorageHelper;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Illuminate\Support\Facades\Log;
@@ -96,7 +97,7 @@ class DigitalCertificateController extends Controller
             Log::error('Error uploading certificate: ' . $e->getMessage());
             
             // Si hay un error, eliminar el archivo si se subió
-            if (isset($path) && Storage::exists($path)) {
+            if (isset($path) && StorageHelper::exists($path)) {
                 Storage::delete($path);
             }
             
@@ -171,7 +172,7 @@ class DigitalCertificateController extends Controller
             // Actualizar archivo si se proporciona
             if ($request->hasFile('certificate')) {
                 // Eliminar el archivo antiguo
-                if (Storage::exists($digitalCertificate->file_path)) {
+                if (StorageHelper::exists($digitalCertificate->file_path)) {
                     Storage::delete($digitalCertificate->file_path);
                 }
                 
@@ -209,8 +210,8 @@ class DigitalCertificateController extends Controller
         
         try {
             // Eliminar el archivo del almacenamiento
-            if (Storage::exists($digitalCertificate->file_path)) {
-                Storage::delete($digitalCertificate->file_path);
+            if (StorageHelper::exists($digitalCertificate->file_path)) {
+                StorageHelper::delete($digitalCertificate->file_path);
             }
             
             // Eliminar el registro de la base de datos
@@ -237,10 +238,10 @@ class DigitalCertificateController extends Controller
     {
         $this->authorize('view', $digitalCertificate);
         
-        if (!Storage::exists($digitalCertificate->file_path)) {
+        if (!StorageHelper::exists($digitalCertificate->file_path)) {
             abort(404, 'Certificate file not found');
         }
         
-        return Storage::download($digitalCertificate->file_path, "certificate-{$digitalCertificate->id}.pfx");
+        return StorageHelper::download($digitalCertificate->file_path, "certificate-{$digitalCertificate->id}.pfx");
     }
 }
