@@ -36,7 +36,7 @@
                     </button>
                 </div>
                 <div id="pdfFormContainer" class="overflow-hidden">
-                    <form action="{{ route('knowledge_base.upload.post') }}" method="POST" enctype="multipart/form-data" class="space-y-6 pt-6">
+                    <form action="{{ route('knowledge_base.upload.post') }}" method="POST" enctype="multipart/form-data" class="space-y-6 pt-6" id="uploadForm">
                         @csrf
                         <div>
                             <label for="pdf" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
@@ -292,5 +292,47 @@
                 form.submit();
             }
         }
+
+        // Manejar el envío del formulario de subida
+        $(document).ready(function() {
+            $('#uploadForm').on('submit', function(e) {
+                e.preventDefault();
+                
+                var formData = new FormData(this);
+                var url = $(this).attr('action');
+                
+                // Mostrar indicador de carga
+                var submitButton = $(this).find('button[type="submit"]');
+                var originalButtonText = submitButton.html();
+                submitButton.prop('disabled', true).html('<i class="fa fa-spinner fa-spin"></i> Procesando...');
+                
+                // Enviar la solicitud AJAX
+                $.ajax({
+                    url: url,
+                    type: 'POST',
+                    data: formData,
+                    processData: false,
+                    contentType: false,
+                    success: function(response) {
+                        // Mostrar mensaje de éxito
+                        alert('PDF subido correctamente. Se está procesando en segundo plano.');
+                        // Recargar la página para actualizar las tablas
+                        window.location.reload();
+                    },
+                    error: function(xhr) {
+                        // Mostrar mensaje de error
+                        var errorMessage = 'Error al subir el PDF. Inténtalo de nuevo.';
+                        if (xhr.responseJSON && xhr.responseJSON.message) {
+                            errorMessage = xhr.responseJSON.message;
+                        }
+                        alert(errorMessage);
+                    },
+                    complete: function() {
+                        // Restaurar el botón
+                        submitButton.prop('disabled', false).html(originalButtonText);
+                    }
+                });
+            });
+        });
     </script>
 </x-app-layout>

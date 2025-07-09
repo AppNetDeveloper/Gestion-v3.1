@@ -3,7 +3,9 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Pgvector\Laravel\Vector; // Importamos la clase Vector
+use Illuminate\Support\Facades\DB;
 
 class KnowledgeBase extends Model
 {
@@ -31,18 +33,47 @@ class KnowledgeBase extends Model
     protected $fillable = [
         'content',
         'embedding',
-        'company_id', // Añadido para multi-inquilino
         'user_id',
-        'source_id',
+        'knowledge_base_file_id',
         'ollama_tasker_id',
         'embedding_status',
     ];
 
     /**
-     * Obtiene el archivo original al que pertenece este trozo de conocimiento.
+     * The "booting" method of the model.
      */
-    public function sourceFile()
+    protected static function booted()
     {
-        return $this->belongsTo(KnowledgeBaseFile::class, 'source_id');
+        // Eliminar el embedding relacionado cuando se elimina el registro
+        static::deleting(function ($knowledge) {
+            if ($knowledge->ollama_tasker_id) {
+                // Opcional: eliminar la tarea de Ollama relacionada si existe
+                OllamaTasker::where('id', $knowledge->ollama_tasker_id)->delete();
+            }
+        });
+    }
+
+    /**
+     * Obtiene el archivo al que pertenece este fragmento de conocimiento.
+     */
+    public function file(): BelongsTo
+    {
+        return $this->belongsTo(KnowledgeBaseFile::class, 'knowledge_base_file_id');
+    }
+
+    /**
+     * Obtiene el usuario propietario de este fragmento de conocimiento.
+     */
+    public function user(): BelongsTo
+    {
+        return $this->belongsTo(User::class)->withDefault();
+    }
+
+    /**
+     * Obtiene la tarea de Ollama asociada a este fragmento.
+     */
+    public function ollamaTasker()
+    {
+        return $this->belongsTo(OllamaTasker::class, 'ollama_tasker_id');
     }
 }

@@ -73,7 +73,8 @@ class ProcessOllamaTasks extends Command
             $this->error("OLLAMA_URL environment variable is not set. Aborting.");
             return Command::FAILURE; // Usar Command::FAILURE para errores
         }
-        $fullUrl = rtrim($ollamaUrl, '/') . '/api/chat'; // Asumiendo que seguimos con /api/chat
+        $baseUrl = rtrim($ollamaUrl, '/');
+        // No definimos $fullUrl aquí, lo haremos según el modelo en cada tarea
 
         $ollamaModel = env('OLLAMA_MODEL_DEFAULT');
         if (!$ollamaModel) {
@@ -105,19 +106,42 @@ class ProcessOllamaTasks extends Command
                 $taskList = array_values($tasks->all());
 
                 // Generador de solicitudes asíncronas
-                $requests = function () use ($taskList, $fullUrl, $ollamaModel) {
+                $requests = function () use ($taskList, $baseUrl, $ollamaModel) {
                     foreach ($taskList as $task) { // $index no se usa directamente para yield, pero es útil para depurar aquí
                         $prompt = $task->prompt;
-                        $payload = [
-                            'model'    => $ollamaModel,
-                            'messages' => [
-                                [
-                                    'role'    => 'user',
-                                    'content' => $prompt,
-                                ],
-                            ],
-                            'stream'   => true, // Asegurarse de que el stream esté habilitado
-                        ];
+                        
+                        // Usar el modelo especificado en la tarea o el modelo predeterminado como fallback
+                        $taskModel = !empty($task->model) ? $task->model : $ollamaModel;
+                        
+                        $this->info("Procesando tarea ID {$task->id} con modelo: {$taskModel}");
+                        
+                        // Determinar el endpoint y payload según el modelo
+                        $isEmbeddingModel = ($taskModel === 'nomic-embed-text');
+                        $endpoint = $isEmbeddingModel ? '/api/embeddings' : '/api/generate';
+                        $fullUrl = $baseUrl . $endpoint;
+                        
+                        if ($isEmbeddingModel) {
+                            // Payload para modelos de embeddings
+                            $payload = [
+                                'model' => $taskModel,
+                                'prompt' => $prompt,
+                                'stream' => false, // Los embeddings no soportan streaming
+                            ];
+                            $this->info("Usando endpoint de embeddings para tarea ID {$task->id}");
+                        } else {
+                            // Payload para modelos de generación (más rápido que chat)
+                            $payload = [
+                                'model' => $taskModel,
+                                'prompt' => $prompt,
+                                'stream' => false, // No necesitamos streaming para respuestas finales
+                                'options' => [
+                                    'temperature' => 0.7,
+                                    'top_k' => 40,
+                                    'top_p' => 0.9,
+                                ]
+                            ];
+                            $this->info("Usando endpoint de generación para tarea ID {$task->id}");
+                        }
 
                         // Usar una función que devuelve una promesa
                         yield function () use ($fullUrl, $payload) {
@@ -152,38 +176,78 @@ class ProcessOllamaTasks extends Command
                                 $task->save();
                                 return;
                             }
-
-                            $combinedContent = '';
-                            $lines = explode("\n", trim($bodyContent));
-                            $ollamaStreamError = null; // Para almacenar el error específico de Ollama si ocurre
-
-                            foreach ($lines as $line) {
-                                $line = trim($line);
-                                if (empty($line)) {
-                                    continue;
+                            
+                            // Decodificar la respuesta JSON completa
+                            $decoded = json_decode($bodyContent, true);
+                            
+                            // Verificar el tipo de respuesta basado en su contenido
+                            $isEmbeddingResponse = isset($decoded['embedding']) || isset($decoded['embeddings']);
+                            $isGenerateResponse = isset($decoded['response']);
+                            
+                            if ($isEmbeddingResponse) {
+                                // Procesar respuesta de embeddings
+                                $this->info("Procesando respuesta de embeddings para tarea ID {$task->id}");
+                                
+                                if (isset($decoded['embedding'])) {
+                                    // Respuesta de un solo embedding
+                                    $embedding = $decoded['embedding'];
+                                    $combinedContent = json_encode($embedding);
+                                    $this->info("Embedding generado correctamente para tarea ID {$task->id}");
+                                } elseif (isset($decoded['embeddings'])) {
+                                    // Respuesta de múltiples embeddings (tomamos el primero)
+                                    $embedding = $decoded['embeddings'][0];
+                                    $combinedContent = json_encode($embedding);
+                                    $this->info("Primer embedding de múltiples generado para tarea ID {$task->id}");
+                                } else {
+                                    $this->error("Formato de respuesta de embeddings inesperado para tarea ID {$task->id}");
+                                    $task->error = 'Formato de respuesta de embeddings inesperado';
+                                    $task->save();
+                                    return;
                                 }
-                                $decoded = json_decode($line, true);
-
-                                if ($decoded && isset($decoded['message']['content'])) {
-                                    $combinedContent .= $decoded['message']['content'];
-                                } elseif ($decoded && isset($decoded['error'])) {
-                                    // Capturar el error del stream de Ollama
-                                    $ollamaStreamError = "Ollama API stream error: " . $decoded['error'];
-                                    $this->error("Ollama API returned an error in stream for task ID {$task->id}: " . $decoded['error']);
-                                    // No guardamos aquí, dejamos que la lógica de combinedContent vacío lo maneje
-                                    // o si hay contenido parcial, se guardará y el error también se puede registrar.
+                            } elseif ($isGenerateResponse) {
+                                // Procesar respuesta del endpoint /api/generate
+                                $this->info("Procesando respuesta de generación para tarea ID {$task->id}");
+                                
+                                if (isset($decoded['response'])) {
+                                    $combinedContent = $decoded['response'];
+                                    $this->info("Respuesta generada correctamente para tarea ID {$task->id}");
+                                } else {
+                                    $this->error("Formato de respuesta de generación inesperado para tarea ID {$task->id}");
+                                    $task->error = 'Formato de respuesta de generación inesperado';
+                                    $task->save();
+                                    return;
                                 }
-                                // $this->info("Decoded line for task {$task->id}: " . print_r($decoded, true)); // Descomentar para depuración detallada
-                            }
+                            } else {
+                                // Procesar respuesta de chat (streaming) - por si acaso todavía hay alguna tarea usando este formato
+                                $this->info("Procesando respuesta de chat (streaming) para tarea ID {$task->id}");
+                                $combinedContent = '';
+                                $lines = explode("\n", trim($bodyContent));
+                                $ollamaStreamError = null; // Para almacenar el error específico de Ollama si ocurre
 
-                            if (empty($combinedContent)) {
-                                // CORRECCIÓN: Cambiado de $this->warning a $this->warn
-                                $this->warn("Raw API response for task ID {$task->id} (resulted in empty combined content): " . $bodyContent);
-                                $this->error("Combined content empty after processing stream for task ID: {$task->id}");
-                                // Priorizar el error de stream de Ollama si existe
-                                $task->error = $ollamaStreamError ?: 'Combined content empty after processing stream';
-                                $task->save();
-                                return;
+                                foreach ($lines as $line) {
+                                    $line = trim($line);
+                                    if (empty($line)) {
+                                        continue;
+                                    }
+                                    $lineDecoded = json_decode($line, true);
+
+                                    if ($lineDecoded && isset($lineDecoded['message']['content'])) {
+                                        $combinedContent .= $lineDecoded['message']['content'];
+                                    } elseif ($lineDecoded && isset($lineDecoded['error'])) {
+                                        // Capturar el error del stream de Ollama
+                                        $ollamaStreamError = "Ollama API stream error: " . $lineDecoded['error'];
+                                        $this->error("Ollama API returned an error in stream for task ID {$task->id}: " . $lineDecoded['error']);
+                                    }
+                                }
+                                
+                                if (empty($combinedContent)) {
+                                    $this->warn("Raw API response for task ID {$task->id} (resulted in empty combined content): " . $bodyContent);
+                                    $this->error("Combined content empty after processing stream for task ID: {$task->id}");
+                                    // Priorizar el error de stream de Ollama si existe
+                                    $task->error = $ollamaStreamError ?: 'Combined content empty after processing stream';
+                                    $task->save();
+                                    return;
+                                }
                             }
 
                             // Limpiar el contenido

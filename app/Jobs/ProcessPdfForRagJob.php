@@ -74,7 +74,7 @@ class ProcessPdfForRagJob implements ShouldQueue
                     'ollama_tasker_id'  => $tasker->id,
                     'embedding_status'  => 'pending',
                     'user_id'           => $file->user_id,
-                    'source_id'         => $file->id,
+                    'knowledge_base_file_id' => $file->id,
                 ]);
             }
             

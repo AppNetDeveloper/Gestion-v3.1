@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use App\Models\KnowledgeBase; // Importamos la clase KnowledgeBase
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 
 class KnowledgeBaseFile extends Model
@@ -48,24 +49,38 @@ class KnowledgeBaseFile extends Model
     protected $fillable = [
         'file_path',
         'original_name',
-        'user_id',
+        'user_id', // Puede ser nulo si es un PDF de empresa
     ];
+
+    /**
+     * The "booting" method of the model.
+     */
+    protected static function booted()
+    {
+        // Eliminar el archivo físico cuando se elimina el registro
+        static::deleting(function ($file) {
+            if (Storage::exists($file->file_path)) {
+                Storage::delete($file->file_path);
+            }
+        });
+    }
 
     /**
      * Obtiene el usuario propietario del archivo.
      */
     public function user(): BelongsTo
     {
-        return $this->belongsTo(User::class);
+        return $this->belongsTo(User::class)->withDefault();
     }
 
     /**
-     * Obtiene todos los trozos (chunks) de conocimiento asociados a este archivo.
+     * Obtiene todos los trozos de conocimiento asociados a este archivo.
+     *
+     * @return \Illuminate\Database\Eloquent\Relations\HasMany
      */
     public function knowledgeChunks(): HasMany
     {
-        // Asume que la columna 'source_id' en la tabla 'knowledge_base'
-        // guarda el 'id' de este archivo (KnowledgeBaseFile).
-        return $this->hasMany(KnowledgeBase::class, 'source_id');
+        // Relación con los chunks de conocimiento usando la nueva columna knowledge_base_file_id
+        return $this->hasMany(KnowledgeBase::class, 'knowledge_base_file_id');
     }
 }
