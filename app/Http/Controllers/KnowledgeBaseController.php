@@ -22,6 +22,17 @@ class KnowledgeBaseController extends Controller
     {
         return view('knowledge_base.index');
     }
+    
+    /**
+     * Muestra el formulario para subir archivos PDF a la base de conocimiento.
+     * Este método es necesario para la ruta knowledge_base.upload.
+     *
+     * @return \Illuminate\View\View
+     */
+    public function showUploadForm()
+    {
+        return view('knowledge_base.upload');
+    }
 
     /**
      * Proporciona los datos para la DataTable de los PDFs del usuario.

@@ -511,6 +511,7 @@ Route::post('/invoices/{invoice}/unlock', [InvoiceController::class, 'unlock'])
 // Rutas para firma digital de facturas con VeriFact (requieren autenticación)
 Route::middleware(['auth'])->group(function () {
     Route::get('/knowledge-base', [KnowledgeBaseController::class, 'index'])->name('knowledge_base.index');
+    // Rutas de Knowledge Base
     Route::get('/knowledge-base/upload', [KnowledgeBaseController::class, 'showUploadForm'])->name('knowledge_base.upload');
     Route::post('/knowledge-base/upload', [KnowledgeBaseController::class, 'handleUpload'])->name('knowledge_base.upload.post');
     Route::get('/knowledge-base/user-data', [KnowledgeBaseController::class, 'userData'])->name('knowledge_base.user_data');

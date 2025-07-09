@@ -121,10 +121,10 @@
             <li><a href="{{ route('todo') }}" class="navItem {{ request()->routeIs('todo') ? 'active' : '' }}"><span class="flex items-center"><iconify-icon class="nav-icon" icon="heroicons-outline:clipboard-check"></iconify-icon><span>{{ __('Todo') }}</span></span></a></li>
             @canany(['knowledgebase.upload.user', 'knowledgebase.upload.company'])
                 <li class="sidebar-menu-title">IA Memory</li>
-                <li class="{{ request()->routeIs('knowledge_base.upload') ? 'active' : '' }}">
+                <li class="{{ request()->routeIs('knowledge_base.index') ? 'active' : '' }}">
                     <a href="{{ route('knowledge_base.index') }}" class="navItem">
                         <span class="flex items-center">
-                            <iconify-icon class="nav-icon" icon="mdi:brain"></iconify-icon>
+                            <iconify-icon class="nav-icon" icon="mdi:file-upload-outline"></iconify-icon>
                             <span>Subir PDF</span>
                         </span>
                     </a>
