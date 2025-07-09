@@ -40,7 +40,7 @@
         "spatie/laravel-query-builder": "^6.3",
         "spatie/laravel-settings": "^3.4",
         "spatie/pdf-to-text": "^1.54",
-        "theodo-group/llphant": "^0.8.0",
+        "theodo-group/llphant": "^0.10.8",
         "vemcogroup/laravel-translation": "^3.0",
         "vlucas/phpdotenv": "^5.6",
         "webklex/laravel-imap": "^6.2",
