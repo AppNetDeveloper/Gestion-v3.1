@@ -43,6 +43,7 @@ class User extends Authenticatable implements MustVerifyEmail, HasMedia
         'photo',
         'address',
         'document_number',
+        'company_id', // <-- Añadido para asegurar que se carga
         'job_position_id',
         'type_of_contract_id',
         'birthdate',

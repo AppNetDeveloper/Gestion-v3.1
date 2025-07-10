@@ -4,6 +4,8 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+// Importamos la clase si existe en el sistema
+// Si no existe, el código en booted() lo manejará
 use App\Models\KnowledgeChunk;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
@@ -109,26 +111,55 @@ class OllamaTasker extends Model
                 Log::warning('RAG: No authenticated user. Skipping knowledge base search.');
                 return;
             }
-            Log::info('RAG: Authenticated user found.', ['user_id' => $user->id, 'company_id' => $user->company_id]);
+            // Log user info - solo necesitamos user_id
+            Log::info('RAG: Authenticated user found.', ['user_id' => $user->id]);
 
-            $knowledgeChunks = KnowledgeChunk::query()
-                ->where(function ($query) use ($searchTerms) {
-                    foreach ($searchTerms as $term) {
-                        $query->orWhere('content', 'LIKE', '%' . $term . '%');
+            // Verificar si la clase KnowledgeChunk existe antes de usarla
+            if (!class_exists('App\\Models\\KnowledgeChunk')) {
+                Log::warning('RAG: KnowledgeChunk class not found. Skipping knowledge base search.');
+                return; // Salir del evento si la clase no existe
+            }
+            
+            try {
+                // Buscar cualquier contenido en la base de conocimiento
+                Log::info('RAG: Realizando búsqueda amplia en la base de conocimiento');
+                
+                // Obtener un término relevante del prompt original
+                $relevantTerm = null;
+                $businessTerms = ['empresa', 'negocio', 'servicio', 'cliente', 'producto', 'desarrollo', 'software', 'automatización'];
+                
+                foreach ($businessTerms as $term) {
+                    if (stripos($task->prompt, $term) !== false) {
+                        $relevantTerm = $term;
+                        break;
                     }
-                })
-                ->when($user, function ($query, $user) {
-                    $query->whereHas('knowledgeBaseFile', function ($fileQuery) use ($user) {
-                        $fileQuery->where('user_id', $user->id)
-                                  ->orWhere(function ($companyQuery) use ($user) {
-                                      if ($user->company_id) {
-                                          $companyQuery->where('company_id', $user->company_id);
-                                      }
-                                  });
-                    });
-                })
-                ->limit(5)
-                ->get();
+                }
+                
+                // Si no se encuentra un término relevante, usar uno genérico
+                if (!$relevantTerm) {
+                    $relevantTerm = 'empresa';
+                }
+                
+                Log::info('RAG: Término relevante seleccionado', ['term' => $relevantTerm]);
+                
+                // Construir consulta muy simple
+                $knowledgeChunks = KnowledgeChunk::query()
+                    ->where('content', 'LIKE', '%' . $relevantTerm . '%')
+                    ->when($user, function ($query, $user) {
+                        $query->whereHas('knowledgeBaseFile', function ($fileQuery) use ($user) {
+                            // Documentos del usuario o documentos públicos (user_id = null)
+                            $fileQuery->where('user_id', $user->id)
+                                     ->orWhereNull('user_id');
+                        });
+                    })
+                    // Ordenar por relevancia (número de coincidencias)
+                    ->orderByRaw('LENGTH(content) DESC') // Priorizar fragmentos más completos
+                    ->limit(5)
+                    ->get();
+            } catch (\Exception $e) {
+                Log::error('RAG: Error during knowledge base search: ' . $e->getMessage());
+                return; // Salir del evento si hay un error
+            }
 
             Log::info('RAG: Knowledge base search completed.', ['chunks_found' => $knowledgeChunks->count()]);
 

@@ -6,6 +6,8 @@ use Illuminate\Console\Command;
 use App\Models\TaskerLinkedin;
 use App\Models\OllamaTasker;
 use Carbon\Carbon;
+use Illuminate\Support\Facades\Auth;
+use App\Models\User;
 
 class ProcessLinkedinOllamaTasks extends Command
 {
@@ -49,19 +51,24 @@ class ProcessLinkedinOllamaTasks extends Command
                 // - Tengan prompt definido.
                 // - Tengan status 'pending' (o el estado que determines)
                 // - Y, o bien no tienen asignado ollama_tasker_id, o tienen asignado pero aun no se recibió respuesta.
-                $tasks = TaskerLinkedin::where('status', 'pending')
+                // Buscar tareas pendientes que necesitan ser enviadas a Ollama
+                $pendingTasks = TaskerLinkedin::where('status', 'pending')
                     ->whereNotNull('prompt')
-                    ->where(function ($query) {
-                        $query->whereNull('ollama_tasker_id')
-                              ->orWhere(function ($query2) {
-                                  $query2->whereNotNull('ollama_tasker_id')
-                                         ->where(function ($q) {
-                                             $q->whereNull('response')
-                                               ->orWhere('response', '');
-                                         });
-                              });
+                    ->get();
+                
+                // Buscar tareas en procesamiento que ya tienen ollama_tasker_id pero aún no tienen respuesta
+                $processingTasks = TaskerLinkedin::where('status', 'processing')
+                    ->whereNotNull('ollama_tasker_id')
+                    ->where(function ($q) {
+                        $q->whereNull('response')
+                          ->orWhere('response', '');
                     })
                     ->get();
+                
+                // Combinar ambos conjuntos de tareas
+                $tasks = $pendingTasks->merge($processingTasks);
+                
+                $this->info("Found {$pendingTasks->count()} pending tasks and {$processingTasks->count()} processing tasks waiting for response.");
 
                 if ($tasks->isEmpty()) {
                     $this->info("No pending tasks found. Sleeping for 10 seconds.");
@@ -98,6 +105,16 @@ class ProcessLinkedinOllamaTasks extends Command
                     if (is_null($task->ollama_tasker_id)) {
                         $this->info("No Ollama task associated. Creating new OllamaTasker for task ID {$task->id}.");
 
+                        // Autenticar temporalmente como el usuario de la tarea para el RAG
+                        $user = null;
+                        if ($task->user_id) {
+                            $user = User::find($task->user_id);
+                            if ($user) {
+                                Auth::login($user);
+                                $this->info("Temporarily authenticated as user ID: {$user->id}");
+                            }
+                        }
+
                         // Crear una nueva entrada en ollama_taskers.
                         // Se usa el campo 'model' de la tarea en ollama_taskers si se ha definido en la migración ALTER,
                         // de lo contrario se podría asignar env('OLLAMA_MODEL_DEFAULT') o dejarlo nulo.
@@ -111,10 +128,16 @@ class ProcessLinkedinOllamaTasks extends Command
                         $ollamaTask->error = null;
                         $ollamaTask->save();
 
-                        // Actualizar la tarea original con el id generado.
-                        $task->ollama_tasker_id = $ollamaTask->id;
-                        $task->save();
+                        // Cerrar sesión para limpiar el contexto
+                        if ($user) {
+                            Auth::logout();
+                            $this->info("Logged out user ID: {$user->id}");
+                        }
 
+                        // Actualizar la tarea original con el id generado y cambiar el estado.
+                        $task->ollama_tasker_id = $ollamaTask->id;
+                        $task->status = 'processing'; // Evita que se vuelva a procesar
+                        $task->save();
                         $this->info("Created OllamaTasker with ID {$ollamaTask->id} for task ID {$task->id}.");
                     } else {
                         // Si ya tiene un ollama_tasker_id, buscamos la respuesta en la tabla ollama_taskers.
@@ -125,7 +148,7 @@ class ProcessLinkedinOllamaTasks extends Command
                                 // Si se recibió respuesta, actualizamos la tarea en tasker_linkedins.
                                 $cleanResponse = $this->cleanContent($ollamaTask->response);
                                 $task->response = $cleanResponse;
-                                // Puedes actualizar el status a 'processing' o 'completed' según convenga.
+                                // Marcamos la tarea como 'processing' para que pueda ser publicada por ProcessLinkedinPublishTasks
                                 $task->status = 'processing';
                                 $task->save();
                                 $this->info("Task ID {$task->id} updated with response from OllamaTasker ID {$ollamaTask->id}.");
