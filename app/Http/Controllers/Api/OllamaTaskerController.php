@@ -131,6 +131,7 @@ class OllamaTaskerController extends Controller
      */
     public function createTask(Request $request)
     {
+        Log::info('OllamaTaskerController@createTask: Request received.');
         // Get allowed models from .env
         $defaultModel = env('OLLAMA_MODEL_DEFAULT', 'gemma3:4b-it-qat');
         $miniModel = env('OLLAMA_MODEL_MINI', 'gemma3:4b-it-qat');
@@ -145,8 +146,10 @@ class OllamaTaskerController extends Controller
         ]);
 
         if ($validator->fails()) {
+            Log::error('OllamaTaskerController@createTask: Validation failed.', $validator->errors()->toArray());
             return response()->json([
                 'success' => false,
+                'message' => 'Validation Error',
                 'errors' => $validator->errors()
             ], 422);
         }

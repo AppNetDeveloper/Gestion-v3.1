@@ -7,9 +7,11 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Log;
 use App\Models\KnowledgeBaseFile;
+use App\Models\KnowledgeBase;
 use App\Models\User;
 use App\Jobs\ProcessPdfForRagJob; // Importamos el Job para el procesamiento
 use App\Helpers\StorageHelper; // Importamos nuestro helper personalizado
+use Illuminate\Support\Facades\DB; // Para consultas avanzadas
 
 class KnowledgeBaseController extends Controller
 {
@@ -20,7 +22,77 @@ class KnowledgeBaseController extends Controller
      */
     public function index()
     {
-        return view('knowledge_base.index');
+        // Obtenemos estadísticas para el dashboard
+        $stats = $this->getKnowledgeBaseStats();
+        
+        return view('knowledge_base.index', compact('stats'));
+    }
+    
+    /**
+     * Obtiene estadísticas para el dashboard de la IA Memory
+     *
+     * @return array
+     */
+    private function getKnowledgeBaseStats()
+    {
+        $userId = Auth::id();
+        $userCanViewCompany = Auth::user()->can('viewCompanyKnowledge', KnowledgeBaseFile::class);
+        
+        // Consulta base para documentos
+        $query = KnowledgeBaseFile::query();
+        
+        // Filtrar según permisos
+        if (!$userCanViewCompany) {
+            $query->where('user_id', $userId);
+        } else {
+            $query->where(function($q) use ($userId) {
+                $q->where('user_id', $userId)
+                  ->orWhereNull('user_id');
+            });
+        }
+        
+        // Total de documentos
+        $totalDocuments = $query->count();
+        
+        // Documentos procesados (tienen al menos un chunk)
+        $processedDocuments = $query->whereHas('knowledgeChunks')->count();
+        
+        // Documentos en procesamiento (no tienen chunks pero tienen job pendiente)
+        $processingDocuments = $query->whereDoesntHave('knowledgeChunks')->count();
+        
+        // Total de chunks
+        $totalChunks = KnowledgeBase::when(!$userCanViewCompany, function($q) use ($userId) {
+            return $q->whereHas('file', function($query) use ($userId) {
+                $query->where('user_id', $userId);
+            });
+        })->when($userCanViewCompany, function($q) use ($userId) {
+            return $q->whereHas('file', function($query) use ($userId) {
+                $query->where('user_id', $userId)
+                      ->orWhereNull('user_id');
+            });
+        })->count();
+        
+        return [
+            'total_documents' => $totalDocuments,
+            'processed_documents' => $processedDocuments,
+            'processing_documents' => $processingDocuments,
+            'total_chunks' => $totalChunks,
+        ];
+    }
+    
+    /**
+     * Devuelve las estadísticas de la base de conocimiento en formato JSON
+     *
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function getStats()
+    {
+        $stats = $this->getKnowledgeBaseStats();
+        
+        return response()->json([
+            'success' => true,
+            'stats' => $stats
+        ]);
     }
     
     /**
@@ -44,25 +116,39 @@ class KnowledgeBaseController extends Controller
     {
         $userId = Auth::id();
         $pdfs = KnowledgeBaseFile::where('user_id', $userId)
+            ->withCount('knowledgeChunks')
             ->orderByDesc('created_at');
             
         return datatables()->of($pdfs)
-            ->addColumn('original_name', function($row) {
+            ->addColumn('file_name', function($row) {
                 return e($row->original_name);
             })
-            ->addColumn('tipo', function($row) {
-                return '<span class="badge badge-primary">Personal</span>';
+            ->addColumn('type', function($row) {
+                return 'user';
+            })
+            ->addColumn('processed', function($row) {
+                return $row->knowledge_chunks_count > 0;
+            })
+            ->addColumn('processing', function($row) {
+                return $row->knowledge_chunks_count == 0;
+            })
+            ->addColumn('status', function($row) {
+                return $row->knowledge_chunks_count > 0 ? 'processed' : 'processing';
             })
             ->addColumn('action', function($row) {
                 $downloadUrl = route('knowledge_base.download', $row->id);
                 $deleteUrl = route('knowledge_base.delete', $row->id);
-                // Usamos un botón con un data attribute para que JavaScript lo maneje
-                return '
-                    <a href="' . $downloadUrl . '" target="_blank" class="btn btn-sm btn-info">Descargar</a>
-                    <button onclick="deleteItem(this)" data-url="' . $deleteUrl . '" class="btn btn-sm btn-danger">Eliminar</button>
-                ';
+                
+                return '<div class="flex justify-center space-x-2">
+                    <a href="' . $downloadUrl . '" class="text-white bg-blue-600 hover:bg-blue-700 focus:ring-4 focus:ring-blue-300 font-medium rounded-lg text-xs p-2 text-center inline-flex items-center dark:bg-blue-700 dark:hover:bg-blue-800 dark:focus:ring-blue-900" title="' . __('Descargar') . '">
+                        <iconify-icon icon="heroicons:arrow-down-tray" class="w-4 h-4"></iconify-icon>
+                    </a>
+                    <button onclick="deletePdf(this)" data-url="' . $deleteUrl . '" class="text-white bg-red-600 hover:bg-red-700 focus:ring-4 focus:ring-red-300 font-medium rounded-lg text-xs p-2 text-center inline-flex items-center dark:bg-red-700 dark:hover:bg-red-800 dark:focus:ring-red-900" title="' . __('Eliminar') . '">
+                        <iconify-icon icon="heroicons:trash" class="w-4 h-4"></iconify-icon>
+                    </button>
+                </div>';
             })
-            ->rawColumns(['action', 'tipo'])
+            ->rawColumns(['action'])
             ->make(true);
     }
 
@@ -80,27 +166,42 @@ class KnowledgeBaseController extends Controller
         }
         
         $pdfs = KnowledgeBaseFile::whereNull('user_id')
+            ->withCount('knowledgeChunks')
             ->orderByDesc('created_at');
 
         return datatables()->of($pdfs)
-            ->addColumn('original_name', function($row) {
+            ->addColumn('file_name', function($row) {
                 return e($row->original_name);
             })
-            ->addColumn('tipo', function($row) {
-                return '<span class="badge badge-success">Empresa</span>';
+            ->addColumn('type', function($row) {
+                return 'company';
+            })
+            ->addColumn('processed', function($row) {
+                return $row->knowledge_chunks_count > 0;
+            })
+            ->addColumn('processing', function($row) {
+                return $row->knowledge_chunks_count == 0;
+            })
+            ->addColumn('status', function($row) {
+                return $row->knowledge_chunks_count > 0 ? 'processed' : 'processing';
             })
             ->addColumn('action', function($row) {
-                $buttons = '';
+                $buttons = '<div class="flex justify-center space-x-2">';
                 // Verificamos permisos para cada acción
                 if (Auth::user()->can('download', $row)) {
-                    $buttons .= '<a href="' . route('knowledge_base.download', $row->id) . '" target="_blank" class="btn btn-sm btn-info">Descargar</a> ';
+                    $buttons .= '<a href="' . route('knowledge_base.download', $row->id) . '" class="text-white bg-blue-600 hover:bg-blue-700 focus:ring-4 focus:ring-blue-300 font-medium rounded-lg text-xs p-2 text-center inline-flex items-center dark:bg-blue-700 dark:hover:bg-blue-800 dark:focus:ring-blue-900" title="' . __('Descargar') . '">
+                        <iconify-icon icon="heroicons:arrow-down-tray" class="w-4 h-4"></iconify-icon>
+                    </a>';
                 }
                 if (Auth::user()->can('delete', $row)) {
-                    $buttons .= '<button onclick="deleteItem(this)" data-url="' . route('knowledge_base.delete', $row->id) . '" class="btn btn-sm btn-danger">Eliminar</button>';
+                    $buttons .= '<button onclick="deletePdf(this)" data-url="' . route('knowledge_base.delete', $row->id) . '" class="text-white bg-red-600 hover:bg-red-700 focus:ring-4 focus:ring-red-300 font-medium rounded-lg text-xs p-2 text-center inline-flex items-center dark:bg-red-700 dark:hover:bg-red-800 dark:focus:ring-red-900" title="' . __('Eliminar') . '">
+                        <iconify-icon icon="heroicons:trash" class="w-4 h-4"></iconify-icon>
+                    </button>';
                 }
+                $buttons .= '</div>';
                 return $buttons;
             })
-            ->rawColumns(['action', 'tipo'])
+            ->rawColumns(['action'])
             ->make(true);
     }
 
@@ -176,13 +277,29 @@ class KnowledgeBaseController extends Controller
     {
         $this->authorize('delete', $file);
 
-        // Usamos la relación para borrar los chunks asociados
-        $file->knowledgeChunks()->delete();
-
-        StorageHelper::delete($file->file_path);
-
-        $file->delete();
-
-        return redirect()->route('knowledge_base.index')->with('success', 'PDF y datos relacionados eliminados correctamente.');
+        try {
+            // Usamos la relación para borrar los chunks asociados
+            $file->knowledgeChunks()->delete();
+            
+            // Eliminamos el archivo físico
+            if (StorageHelper::exists($file->file_path)) {
+                StorageHelper::delete($file->file_path);
+            }
+            
+            // Eliminamos el registro de la base de datos
+            $file->delete();
+            
+            return response()->json([
+                'success' => true,
+                'message' => __('Documento y datos relacionados eliminados correctamente.')
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Error al eliminar documento: ' . $e->getMessage());
+            
+            return response()->json([
+                'success' => false,
+                'message' => __('Ha ocurrido un error al eliminar el documento.')
+            ], 500);
+        }
     }
 }

@@ -899,8 +899,29 @@
       "IBAN": "IBAN",
       "SWIFT/BIC": "SWIFT/BIC",
       "Please use the invoice number as reference:": "Por favor, utiliza el número de factura como referencia:",
-      "invoice": "factura"
-  
+      "invoice": "factura",
+      
+      "IA Memory (Knowledge Base)": "Memoria IA (Base de Conocimiento)",
+      "Total Documents": "Total Documentos",
+      "Processed": "Procesados",
+      "Processing": "Procesando",
+      "Knowledge Chunks": "Fragmentos de Conocimiento",
+      "Upload PDF to Knowledge Base": "Subir PDF a la Base de Conocimiento",
+      "Visibility of the document:": "Visibilidad del documento:",
+      "Only visible to you": "Solo visible para ti",
+      "Visible to all company users": "Visible para todos los usuarios de la empresa",
+      "PDF File": "Archivo PDF",
+      "No file selected": "Ningún archivo seleccionado",
+      "Upload": "Subir",
+      "PDF uploaded successfully. It is being processed in the background.": "PDF subido correctamente. Se está procesando en segundo plano.",
+      "Error uploading PDF. Please try again.": "Error al subir el PDF. Inténtalo de nuevo.",
+      "Are you sure?": "¿Estás seguro?",
+      "This document and all related data will be permanently deleted.": "Este documento y todos sus datos relacionados serán eliminados permanentemente.",
+      "Yes, delete": "Sí, eliminar",
+      "Deleted": "Eliminado",
+      "Document and related data successfully deleted.": "Documento y datos relacionados eliminados correctamente.",
+      "An error occurred while processing the request.": "Ha ocurrido un error al procesar la solicitud.",
+      "Accept": "Aceptar"
   }
   
 
